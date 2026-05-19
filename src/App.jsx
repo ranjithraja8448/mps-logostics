@@ -319,10 +319,10 @@ export default function App() {
 
   return (
     <div className={`flex h-screen font-sans ${bgClass} transition-colors duration-300`}>
-      <aside className={`${sidebarExpanded ? "w-64" : "w-20"} bg-slate-950 text-slate-300 flex flex-col shadow-2xl z-20 shrink-0 transition-all duration-300`}>
-        <div className="h-20 flex items-center justify-between px-4 border-b border-slate-800 bg-black/10">
+      <aside className={`${sidebarExpanded ? "w-64" : "w-16 md:w-20"} bg-slate-950 text-slate-300 flex flex-col shadow-2xl z-20 shrink-0 transition-all duration-300`}>
+        <div className="h-16 md:h-20 flex items-center justify-between px-2 md:px-4 border-b border-slate-800 bg-black/10">
           {sidebarExpanded ? (
-            <div className="flex items-center animate-fade-in">
+            <div className="flex items-center animate-fade-in pl-2">
               <MpsLogo />
               <div><h1 className="text-xl font-black text-white tracking-widest">MPS</h1><p className="text-[10px] uppercase text-indigo-400 font-bold">{user.branch} Branch</p></div>
             </div>
@@ -334,7 +334,7 @@ export default function App() {
           </button>
         </div>
 
-        <nav className="flex-1 px-3 py-6 space-y-2 overflow-y-auto">
+        <nav className="flex-1 px-2 py-4 md:px-3 md:py-6 space-y-2 overflow-y-auto">
           {[
             { id: 'dashboard', icon: '📊', label: t.nav.dashboard, role: 'staff' },
             { id: 'book', icon: '📦', label: t.nav.book, role: 'staff' },
@@ -362,23 +362,23 @@ export default function App() {
       </aside>
 
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        <header className={`${headerBg} shadow-sm h-16 flex items-center justify-between px-8 z-10 shrink-0`}>
-          <div className="flex space-x-4 text-sm font-bold bg-black/5 px-4 py-2 rounded-full">
-            <span onClick={()=>{setPage('book'); setShortcutMode('Paid');}} className="cursor-pointer text-blue-500 hover:text-blue-600">F7: PAID</span><span className="opacity-25">|</span>
-            <span onClick={()=>{setPage('book'); setShortcutMode('To Pay');}} className="cursor-pointer text-red-500 hover:text-red-600">F8: TO PAY</span><span className="opacity-25">|</span>
-            <span onClick={()=>{setPage('book'); setShortcutMode('Credit');}} className="cursor-pointer text-amber-500 hover:text-amber-600">F9: CREDIT</span><span className="opacity-25">|</span>
+        <header className={`${headerBg} shadow-sm h-auto min-h-[4rem] py-2 flex flex-col md:flex-row items-center justify-between px-4 md:px-8 z-10 shrink-0 gap-2`}>
+          <div className="flex flex-wrap justify-center gap-2 text-[10px] md:text-sm font-bold bg-black/5 px-4 py-2 rounded-full">
+            <span onClick={()=>{setPage('book'); setShortcutMode('Paid');}} className="cursor-pointer text-blue-500 hover:text-blue-600">F7: PAID</span><span className="opacity-25 hidden md:inline">|</span>
+            <span onClick={()=>{setPage('book'); setShortcutMode('To Pay');}} className="cursor-pointer text-red-500 hover:text-red-600">F8: TO PAY</span><span className="opacity-25 hidden md:inline">|</span>
+            <span onClick={()=>{setPage('book'); setShortcutMode('Credit');}} className="cursor-pointer text-amber-500 hover:text-amber-600">F9: CREDIT</span><span className="opacity-25 hidden md:inline">|</span>
             <span onClick={()=>{setPage('book'); setShortcutMode('FOC');}} className="cursor-pointer text-emerald-500 hover:text-emerald-600">F10: FOC</span>
           </div>
-          <div className="flex items-center gap-4">
-            <span className={`text-xs font-black uppercase px-3 py-1 rounded-full border ${user.role === 'superadmin' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20'}`}>
+          <div className="flex items-center gap-2 md:gap-4">
+            <span className={`text-[10px] md:text-xs font-black uppercase px-2 py-1 md:px-3 rounded-full border ${user.role === 'superadmin' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20'}`}>
               {user.role} | {user.branch}
             </span>
-            <button onClick={() => setLang(lang==='en'?'ta':'en')} className="px-3 py-1 text-xs font-bold border rounded-full">{lang==='en'?'தமிழ்':'EN'}</button>
-            <button onClick={toggleTheme} className="text-xl">{(isDark)?'☀️':'🌙'}</button>
+            <button onClick={() => setLang(lang==='en'?'ta':'en')} className="px-2 py-1 md:px-3 text-[10px] md:text-xs font-bold border rounded-full">{lang==='en'?'தமிழ்':'EN'}</button>
+            <button onClick={toggleTheme} className="text-lg md:text-xl">{(isDark)?'☀️':'🌙'}</button>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-8 relative">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 relative">
           <div className="max-w-6xl mx-auto animate-fade-in">
             {page === 'dashboard' && <Dashboard parcels={parcels} isDark={isDark} user={user} />}
             {page === 'book' && <Book shortcutMode={shortcutMode} parcels={parcels} setParcels={setParcels} db={db} showMsg={showMsg} isDark={isDark} theme={theme} user={user} />}
@@ -392,7 +392,7 @@ export default function App() {
       </main>
 
       {toast && (
-        <div className={`fixed bottom-8 right-8 px-6 py-3 rounded-xl shadow-2xl font-bold text-white z-50 animate-bounce-in ${toast.type==='error'?'bg-red-500':'bg-emerald-500'}`}>
+        <div className={`fixed bottom-4 right-4 md:bottom-8 md:right-8 px-4 md:px-6 py-2 md:py-3 rounded-xl shadow-2xl font-bold text-white z-50 animate-bounce-in text-sm md:text-base ${toast.type==='error'?'bg-red-500':'bg-emerald-500'}`}>
           {toast.msg}
         </div>
       )}
@@ -409,16 +409,16 @@ function Dashboard({parcels, isDark, user}) {
   const rev = branchParcels.reduce((a,b)=>a+(b.price||0),0);
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-100";
   return (
-    <div className="grid grid-cols-4 gap-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
       {[
         {l: "Total Bookings", v: branchParcels.length, c: "text-blue-500"},
         {l: "In Transit", v: branchParcels.filter(p=>p.status==="In Transit").length, c: "text-amber-500"},
         {l: "Delivered", v: branchParcels.filter(p=>p.status==="Delivered").length, c: "text-emerald-500"},
         {l: "Branch Revenue", v: `₹${rev}`, c: "text-indigo-500"}
       ].map((s,i) => (
-        <div key={i} className={`${cardBg} p-6 rounded-2xl shadow-sm border flex flex-col justify-center`}>
-          <span className="text-xs font-bold opacity-60 uppercase mb-2">{s.l}</span>
-          <span className={`text-4xl font-black ${s.c}`}>{s.v}</span>
+        <div key={i} className={`${cardBg} p-4 md:p-6 rounded-2xl shadow-sm border flex flex-col justify-center`}>
+          <span className="text-xs font-bold opacity-60 uppercase mb-1 md:mb-2">{s.l}</span>
+          <span className={`text-2xl md:text-4xl font-black ${s.c}`}>{s.v}</span>
         </div>
       ))}
     </div>
@@ -426,7 +426,7 @@ function Dashboard({parcels, isDark, user}) {
 }
 
 /* ══════════════════════════════════════════
-   BOOK (Strict Validation with Asterisks *)
+   BOOK (Responsive Layout)
 ══════════════════════════════════════════ */
 function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, user}) {
   const initF = {sName:"", sPhone:"", sGst:"", rName:"", rPhone:"", rGst:"", from: user.branch === 'All' ? "" : user.branch, to:"", rate:"", count:"1", actualWeight:"", type:"Box", payment:"Paid", creditCustomer:"", notes:""};
@@ -490,7 +490,6 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200";
   const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800";
 
-  // 🔥 STRICT VALIDATION LOGIC ADDED HERE 🔥
   const submit = async () => {
     if(!f.sName || !f.sPhone || !f.from || !f.rName || !f.rPhone || !f.to || !f.count || !f.rate || !f.type) {
       return showMsg("Please fill all mandatory fields marked with (*)", "error");
@@ -500,9 +499,7 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
     const dObj = new Date();
     const isoDate = dObj.toISOString();
     const locDateStr = dObj.toLocaleDateString('en-IN');
-    
     const lrNumber = generateLR(f.from, parcels);
-
     const p = {...f, notes: f.payment === 'Credit' ? `[A/c: ${f.creditCustomer}] ${f.notes}` : f.notes, id: lrNumber, date: locDateStr, isoDate: isoDate, status: "Booked", price: ep, bookedBy: user.username, bookedBranch: user.branch, history: [{status: "Booked", loc: f.from, time: dObj.toLocaleString()}]};
     
     const saved = await local.get("mps_contacts") || {};
@@ -510,30 +507,28 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
     await local.set("mps_contacts", saved);
     await db.insertParcel(p); setParcels([p, ...parcels]); setDone(p); showMsg("LR Generated cleanly.");
     
-    setTimeout(() => {
-      openWhatsApp(p.sPhone, true, p);
-    }, 800);
+    setTimeout(() => { openWhatsApp(p.sPhone, true, p); }, 800);
   };
 
   if(done) return (
-    <div className={`${cardBg} p-10 rounded-3xl max-w-xl mx-auto text-center border-t-4 border-emerald-500`}>
-      <h2 className="text-2xl font-black mb-4">Parcel Registered Successfully</h2>
-      <div className="bg-indigo-600/10 text-indigo-500 text-2xl font-mono font-bold p-3 rounded-xl mb-6">{done.id}</div>
+    <div className={`${cardBg} p-6 md:p-10 rounded-3xl max-w-xl mx-auto text-center border-t-4 border-emerald-500`}>
+      <h2 className="text-xl md:text-2xl font-black mb-4">Parcel Registered Successfully</h2>
+      <div className="bg-indigo-600/10 text-indigo-500 text-xl md:text-2xl font-mono font-bold p-3 rounded-xl mb-6">{done.id}</div>
       <button onClick={()=>{setDone(null); setF(initF); setEway("");}} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl mb-3">New Registration</button>
       <button onClick={()=>generatePDF(done)} className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl">Download Receipt</button>
     </div>
   );
 
   return (
-    <div className="space-y-6">
-      <div className={`${cardBg} p-4 rounded-2xl border mb-2 flex items-center gap-4 relative z-10`}>
-        <span className="text-xl">⚡</span>
-        <input id="eway" onKeyDown={e=>handleBoxTravel(e,{enter:'sPhone', down:'sPhone'})} value={eway} onChange={handleEwayChange} placeholder="Enter 12-Digit E-Way Bill Number..." className={`flex-1 px-4 py-3 rounded-lg outline-none font-mono font-bold tracking-widest ${inputBg}`} />
+    <div className="space-y-4 md:space-y-6">
+      <div className={`${cardBg} p-4 rounded-2xl border mb-2 flex flex-col sm:flex-row items-center gap-4 relative z-10`}>
+        <span className="text-xl hidden sm:block">⚡</span>
+        <input id="eway" onKeyDown={e=>handleBoxTravel(e,{enter:'sPhone', down:'sPhone'})} value={eway} onChange={handleEwayChange} placeholder="Enter 12-Digit E-Way Bill Number..." className={`w-full sm:flex-1 px-4 py-3 rounded-lg outline-none font-mono font-bold tracking-widest text-center sm:text-left ${inputBg}`} />
         {eway.length === 12 && <span className="text-emerald-500 font-bold px-4">Verified ✅</span>}
       </div>
 
-      <div className="grid grid-cols-2 gap-6 relative z-50">
-        <div className={`${cardBg} p-6 rounded-2xl border space-y-4`}>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 relative z-50">
+        <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}>
           <h3 className="font-bold text-indigo-500">Sender Profile</h3>
           <SuggestInput id="sPhone" onKeyDown={e=>handleBoxTravel(e,{enter:'sName', down:'sName', right:'rPhone', up:'eway'})} label="Mobile Number *" value={f.sPhone} onChange={v=>handlePhoneChange(true, v)} onSelect={d=>handleContactSelect(true, d)} dataList={contacts} isPhone={true} theme={theme} />
           <SuggestInput id="sName" onKeyDown={e=>handleBoxTravel(e,{enter:'sGst', down:'sGst', right:'rName', up:'sPhone'})} label="Full Name *" value={f.sName} onChange={v=>setF({...f, sName:v})} onSelect={d=>handleContactSelect(true, d)} dataList={contacts} isPhone={false} theme={theme} />
@@ -544,7 +539,7 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
           </select>
         </div>
 
-        <div className={`${cardBg} p-6 rounded-2xl border space-y-4`}>
+        <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}>
           <h3 className="font-bold text-emerald-500">Receiver Profile</h3>
           <SuggestInput id="rPhone" onKeyDown={e=>handleBoxTravel(e,{enter:'rName', down:'rName', left:'sPhone', up:'eway'})} label="Mobile Number *" value={f.rPhone} onChange={v=>handlePhoneChange(false, v)} onSelect={d=>handleContactSelect(false, d)} dataList={contacts} isPhone={true} theme={theme} />
           <SuggestInput id="rName" onKeyDown={e=>handleBoxTravel(e,{enter:'rGst', down:'rGst', left:'sName', up:'rPhone'})} label="Full Name *" value={f.rName} onChange={v=>setF({...f, rName:v})} onSelect={d=>handleContactSelect(false, d)} dataList={contacts} isPhone={false} theme={theme} />
@@ -553,18 +548,20 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
         </div>
       </div>
 
-      <div className={`${cardBg} p-6 rounded-2xl border space-y-4 relative z-10`}>
+      <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4 relative z-10`}>
         <h3 className="font-bold">Cargo Details</h3>
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
           <input id="pQty" onKeyDown={e=>handleBoxTravel(e,{enter:'pType', down:'pPay', right:'pType', up:user.branch==='All'?'sFrom':'sGst'})} type="number" value={f.count} onChange={e=>setF({...f, count:e.target.value})} placeholder="Quantity *" className={`p-3 rounded-xl border outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${inputBg}`} />
           <select id="pType" onKeyDown={e=>handleBoxTravel(e,{enter:'pWgt', down:'pPay', left:'pQty', right:'pWgt', up:'rTo'})} value={f.type} onChange={e=>setF({...f, type:e.target.value})} className={`p-3 rounded-xl border outline-none ${inputBg}`}>{TYPES.map(t=><option key={t}>{t}</option>)}</select>
           <input id="pWgt" onKeyDown={e=>handleBoxTravel(e,{enter:'pRate', down:'btnSubmit', left:'pType', right:'pRate', up:'rTo'})} type="number" value={f.actualWeight} onChange={e=>setF({...f, actualWeight:e.target.value})} placeholder="Weight (Kg)" className={`p-3 rounded-xl border outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${inputBg}`} />
           <input id="pRate" onKeyDown={e=>handleBoxTravel(e,{enter:'pPay', down:'btnSubmit', left:'pWgt', up:'rTo'})} type="number" value={f.rate} onChange={e=>setF({...f, rate:e.target.value})} placeholder="Rate Per Unit *" className={`p-3 rounded-xl border outline-none font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${inputBg}`} />
         </div>
-        <div className="grid grid-cols-2 gap-4">
-          <select id="pPay" onKeyDown={e=>handleBoxTravel(e,{enter: f.payment==='Credit' ? 'pCredit' : 'btnSubmit', right: f.payment==='Credit'?'pCredit':'', up:'pQty', down:'btnSubmit'})} value={f.payment} onChange={e=>setF({...f, payment:e.target.value})} className="p-3 border rounded-xl font-bold bg-indigo-600 text-white outline-none">{PAY_MODES.map(p=><option key={p} value={p}>{p.toUpperCase()}</option>)}</select>
-          {f.payment === 'Credit' && <input id="pCredit" onKeyDown={e=>handleBoxTravel(e,{enter:'btnSubmit', left:'pPay', up:'pRate', down:'btnSubmit'})} value={f.creditCustomer} onChange={e=>setF({...f, creditCustomer:e.target.value})} placeholder="Company Name Account *" className={`p-3 rounded-xl border outline-none ${inputBg}`} />}
-          <div className="bg-slate-950 p-4 rounded-xl flex justify-between items-center text-white"><span className="text-sm opacity-50">Total Income Allocation</span><span className="text-2xl font-black text-emerald-400">₹{ep}</span></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mt-2">
+          <div className="flex flex-col gap-3">
+            <select id="pPay" onKeyDown={e=>handleBoxTravel(e,{enter: f.payment==='Credit' ? 'pCredit' : 'btnSubmit', right: f.payment==='Credit'?'pCredit':'', up:'pQty', down:'btnSubmit'})} value={f.payment} onChange={e=>setF({...f, payment:e.target.value})} className="p-3 border rounded-xl font-bold bg-indigo-600 text-white outline-none w-full">{PAY_MODES.map(p=><option key={p} value={p}>{p.toUpperCase()}</option>)}</select>
+            {f.payment === 'Credit' && <input id="pCredit" onKeyDown={e=>handleBoxTravel(e,{enter:'btnSubmit', left:'pPay', up:'pRate', down:'btnSubmit'})} value={f.creditCustomer} onChange={e=>setF({...f, creditCustomer:e.target.value})} placeholder="Company Name Account *" className={`p-3 rounded-xl border outline-none w-full ${inputBg}`} />}
+          </div>
+          <div className="bg-slate-950 p-4 rounded-xl flex justify-between items-center text-white h-full"><span className="text-sm opacity-50">Total Income Allocation</span><span className="text-xl md:text-2xl font-black text-emerald-400">₹{ep}</span></div>
         </div>
       </div>
       <button id="btnSubmit" onClick={submit} onKeyDown={e => e.key === 'Enter' && submit()} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-xl shadow-lg transition-transform transform hover:-translate-y-1 relative z-10">Confirm Booking</button>
@@ -582,17 +579,17 @@ function Track({parcels, isDark}) {
 
   return (
     <div className="max-w-xl mx-auto space-y-4">
-      <div className="flex gap-4">
+      <div className="flex gap-2 md:gap-4 flex-col sm:flex-row">
         <input id="trkIn" onKeyDown={e=> e.key === 'Enter' ? search() : handleBoxTravel(e, {enter: 'trkBtn'})} value={id} onChange={e=>setId(e.target.value)} placeholder="Enter LR Tracking Number" className={`flex-1 p-3 rounded-xl border outline-none ${isDark?'bg-slate-900 border-slate-700':'bg-white'}`} />
-        <button id="trkBtn" onClick={search} className="bg-indigo-600 text-white px-6 rounded-xl font-bold">Search</button>
+        <button id="trkBtn" onClick={search} className="bg-indigo-600 text-white py-3 px-6 rounded-xl font-bold">Search</button>
       </div>
       {res === 'err' && <div className="text-red-500 text-center font-bold">Invalid LR Reference</div>}
       {res && res !== 'err' && (
-        <div className={`${cardBg} p-6 rounded-2xl border`}>
-          <h3 className="text-xl font-black text-indigo-500 mb-2">{res.id}</h3>
+        <div className={`${cardBg} p-4 md:p-6 rounded-2xl border`}>
+          <h3 className="text-lg md:text-xl font-black text-indigo-500 mb-2">{res.id}</h3>
           <p className="font-bold mb-4">{res.from} ➔ {res.to} <span className="ml-2 px-2 py-1 rounded text-[10px] uppercase font-black" style={{backgroundColor: S_CLR[res.status]+'22', color: S_CLR[res.status]}}>{res.status}</span></p>
           <div className="space-y-3">
-            {res.history.map((h,i)=>(<div key={i} className="text-sm border-l-2 border-indigo-500 pl-3"><b>{h.status}</b> - {h.loc} ({h.time}) <span className="opacity-50 ml-1">{h.reason ? `[${h.reason}]` : ''}</span></div>))}
+            {res.history.map((h,i)=>(<div key={i} className="text-xs md:text-sm border-l-2 border-indigo-500 pl-3"><b>{h.status}</b> - {h.loc} <br className="block sm:hidden" /><span className="opacity-70 sm:opacity-100">({h.time})</span> <span className="opacity-50 ml-1">{h.reason ? `[${h.reason}]` : ''}</span></div>))}
           </div>
         </div>
       )}
@@ -605,7 +602,7 @@ function Track({parcels, isDark}) {
 ══════════════════════════════════════════ */
 function Dispatch({showMsg, isDark}) {
   return (
-    <div className={`max-w-xl mx-auto p-6 rounded-2xl border ${isDark?'bg-slate-800 border-slate-700':'bg-white'}`}>
+    <div className={`max-w-xl mx-auto p-4 md:p-6 rounded-2xl border ${isDark?'bg-slate-800 border-slate-700':'bg-white'}`}>
       <h3 className="text-lg font-bold mb-4">Vehicle Manifest Load</h3>
       <input id="dVehicle" onKeyDown={e=>handleBoxTravel(e,{enter:'dDriver', down:'dDriver'})} placeholder="Vehicle Registration Number" className={`w-full p-3 mb-4 rounded-xl border outline-none ${isDark?'bg-slate-900':'bg-transparent'}`} />
       <input id="dDriver" onKeyDown={e=>handleBoxTravel(e,{enter:'dScan', down:'dScan', up:'dVehicle'})} placeholder="Assigned Driver Name" className={`w-full p-3 mb-4 rounded-xl border outline-none ${isDark?'bg-slate-900':'bg-transparent'}`} />
@@ -645,24 +642,24 @@ function Delivery({parcels, setParcels, db, showMsg, isDark, user}) {
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200";
 
   return (
-    <div className="max-w-xl mx-auto space-y-6">
-      <div className="flex gap-4">
-        <input id="delScan" onKeyDown={e=> e.key==='Enter'?searchLR():null} value={id} onChange={e=>setId(e.target.value)} placeholder="Enter LR Tracking Identifier Code" className={`flex-1 p-4 text-center text-xl font-bold border rounded-xl outline-none ${isDark?'bg-slate-900 border-slate-700':'bg-slate-50'}`} />
-        <button id="delFetch" onClick={searchLR} className="bg-indigo-600 text-white px-6 rounded-xl font-bold">Fetch Details</button>
+    <div className="max-w-xl mx-auto space-y-4 md:space-y-6">
+      <div className="flex gap-2 md:gap-4 flex-col sm:flex-row">
+        <input id="delScan" onKeyDown={e=> e.key==='Enter'?searchLR():null} value={id} onChange={e=>setId(e.target.value)} placeholder="Enter LR Code" className={`flex-1 p-3 md:p-4 text-center text-lg md:text-xl font-bold border rounded-xl outline-none ${isDark?'bg-slate-900 border-slate-700':'bg-slate-50'}`} />
+        <button id="delFetch" onClick={searchLR} className="bg-indigo-600 text-white py-3 px-6 rounded-xl font-bold">Fetch Details</button>
       </div>
 
       {activeItem && (
-        <div className={`${cardBg} p-6 rounded-2xl border space-y-4 animate-fade-in`}>
+        <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4 animate-fade-in`}>
           <h3 className="font-bold text-lg">Consignment ID: {activeItem.id}</h3>
-          <p>Payment Profile Node: <b className="text-indigo-500">{activeItem.payment.toUpperCase()}</b> (Charges Due: ₹{activeItem.price})</p>
+          <p className="text-sm md:text-base">Payment Profile Node: <b className="text-indigo-500">{activeItem.payment.toUpperCase()}</b> (Charges Due: ₹{activeItem.price})</p>
           
           {activeItem.payment === "To Pay" && (
-            <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl space-y-2">
-              <label className="block text-xs font-bold text-red-500 uppercase">Forced Delivery Payment Selection *</label>
-              <select id="payMode" onKeyDown={e=>handleBoxTravel(e,{enter:'btnDel'})} value={payMethod} onChange={e=>setPayMethod(e.target.value)} className="w-full p-2 rounded border bg-transparent font-bold outline-none">
+            <div className="p-3 md:p-4 bg-red-500/10 border border-red-500/20 rounded-xl space-y-2">
+              <label className="block text-[10px] md:text-xs font-bold text-red-500 uppercase">Forced Delivery Payment Selection *</label>
+              <select id="payMode" onKeyDown={e=>handleBoxTravel(e,{enter:'btnDel'})} value={payMethod} onChange={e=>setPayMethod(e.target.value)} className="w-full p-2 rounded border bg-transparent font-bold outline-none text-sm">
                 <option value="" className="text-slate-900">Select Settlement Mode...</option>
-                <option value="Cash" className="text-slate-900">💵 Physical Cash Counter Collection</option>
-                <option value="GPay" className="text-slate-900">📱 Mobile UPI / PhonePe / GPay Transaction</option>
+                <option value="Cash" className="text-slate-900">💵 Physical Cash</option>
+                <option value="GPay" className="text-slate-900">📱 UPI / GPay</option>
               </select>
             </div>
           )}
@@ -693,48 +690,48 @@ function Accounts({parcels, isDark, user}) {
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200";
 
   return (
-    <div className="space-y-8">
-      <div className={`${cardBg} p-6 rounded-3xl border border-dashed border-indigo-500/40 grid grid-cols-3 gap-6`}>
-        <div className="col-span-3"><h3 className="text-lg font-black text-indigo-500">⚡ End-Of-Day (EOD) Balance Sheet / Cash Box Tally Book ({user.branch})</h3></div>
+    <div className="space-y-6 md:space-y-8">
+      <div className={`${cardBg} p-4 md:p-6 rounded-3xl border border-dashed border-indigo-500/40 grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6`}>
+        <div className="md:col-span-3"><h3 className="text-base md:text-lg font-black text-indigo-500">⚡ EOD Balance Sheet ({user.branch})</h3></div>
         <div className="bg-slate-950 p-4 rounded-xl text-white">
-          <p className="text-xs text-slate-400 font-bold uppercase">💵 Safe Box Physical Cash Balance</p>
-          <p className="text-3xl font-black text-emerald-400 mt-1">₹{cashCollectedToday.toLocaleString()}</p>
+          <p className="text-[10px] md:text-xs text-slate-400 font-bold uppercase">💵 Safe Box Cash Balance</p>
+          <p className="text-2xl md:text-3xl font-black text-emerald-400 mt-1">₹{cashCollectedToday.toLocaleString()}</p>
         </div>
         <div className="bg-slate-950 p-4 rounded-xl text-white">
-          <p className="text-xs text-slate-400 font-bold uppercase">📱 Corporate GPay Wallet Balance</p>
-          <p className="text-3xl font-black text-blue-400 mt-1">₹{gpayCollectedToday.toLocaleString()}</p>
+          <p className="text-[10px] md:text-xs text-slate-400 font-bold uppercase">📱 Corporate GPay Wallet</p>
+          <p className="text-2xl md:text-3xl font-black text-blue-400 mt-1">₹{gpayCollectedToday.toLocaleString()}</p>
         </div>
         <div className="bg-slate-950 p-4 rounded-xl text-white">
-          <p className="text-xs text-slate-400 font-bold uppercase">📊 Aggregate Turnover (Today)</p>
-          <p className="text-3xl font-black text-indigo-400 mt-1">₹{(cashCollectedToday + gpayCollectedToday).toLocaleString()}</p>
+          <p className="text-[10px] md:text-xs text-slate-400 font-bold uppercase">📊 Aggregate Turnover</p>
+          <p className="text-2xl md:text-3xl font-black text-indigo-400 mt-1">₹{(cashCollectedToday + gpayCollectedToday).toLocaleString()}</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-8">
-        <div className={`${cardBg} p-6 rounded-3xl border space-y-4`}>
-          <h3 className="font-bold text-md text-indigo-500">Fixed Operational Expenses Ledger</h3>
-          <p className="text-xs opacity-50">Specify designated expenditures to dynamically evaluate net partner payouts:</p>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
+        <div className={`${cardBg} p-4 md:p-6 rounded-3xl border space-y-4`}>
+          <h3 className="font-bold text-sm md:text-md text-indigo-500">Fixed Operational Expenses Ledger</h3>
+          <p className="text-[10px] md:text-xs opacity-50">Specify designated expenditures to dynamically evaluate net partner payouts:</p>
           <div className="space-y-4">
              <div>
-               <label className="text-xs font-bold opacity-60 uppercase">Monthly Vehicle EMI Outflow (₹)</label>
-               <input id="accEmi" onKeyDown={e=>handleBoxTravel(e,{enter:'accDiesel', down:'accDiesel'})} type="number" placeholder="Enter monthly truck loan EMI amount" value={acc.emi} onChange={e=>setAcc({...acc, emi:Number(e.target.value)})} className={`w-full p-3 mt-1 rounded-xl border outline-none font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${isDark?'bg-slate-900 border-slate-700':'bg-slate-50'}`} />
+               <label className="text-[10px] md:text-xs font-bold opacity-60 uppercase">Monthly Vehicle EMI Outflow (₹)</label>
+               <input id="accEmi" onKeyDown={e=>handleBoxTravel(e,{enter:'accDiesel', down:'accDiesel'})} type="number" placeholder="Enter monthly truck loan EMI amount" value={acc.emi} onChange={e=>setAcc({...acc, emi:Number(e.target.value)})} className={`w-full p-2 md:p-3 mt-1 rounded-xl border outline-none font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${isDark?'bg-slate-900 border-slate-700':'bg-slate-50'}`} />
              </div>
              <div>
-               <label className="text-xs font-bold opacity-60 uppercase">Diesel Fuel & Highway Toll Log (₹)</label>
-               <input id="accDiesel" onKeyDown={e=>handleBoxTravel(e,{enter:'accOther', down:'accOther', up:'accEmi'})} type="number" placeholder="Enter combined diesel & transit expenditures" value={acc.diesel} onChange={e=>setAcc({...acc, diesel:Number(e.target.value)})} className={`w-full p-3 mt-1 rounded-xl border outline-none font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${isDark?'bg-slate-900 border-slate-700':'bg-slate-50'}`} />
+               <label className="text-[10px] md:text-xs font-bold opacity-60 uppercase">Diesel Fuel & Highway Toll Log (₹)</label>
+               <input id="accDiesel" onKeyDown={e=>handleBoxTravel(e,{enter:'accOther', down:'accOther', up:'accEmi'})} type="number" placeholder="Enter combined diesel & transit expenditures" value={acc.diesel} onChange={e=>setAcc({...acc, diesel:Number(e.target.value)})} className={`w-full p-2 md:p-3 mt-1 rounded-xl border outline-none font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${isDark?'bg-slate-900 border-slate-700':'bg-slate-50'}`} />
              </div>
              <div>
-               <label className="text-xs font-bold opacity-60 uppercase">Misc Office Rent & Utility Costs (₹)</label>
-               <input id="accOther" onKeyDown={e=>handleBoxTravel(e,{up:'accDiesel'})} type="number" placeholder="Enter miscellaneous administrative overheads" value={acc.other} onChange={e=>setAcc({...acc, other:Number(e.target.value)})} className={`w-full p-3 mt-1 rounded-xl border outline-none font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${isDark?'bg-slate-900 border-slate-700':'bg-slate-50'}`} />
+               <label className="text-[10px] md:text-xs font-bold opacity-60 uppercase">Misc Office Rent & Utility Costs (₹)</label>
+               <input id="accOther" onKeyDown={e=>handleBoxTravel(e,{up:'accDiesel'})} type="number" placeholder="Enter miscellaneous administrative overheads" value={acc.other} onChange={e=>setAcc({...acc, other:Number(e.target.value)})} className={`w-full p-2 md:p-3 mt-1 rounded-xl border outline-none font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${isDark?'bg-slate-900 border-slate-700':'bg-slate-50'}`} />
              </div>
           </div>
         </div>
-        <div className="bg-slate-950 p-8 rounded-3xl text-white flex flex-col justify-center">
-          <h3 className="text-xl font-black mb-4 tracking-wider text-indigo-400">PARTNERSHIP SETTLEMENT SUMMARY</h3>
-          <p className="text-sm opacity-60">Cumulative Net Profit Share: ₹{net.toLocaleString()}</p>
-          <div className="mt-6 bg-white/5 p-6 rounded-2xl text-center border border-white/10">
-            <p className="text-xs opacity-50 uppercase tracking-widest mb-1">Per Partner Net Yield Dividend (Div 5 Split)</p>
-            <p className="text-4xl font-black text-emerald-400">₹{(net / 5).toLocaleString()}</p>
+        <div className="bg-slate-950 p-6 md:p-8 rounded-3xl text-white flex flex-col justify-center">
+          <h3 className="text-lg md:text-xl font-black mb-2 md:mb-4 tracking-wider text-indigo-400">PARTNERSHIP SETTLEMENT</h3>
+          <p className="text-xs md:text-sm opacity-60">Cumulative Net Profit Share: ₹{net.toLocaleString()}</p>
+          <div className="mt-4 md:mt-6 bg-white/5 p-4 md:p-6 rounded-2xl text-center border border-white/10">
+            <p className="text-[10px] md:text-xs opacity-50 uppercase tracking-widest mb-1">Per Partner Yield Dividend (Div 5 Split)</p>
+            <p className="text-3xl md:text-4xl font-black text-emerald-400">₹{(net / 5).toLocaleString()}</p>
           </div>
         </div>
       </div>
@@ -743,7 +740,7 @@ function Accounts({parcels, isDark, user}) {
 }
 
 /* ══════════════════════════════════════════
-   ADMIN MANAGEMENT (Reports, Filters, Soft Delete & Print)
+   ADMIN MANAGEMENT (Responsive)
 ══════════════════════════════════════════ */
 function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user}) {
   const [tab, setTab] = useState('parcels');
@@ -850,133 +847,129 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user}
   const statPending = sortedTableData.filter(p => p.status !== 'Deleted' && (p.payment === 'To Pay' && p.status !== 'Delivered')).reduce((a,b)=>a+b.price, 0);
 
   return (
-    <div className="space-y-6">
-      <div className="flex gap-4">
-        <button onClick={()=>setTab('parcels')} className={`px-6 py-2 rounded-full font-bold ${tab==='parcels'?'bg-indigo-600 text-white':cardBg}`}>📋 Audits & Analytics</button>
-        <button onClick={()=>setTab('staff')} className={`px-6 py-2 rounded-full font-bold ${tab==='staff'?'bg-indigo-600 text-white':cardBg}`}>👥 System RBAC Accounts</button>
+    <div className="space-y-4 md:space-y-6">
+      <div className="flex flex-wrap gap-2 md:gap-4">
+        <button onClick={()=>setTab('parcels')} className={`px-4 md:px-6 py-2 rounded-full text-xs md:text-sm font-bold ${tab==='parcels'?'bg-indigo-600 text-white':cardBg}`}>📋 Audits & Analytics</button>
+        <button onClick={()=>setTab('staff')} className={`px-4 md:px-6 py-2 rounded-full text-xs md:text-sm font-bold ${tab==='staff'?'bg-indigo-600 text-white':cardBg}`}>👥 System RBAC Accounts</button>
       </div>
 
       {tab === 'staff' ? (
-        <div className="grid grid-cols-3 gap-6">
-          <div className={`${cardBg} p-6 rounded-2xl border space-y-4`}>
-            <h3 className="font-black">Assign Privilege Context</h3>
-            <input id="stfUser" onKeyDown={e=>handleBoxTravel(e,{enter:'stfPass', down:'stfPass'})} value={newUser} onChange={e=>setNewUser(e.target.value)} placeholder="Username Identifier" className={`w-full p-3 rounded-xl border outline-none ${inputBg}`} />
-            <input id="stfPass" onKeyDown={e=>handleBoxTravel(e,{enter: isSuper ? 'stfRole' : 'stfBranch', down: isSuper ? 'stfRole' : 'stfBranch', up:'stfUser'})} value={newPass} onChange={e=>setNewPass(e.target.value)} type="password" placeholder="Account Password" className={`w-full p-3 rounded-xl border outline-none ${inputBg}`} />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+          <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}>
+            <h3 className="font-black text-sm md:text-base">Assign Privilege Context</h3>
+            <input id="stfUser" onKeyDown={e=>handleBoxTravel(e,{enter:'stfPass', down:'stfPass'})} value={newUser} onChange={e=>setNewUser(e.target.value)} placeholder="Username Identifier" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} />
+            <input id="stfPass" onKeyDown={e=>handleBoxTravel(e,{enter: isSuper ? 'stfRole' : 'stfBranch', down: isSuper ? 'stfRole' : 'stfBranch', up:'stfUser'})} value={newPass} onChange={e=>setNewPass(e.target.value)} type="password" placeholder="Account Password" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} />
             
             {isSuper && (
-              <select id="stfRole" onKeyDown={e=>handleBoxTravel(e,{enter:'stfBranch', down:'stfBranch', up:'stfPass'})} value={newRole} onChange={e=>setNewRole(e.target.value)} className={`w-full p-3 rounded-xl border font-bold outline-none ${inputBg}`}>
-                <option value="staff">Privilege Level: STAFF NODE</option>
-                <option value="admin">Privilege Level: SYSTEM ADMIN</option>
-                <option value="superadmin">Privilege Level: SUPERADMIN ACCESS</option>
+              <select id="stfRole" onKeyDown={e=>handleBoxTravel(e,{enter:'stfBranch', down:'stfBranch', up:'stfPass'})} value={newRole} onChange={e=>setNewRole(e.target.value)} className={`w-full p-2 md:p-3 rounded-xl border font-bold outline-none text-sm ${inputBg}`}>
+                <option value="staff">Privilege Level: STAFF</option>
+                <option value="admin">Privilege Level: ADMIN</option>
+                <option value="superadmin">Privilege Level: SUPERADMIN</option>
               </select>
             )}
 
-            <select id="stfBranch" disabled={newRole === 'superadmin' || newRole === 'admin'} onKeyDown={e=>handleBoxTravel(e,{enter:'stfBtn', up: isSuper ? 'stfRole' : 'stfPass'})} value={newRole==='superadmin'?'All':newBranch} onChange={e=>setNewBranch(e.target.value)} className={`w-full p-3 rounded-xl border font-bold outline-none ${inputBg} ${(newRole==='superadmin' || newRole==='admin')?'opacity-50':''}`}>
+            <select id="stfBranch" disabled={newRole === 'superadmin' || newRole === 'admin'} onKeyDown={e=>handleBoxTravel(e,{enter:'stfBtn', up: isSuper ? 'stfRole' : 'stfPass'})} value={newRole==='superadmin'?'All':newBranch} onChange={e=>setNewBranch(e.target.value)} className={`w-full p-2 md:p-3 rounded-xl border font-bold outline-none text-sm ${inputBg} ${(newRole==='superadmin' || newRole==='admin')?'opacity-50':''}`}>
               {(isSuper && (newRole === 'admin' || newRole === 'superadmin')) && <option value="All">Global Access (All Branches)</option>}
               {CITIES.map(c => <option key={c} value={c}>Branch: {c}</option>)}
             </select>
             
-            <button id="stfBtn" onClick={handleAddUser} onKeyDown={e => e.key === 'Enter' && handleAddUser()} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl">Commit Assignment</button>
+            <button id="stfBtn" onClick={handleAddUser} onKeyDown={e => e.key === 'Enter' && handleAddUser()} className="w-full bg-indigo-600 text-white font-bold py-2 md:py-3 rounded-xl text-sm md:text-base">Commit Assignment</button>
           </div>
           
-          <div className={`${cardBg} p-6 rounded-2xl border col-span-2 space-y-3`}>
-            <h3 className="font-black">Identity Mapping Matrix</h3>
-            {users.filter(u => isSuper ? true : u.role === 'staff').map(u => {
-              const canManage = isSuper ? (u.username !== user.username) : true;
-              return (
-                <div key={u.id} className="flex justify-between items-center p-3 border rounded-xl bg-black/5">
-                  <div>
-                    <p className="font-bold">{u.username} <span className="text-xs ml-2 opacity-50">({u.branch})</span></p>
-                    <p className={`text-xs uppercase font-black ${u.role === 'superadmin' ? 'text-amber-500' : 'text-indigo-500'}`}>{u.role}</p>
-                  </div>
-                  {canManage && (
-                    <div className="flex items-center gap-3">
-                      {isSuper && u.role === 'staff' && (
-                        <button onClick={()=>handleRoleChange(u.id, 'admin')} className="text-indigo-500 text-xs font-bold px-2 py-1 bg-indigo-500/10 rounded">Promote 🔼</button>
-                      )}
-                      {isSuper && u.role === 'admin' && (
-                        <button onClick={()=>handleRoleChange(u.id, 'staff')} className="text-amber-500 text-xs font-bold px-2 py-1 bg-amber-500/10 rounded">Demote 🔽</button>
-                      )}
-                      
-                      <button onClick={async ()=>{ 
-                        await db.deleteUser(u.id); setUsers(users.filter(x=>x.id!==u.id)); showMsg("Access revoked", "error"); 
-                      }} className="text-red-500 text-xs font-bold border border-red-500/20 px-2 py-1 rounded bg-red-500/10">Revoke Access 🗑️</button>
+          <div className={`${cardBg} p-4 md:p-6 rounded-2xl border lg:col-span-2 space-y-3`}>
+            <h3 className="font-black text-sm md:text-base">Identity Mapping Matrix</h3>
+            <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
+              {users.filter(u => isSuper ? true : u.role === 'staff').map(u => {
+                const canManage = isSuper ? (u.username !== user.username) : true;
+                return (
+                  <div key={u.id} className="flex flex-col sm:flex-row justify-between sm:items-center p-3 border rounded-xl bg-black/5 gap-2">
+                    <div>
+                      <p className="font-bold text-sm">{u.username} <span className="text-[10px] ml-1 opacity-50">({u.branch})</span></p>
+                      <p className={`text-[10px] uppercase font-black ${u.role === 'superadmin' ? 'text-amber-500' : 'text-indigo-500'}`}>{u.role}</p>
                     </div>
-                  )}
-                </div>
-              );
-            })}
+                    {canManage && (
+                      <div className="flex items-center gap-2">
+                        <button onClick={async ()=>{ 
+                          await db.deleteUser(u.id); setUsers(users.filter(x=>x.id!==u.id)); showMsg("Access revoked", "error"); 
+                        }} className="text-red-500 text-[10px] font-bold border border-red-500/20 px-2 py-1 rounded bg-red-500/10">Revoke 🗑️</button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-4 gap-4">
-            <div className={`${cardBg} p-6 rounded-2xl border h-48 col-span-3`}>
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+            <div className={`${cardBg} p-4 md:p-6 rounded-2xl border h-48 lg:col-span-3`}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <XAxis dataKey="name" tick={{fontSize: 10}} axisLine={false} tickLine={false} />
-                  <Tooltip cursor={{fill: 'rgba(0,0,0,0.05)'}} contentStyle={{background: '#1e293b', border:'none', color:'#fff', borderRadius:'8px'}} />
+                  <Tooltip cursor={{fill: 'rgba(0,0,0,0.05)'}} contentStyle={{background: '#1e293b', border:'none', color:'#fff', borderRadius:'8px', fontSize:'12px'}} />
                   <Bar dataKey="count" radius={[4, 4, 0, 0]}>{chartData.map((e, i) => (<Cell key={i} fill={e.fill} />))}</Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
             
-            <div className={`${cardBg} p-4 rounded-2xl border flex flex-col justify-center gap-3`}>
-               <h4 className="text-xs font-bold opacity-60 uppercase text-center border-b border-slate-500/20 pb-2">Filter Summary</h4>
-               <div className="flex justify-between items-center text-sm"><span className="opacity-70">Cash:</span><b className="text-emerald-500">₹{statCash}</b></div>
-               <div className="flex justify-between items-center text-sm"><span className="opacity-70">GPay:</span><b className="text-blue-500">₹{statGpay}</b></div>
-               <div className="flex justify-between items-center text-sm border-t border-slate-500/20 pt-2"><span className="opacity-70">Pending (To Pay):</span><b className="text-amber-500">₹{statPending}</b></div>
-               <button onClick={exportData} className="mt-2 w-full py-2 bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500 hover:text-white transition-colors text-xs font-bold rounded-lg border border-indigo-500/20">📥 Export Excel/CSV</button>
+            <div className={`${cardBg} p-4 rounded-2xl border flex flex-col justify-center gap-2 md:gap-3`}>
+               <h4 className="text-[10px] md:text-xs font-bold opacity-60 uppercase text-center border-b border-slate-500/20 pb-2">Filter Summary</h4>
+               <div className="flex justify-between items-center text-xs md:text-sm"><span className="opacity-70">Cash:</span><b className="text-emerald-500">₹{statCash}</b></div>
+               <div className="flex justify-between items-center text-xs md:text-sm"><span className="opacity-70">GPay:</span><b className="text-blue-500">₹{statGpay}</b></div>
+               <div className="flex justify-between items-center text-xs md:text-sm border-t border-slate-500/20 pt-2"><span className="opacity-70">Pending:</span><b className="text-amber-500">₹{statPending}</b></div>
+               <button onClick={exportData} className="mt-2 w-full py-2 bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500 hover:text-white transition-colors text-[10px] md:text-xs font-bold rounded-lg border border-indigo-500/20">📥 Export CSV</button>
             </div>
           </div>
 
-          <div className="grid grid-cols-5 gap-4">
-            <input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="🔍 Lookup Keyword" className={`p-3 rounded-xl border ${cardBg}`} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
+            <input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="🔍 Keyword" className={`p-2 md:p-3 rounded-xl border text-sm ${cardBg}`} />
             
-            <select disabled={!isSuper} value={branchFilter} onChange={e=>setBranchFilter(e.target.value)} className={`p-3 rounded-xl border font-bold ${cardBg} ${!isSuper && 'opacity-50 cursor-not-allowed'}`}>
-              {isSuper && <option value="All">Global (All Branches)</option>}
-              {CITIES.map(c => <option key={c} value={c}>Branch: {c}</option>)}
+            <select disabled={!isSuper} value={branchFilter} onChange={e=>setBranchFilter(e.target.value)} className={`p-2 md:p-3 rounded-xl border font-bold text-sm ${cardBg} ${!isSuper && 'opacity-50 cursor-not-allowed'}`}>
+              {isSuper && <option value="All">All Branches</option>}
+              {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
 
-            <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} className={`p-3 rounded-xl border font-bold ${cardBg}`} title="From Date" />
-            <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} className={`p-3 rounded-xl border font-bold ${cardBg}`} title="To Date" />
+            <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} className={`p-2 md:p-3 rounded-xl border font-bold text-sm ${cardBg}`} title="From Date" />
+            <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} className={`p-2 md:p-3 rounded-xl border font-bold text-sm ${cardBg}`} title="To Date" />
 
-            <select value={paymentFilter} onChange={e=>setPaymentFilter(e.target.value)} className={`p-3 rounded-xl border font-bold ${cardBg}`}>
-              <option value="All">All Modalities</option>
-              <option value="Paid">Paid Receipts</option>
-              <option value="To Pay">To Pay Invoices</option>
-              <option value="Credit">Credit Profiles</option>
+            <select value={paymentFilter} onChange={e=>setPaymentFilter(e.target.value)} className={`p-2 md:p-3 rounded-xl border font-bold text-sm ${cardBg}`}>
+              <option value="All">All Modes</option>
+              <option value="Paid">Paid</option>
+              <option value="To Pay">To Pay</option>
+              <option value="Credit">Credit</option>
             </select>
           </div>
 
-          <div className={`${cardBg} rounded-2xl border overflow-hidden shadow-sm`}>
-            <table className="w-full text-left">
-              <thead className={`${tblBg} text-xs font-bold uppercase opacity-80`}>
-                <tr><th className="p-4">LR Code</th><th className="p-4">Route Info</th><th className="p-4">Billing Parameters</th><th className="p-4">Tracking Node</th><th className="p-4">Operations Control</th></tr>
+          {/* 🔥 MOBILE TABLE FIX HERE (overflow-x-auto) 🔥 */}
+          <div className={`${cardBg} rounded-2xl border overflow-x-auto shadow-sm`}>
+            <table className="min-w-[800px] w-full text-left whitespace-nowrap">
+              <thead className={`${tblBg} text-[10px] md:text-xs font-bold uppercase opacity-80`}>
+                <tr><th className="p-3 md:p-4">LR Code</th><th className="p-3 md:p-4">Route Info</th><th className="p-3 md:p-4">Billing Parameters</th><th className="p-3 md:p-4">Tracking Node</th><th className="p-3 md:p-4">Operations Control</th></tr>
               </thead>
               <tbody>
-                {sortedTableData.length === 0 ? <tr><td colSpan="5" className="p-8 text-center opacity-50 font-bold">No records found for the selected dates/branch.</td></tr> : sortedTableData.map(p => (
+                {sortedTableData.length === 0 ? <tr><td colSpan="5" className="p-8 text-center opacity-50 font-bold">No records found.</td></tr> : sortedTableData.map(p => (
                   <tr key={p.id} className={`border-t hover:bg-black/5 ${p.status === 'Deleted' ? 'bg-red-500/5 border-red-500/10' : 'border-slate-500/10'}`}>
-                    <td className="p-4 font-black text-indigo-500">{p.id} <span className="block text-[10px] opacity-50 font-normal">{p.date}</span></td>
-                    <td className="p-4 text-sm font-bold">{p.from} ➔ {p.to}</td>
-                    <td className="p-4 text-sm">₹{p.price} <b className="text-xs opacity-60">({p.payment})</b></td>
-                    <td className="p-4">
-                      <span className="px-3 py-1 rounded-full text-xs font-bold" style={{backgroundColor: S_CLR[p.status]+'22', color: S_CLR[p.status]}}>{p.status}</span>
+                    <td className="p-3 md:p-4 font-black text-indigo-500 text-sm">{p.id} <span className="block text-[10px] opacity-50 font-normal">{p.date}</span></td>
+                    <td className="p-3 md:p-4 text-xs md:text-sm font-bold">{p.from} ➔ {p.to}</td>
+                    <td className="p-3 md:p-4 text-xs md:text-sm">₹{p.price} <b className="text-[10px] md:text-xs opacity-60">({p.payment})</b></td>
+                    <td className="p-3 md:p-4">
+                      <span className="px-2 md:px-3 py-1 rounded-full text-[10px] md:text-xs font-bold" style={{backgroundColor: S_CLR[p.status]+'22', color: S_CLR[p.status]}}>{p.status}</span>
                       {p.status === 'Deleted' && isSuper && (
-                        <div className="text-[10px] text-red-500 font-bold mt-2">
+                        <div className="text-[10px] text-red-500 font-bold mt-1">
                           <p>By: {p.deletedBy}</p>
                           <p>Reason: {p.deleteReason}</p>
                         </div>
                       )}
                     </td>
-                    <td className="p-4 space-x-2">
+                    <td className="p-3 md:p-4 space-x-1 md:space-x-2">
                       {p.status !== 'Deleted' && (
                         <>
-                          <button onClick={()=>setEditF(p)} className="text-amber-500 text-xs font-bold border border-amber-500/20 px-2 py-1 rounded bg-amber-500/5">✏️ Edit</button>
-                          <button onClick={()=>deleteRecord(p.id)} className="text-red-500 text-xs font-bold border border-red-500/20 px-2 py-1 rounded bg-red-500/5">🗑️ Drop</button>
+                          <button onClick={()=>setEditF(p)} className="text-amber-500 text-[10px] md:text-xs font-bold border border-amber-500/20 px-2 py-1 rounded bg-amber-500/5">✏️ Edit</button>
+                          <button onClick={()=>deleteRecord(p.id)} className="text-red-500 text-[10px] md:text-xs font-bold border border-red-500/20 px-2 py-1 rounded bg-red-500/5">🗑️ Drop</button>
                         </>
                       )}
-                      <button onClick={()=>generatePDF(p)} className="text-blue-500 text-xs font-bold border border-blue-500/20 px-2 py-1 rounded bg-blue-500/5">🖨️ Print</button>
+                      <button onClick={()=>generatePDF(p)} className="text-blue-500 text-[10px] md:text-xs font-bold border border-blue-500/20 px-2 py-1 rounded bg-blue-500/5">🖨️ Print</button>
                     </td>
                   </tr>
                 ))}
@@ -990,12 +983,12 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user}
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
           <div className={`${cardBg} p-6 rounded-2xl max-w-lg w-full space-y-4 animate-bounce-in`}>
             <h3 className="font-black text-lg">Modify Manifest Parameters: {editF.id}</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <input value={editF.sName} onChange={e=>setEditF({...editF, sName:e.target.value})} placeholder="Sender Identity" className={`p-2 border rounded ${inputBg}`} />
-              <input value={editF.rName} onChange={e=>setEditF({...editF, rName:e.target.value})} placeholder="Receiver Identity" className={`p-2 border rounded ${inputBg}`} />
-              <input type="number" value={editF.price} onChange={e=>setEditF({...editF, price:Number(e.target.value)})} placeholder="Price Override" className={`p-2 border rounded font-bold ${inputBg}`} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <input value={editF.sName} onChange={e=>setEditF({...editF, sName:e.target.value})} placeholder="Sender Identity" className={`p-2 border rounded text-sm ${inputBg}`} />
+              <input value={editF.rName} onChange={e=>setEditF({...editF, rName:e.target.value})} placeholder="Receiver Identity" className={`p-2 border rounded text-sm ${inputBg}`} />
+              <input type="number" value={editF.price} onChange={e=>setEditF({...editF, price:Number(e.target.value)})} placeholder="Price Override" className={`p-2 border rounded font-bold text-sm ${inputBg}`} />
             </div>
-            <div className="flex gap-2"><button onClick={saveOverrides} className="bg-indigo-600 text-white font-bold py-2 px-4 rounded-xl flex-1">Save Changes</button><button onClick={()=>setEditF(null)} className="bg-slate-500 text-white py-2 px-4 rounded-xl">Dismiss</button></div>
+            <div className="flex gap-2 mt-4"><button onClick={saveOverrides} className="bg-indigo-600 text-white font-bold py-2 px-4 rounded-xl flex-1 text-sm">Save Changes</button><button onClick={()=>setEditF(null)} className="bg-slate-500 text-white py-2 px-4 rounded-xl text-sm">Dismiss</button></div>
           </div>
         </div>
       )}
@@ -1019,16 +1012,16 @@ function Login({onLogin, theme}) {
   };
 
   return (
-    <div className={`flex h-screen items-center justify-center ${isDark?'bg-slate-900':'bg-slate-100'}`}>
-      <div className={`${isDark?'bg-slate-800 border-slate-700 text-white':'bg-white border-slate-200 text-slate-800'} p-10 rounded-3xl shadow-2xl w-96 text-center border relative`}>
+    <div className={`flex h-screen items-center justify-center p-4 ${isDark?'bg-slate-900':'bg-slate-100'}`}>
+      <div className={`${isDark?'bg-slate-800 border-slate-700 text-white':'bg-white border-slate-200 text-slate-800'} p-8 md:p-10 rounded-3xl shadow-2xl w-full max-w-sm text-center border relative`}>
         <div className="flex justify-center mb-6"><MpsLogo /></div>
-        <h2 className="text-2xl font-black mb-2 tracking-widest">MPS TERMINAL</h2>
+        <h2 className="text-xl md:text-2xl font-black mb-2 tracking-widest">MPS TERMINAL</h2>
         
-        {err ? <p className="text-red-500 font-bold mb-4 text-sm animate-fade-in">{err}</p> : <div className="h-4 mb-4"></div>}
+        {err ? <p className="text-red-500 font-bold mb-4 text-xs md:text-sm animate-fade-in">{err}</p> : <div className="h-4 mb-4"></div>}
         
-        <input id="userIn" onKeyDown={e=> e.key === 'Enter' ? document.getElementById('pwdIn').focus() : null} value={u} onChange={e=>{setU(e.target.value); setErr("");}} placeholder="User Identity ID" className="w-full border p-3 rounded-xl mb-4 text-center font-bold text-slate-900 bg-slate-100 outline-none focus:ring-2 focus:ring-indigo-500" />
-        <input id="pwdIn" onKeyDown={e=> e.key === 'Enter' && handleSub()} value={p} onChange={e=>{setP(e.target.value); setErr("");}} type="password" placeholder="Credential Security Code" className="w-full border p-3 rounded-xl mb-6 text-center font-bold text-slate-900 bg-slate-100 outline-none focus:ring-2 focus:ring-indigo-500" />
-        <button onClick={handleSub} className="w-full bg-indigo-600 text-white font-black py-3 rounded-xl hover:bg-indigo-700 transition">Access Server</button>
+        <input id="userIn" onKeyDown={e=> e.key === 'Enter' ? document.getElementById('pwdIn').focus() : null} value={u} onChange={e=>{setU(e.target.value); setErr("");}} placeholder="User Identity ID" className="w-full border p-3 rounded-xl mb-4 text-center font-bold text-slate-900 bg-slate-100 outline-none focus:ring-2 focus:ring-indigo-500 text-sm md:text-base" />
+        <input id="pwdIn" onKeyDown={e=> e.key === 'Enter' && handleSub()} value={p} onChange={e=>{setP(e.target.value); setErr("");}} type="password" placeholder="Credential Security Code" className="w-full border p-3 rounded-xl mb-6 text-center font-bold text-slate-900 bg-slate-100 outline-none focus:ring-2 focus:ring-indigo-500 text-sm md:text-base" />
+        <button onClick={handleSub} className="w-full bg-indigo-600 text-white font-black py-3 rounded-xl hover:bg-indigo-700 transition text-sm md:text-base">Access Server</button>
       </div>
     </div>
   );
