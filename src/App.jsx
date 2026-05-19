@@ -29,18 +29,6 @@ const generateLR = (originCity, allParcels) => {
   return `${prefix}${String(max + 1).padStart(6, '0')}`;
 };
 
-function parseIndDate(dStr) {
-  if(!dStr) return new Date();
-  const parts = dStr.split('/');
-  if(parts.length === 3) return new Date(`${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}T00:00:00`);
-  return new Date(dStr);
-}
-
-const T = {
-  en: { nav: { dashboard: "Dashboard", book: "Book LR", track: "Track", dispatch: "Dispatch", delivery: "Delivery", accounts: "Accounts", admin: "System Control" }, bookT: "Book a Parcel", estC: "Estimated Total", sT: "Sender Details", rT: "Receiver Details", pT: "Parcel Details", conf: "Confirm Booking", trkT: "Track Parcel" },
-  ta: { nav: { dashboard: "முகப்பு", book: "பார்சல் பதிவு", track: "கண்காணி", dispatch: "அனுப்புதல்", delivery: "டெலிவரி", accounts: "கணக்குகள்", admin: "கட்டுப்பாடு" }, bookT: "பார்சல் பதிவு", estC: "மொத்த கட்டணம்", sT: "அனுப்புபவர்", rT: "பெறுபவர்", pT: "பார்சல் விவரம்", conf: "உறுதிப்படுத்து", trkT: "கண்காணிப்பு" }
-};
-
 const MpsLogo = () => (
   <svg className="w-8 h-8 text-indigo-500 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line>
@@ -126,9 +114,6 @@ const handleBoxTravel = (e, targets) => {
   }
 };
 
-/* ══════════════════════════════════════════
-   CUSTOM AUTO-SUGGEST COMPONENT
-══════════════════════════════════════════ */
 function SuggestInput({ id, label, value, onChange, onSelect, dataList, isPhone, theme, onKeyDown }) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -201,9 +186,6 @@ function SuggestInput({ id, label, value, onChange, onSelect, dataList, isPhone,
   );
 }
 
-/* ══════════════════════════════════════════
-   LOCAL STORAGE ENGINE
-══════════════════════════════════════════ */
 const local={
   async get(k){try{const r=window.localStorage.getItem(k);return r?JSON.parse(r):null;}catch{return null;}},
   async set(k,v){try{window.localStorage.setItem(k,JSON.stringify(v));}catch{}},
@@ -264,9 +246,6 @@ class DB{
   }
 }
 
-/* ══════════════════════════════════════════
-   MAIN CONTAINER
-══════════════════════════════════════════ */
 export default function App() {
   const [page, setPage] = useState("dashboard");
   const [parcels, setParcels] = useState([]);
@@ -275,13 +254,12 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [shortcutMode, setShortcutMode] = useState("");
   const [theme, setTheme] = useState("light");
-  const [lang, setLang] = useState("en");
   
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
+  const [creditAuthList, setCreditAuthList] = useState([]); 
 
   const [db] = useState(new DB(ENV_URL, ENV_KEY));
   const showMsg = (msg, type='success') => { setToast({msg, type}); setTimeout(() => setToast(null), 3000); };
-  const t = T[lang];
 
   useEffect(() => {
     async function init() {
@@ -289,6 +267,8 @@ export default function App() {
       const usrs = await db.getUsers(); setUsers(usrs);
       const session = await local.get("mps_session"); if(session) setUser(session);
       const savedTheme = await local.get("mps_theme"); if(savedTheme) setTheme(savedTheme);
+      
+      const cList = await local.get("mps_credit_auth") || []; setCreditAuthList(cList);
     } init();
   }, []);
 
@@ -336,13 +316,12 @@ export default function App() {
 
         <nav className="flex-1 px-2 py-4 md:px-3 md:py-6 space-y-2 overflow-y-auto">
           {[
-            { id: 'dashboard', icon: '📊', label: t.nav.dashboard, role: 'staff' },
-            { id: 'book', icon: '📦', label: t.nav.book, role: 'staff' },
-            { id: 'track', icon: '🔍', label: t.nav.track, role: 'staff' },
-            { id: 'dispatch', icon: '🚚', label: t.nav.dispatch, role: 'staff' },
-            { id: 'delivery', icon: '🤝', label: t.nav.delivery, role: 'staff' },
-            { id: 'accounts', icon: '💰', label: t.nav.accounts, role: 'admin' },
-            { id: 'admin', icon: '⚙️', label: t.nav.admin, role: 'admin' }
+            { id: 'dashboard', icon: '📊', label: 'Dashboard', role: 'staff' },
+            { id: 'book', icon: '📦', label: 'Book Parcel', role: 'staff' },
+            { id: 'track', icon: '🔍', label: 'Track', role: 'staff' },
+            { id: 'delivery', icon: '🤝', label: 'Delivery', role: 'staff' },
+            { id: 'accounts', icon: '💰', label: 'Accounts', role: 'admin' },
+            { id: 'admin', icon: '⚙️', label: 'System Control', role: 'admin' }
           ].map(item => {
             const isAuthorized = item.role === 'staff' || user.role === 'admin' || user.role === 'superadmin';
             if (!isAuthorized) return null;
@@ -356,7 +335,7 @@ export default function App() {
         </nav>
         <div className="p-4 border-t border-slate-800 flex justify-center">
           <button onClick={async ()=>{setUser(null); await local.remove("mps_session");}} className="text-slate-400 hover:text-white transition-colors flex items-center justify-center font-bold text-sm">
-            <span>🚪</span> {sidebarExpanded && <span className="ml-2">Logout ({user.username})</span>}
+            <span>🚪</span> {sidebarExpanded && <span className="ml-2">Logout</span>}
           </button>
         </div>
       </aside>
@@ -373,7 +352,6 @@ export default function App() {
             <span className={`text-[10px] md:text-xs font-black uppercase px-2 py-1 md:px-3 rounded-full border ${user.role === 'superadmin' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20'}`}>
               {user.role} | {user.branch}
             </span>
-            <button onClick={() => setLang(lang==='en'?'ta':'en')} className="px-2 py-1 md:px-3 text-[10px] md:text-xs font-bold border rounded-full">{lang==='en'?'தமிழ்':'EN'}</button>
             <button onClick={toggleTheme} className="text-lg md:text-xl">{(isDark)?'☀️':'🌙'}</button>
           </div>
         </header>
@@ -381,12 +359,11 @@ export default function App() {
         <div className="flex-1 overflow-y-auto p-4 md:p-8 relative">
           <div className="max-w-6xl mx-auto animate-fade-in">
             {page === 'dashboard' && <Dashboard parcels={parcels} isDark={isDark} user={user} />}
-            {page === 'book' && <Book shortcutMode={shortcutMode} parcels={parcels} setParcels={setParcels} db={db} showMsg={showMsg} isDark={isDark} theme={theme} user={user} />}
+            {page === 'book' && <Book shortcutMode={shortcutMode} parcels={parcels} setParcels={setParcels} db={db} showMsg={showMsg} isDark={isDark} theme={theme} user={user} creditAuthList={creditAuthList} />}
             {page === 'track' && <Track parcels={parcels} isDark={isDark} />}
-            {page === 'dispatch' && <Dispatch showMsg={showMsg} isDark={isDark} />}
             {page === 'delivery' && <Delivery parcels={parcels} setParcels={setParcels} db={db} showMsg={showMsg} isDark={isDark} user={user} />}
-            {page === 'accounts' && (user.role === 'admin' || user.role === 'superadmin') && <Accounts parcels={parcels} isDark={isDark} user={user} />}
-            {page === 'admin' && (user.role === 'admin' || user.role === 'superadmin') && <Admin parcels={parcels} users={users} setUsers={setUsers} setParcels={setParcels} db={db} showMsg={showMsg} isDark={isDark} user={user} />}
+            {page === 'accounts' && (user.role === 'admin' || user.role === 'superadmin') && <Accounts parcels={parcels} setParcels={setParcels} db={db} showMsg={showMsg} isDark={isDark} user={user} />}
+            {page === 'admin' && (user.role === 'admin' || user.role === 'superadmin') && <Admin parcels={parcels} users={users} setUsers={setUsers} setParcels={setParcels} db={db} showMsg={showMsg} isDark={isDark} user={user} creditAuthList={creditAuthList} setCreditAuthList={setCreditAuthList} />}
           </div>
         </div>
       </main>
@@ -400,35 +377,56 @@ export default function App() {
   );
 }
 
-/* ══════════════════════════════════════════
-   DASHBOARD
-══════════════════════════════════════════ */
 function Dashboard({parcels, isDark, user}) {
   const activeParcels = parcels.filter(p => p.status !== 'Deleted');
   const branchParcels = activeParcels.filter(p => user.branch === 'All' || p.bookedBranch === user.branch || p.from === user.branch || p.to === user.branch);
   const rev = branchParcels.reduce((a,b)=>a+(b.price||0),0);
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-100";
+  
+  const godownStock = activeParcels.filter(p => p.from === user.branch && p.status === 'Booked');
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-      {[
-        {l: "Total Bookings", v: branchParcels.length, c: "text-blue-500"},
-        {l: "In Transit", v: branchParcels.filter(p=>p.status==="In Transit").length, c: "text-amber-500"},
-        {l: "Delivered", v: branchParcels.filter(p=>p.status==="Delivered").length, c: "text-emerald-500"},
-        {l: "Branch Revenue", v: `₹${rev}`, c: "text-indigo-500"}
-      ].map((s,i) => (
-        <div key={i} className={`${cardBg} p-4 md:p-6 rounded-2xl shadow-sm border flex flex-col justify-center`}>
-          <span className="text-xs font-bold opacity-60 uppercase mb-1 md:mb-2">{s.l}</span>
-          <span className={`text-2xl md:text-4xl font-black ${s.c}`}>{s.v}</span>
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+        {[
+          {l: "Total Bookings", v: branchParcels.length, c: "text-blue-500"},
+          {l: "In Transit", v: branchParcels.filter(p=>p.status==="In Transit").length, c: "text-amber-500"},
+          {l: "Delivered", v: branchParcels.filter(p=>p.status==="Delivered").length, c: "text-emerald-500"},
+          {l: "Branch Revenue", v: `₹${rev}`, c: "text-indigo-500"}
+        ].map((s,i) => (
+          <div key={i} className={`${cardBg} p-4 md:p-6 rounded-2xl shadow-sm border flex flex-col justify-center`}>
+            <span className="text-xs font-bold opacity-60 uppercase mb-1 md:mb-2">{s.l}</span>
+            <span className={`text-2xl md:text-4xl font-black ${s.c}`}>{s.v}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className={`${cardBg} rounded-2xl shadow-sm border overflow-hidden mt-6`}>
+        <div className="bg-slate-900 text-white p-4 font-bold md:text-lg flex justify-between items-center">
+          <span>📦 Godown Stock (Pending Loading)</span>
+          <span className="bg-red-500 px-3 py-1 rounded-full text-xs md:text-sm">{godownStock.length} Parcels</span>
         </div>
-      ))}
+        <div className="p-4 max-h-64 overflow-y-auto">
+          {godownStock.length === 0 ? <p className="text-center opacity-50 font-bold py-4">Godown Empty. All dispatched!</p> : 
+            <table className="w-full text-left text-sm">
+              <thead className="opacity-50"><tr><th className="pb-2">LR No</th><th className="pb-2">Destination</th><th className="pb-2">Type</th><th className="pb-2">Qty</th></tr></thead>
+              <tbody>
+                {godownStock.map(p => (
+                  <tr key={p.id} className="border-t border-slate-500/20">
+                    <td className="py-3 font-bold text-indigo-500">{p.id}</td><td className="py-3">{p.to}</td>
+                    <td className="py-3">{p.type}</td><td className="py-3 font-black text-amber-500">{p.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          }
+        </div>
+      </div>
     </div>
   );
 }
 
-/* ══════════════════════════════════════════
-   BOOK (Responsive Layout)
-══════════════════════════════════════════ */
-function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, user}) {
+function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, user, creditAuthList}) {
   const initF = {sName:"", sPhone:"", sGst:"", rName:"", rPhone:"", rGst:"", from: user.branch === 'All' ? "" : user.branch, to:"", rate:"", count:"1", actualWeight:"", type:"Box", payment:"Paid", creditCustomer:"", notes:""};
   const [f, setF] = useState(initF);
   const [done, setDone] = useState(null);
@@ -494,20 +492,25 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
     if(!f.sName || !f.sPhone || !f.from || !f.rName || !f.rPhone || !f.to || !f.count || !f.rate || !f.type) {
       return showMsg("Please fill all mandatory fields marked with (*)", "error");
     }
-    if(f.payment === "Credit" && !f.creditCustomer) return showMsg("Credit Customer Account target missing (*)", "error");
+
+    if(f.payment === "Credit") {
+      const isAuth = creditAuthList.find(c => c.phone === f.sPhone);
+      if(!isAuth) return showMsg("Unauthorized Phone Number for Credit Billing! Please use Cash/To-Pay.", "error");
+      f.creditCustomer = isAuth.company; 
+    } else if(f.payment === "Credit" && !f.creditCustomer) {
+      return showMsg("Credit Customer Account target missing (*)", "error");
+    }
     
     const dObj = new Date();
     const isoDate = dObj.toISOString();
     const locDateStr = dObj.toLocaleDateString('en-IN');
     const lrNumber = generateLR(f.from, parcels);
-    const p = {...f, notes: f.payment === 'Credit' ? `[A/c: ${f.creditCustomer}] ${f.notes}` : f.notes, id: lrNumber, date: locDateStr, isoDate: isoDate, status: "Booked", price: ep, bookedBy: user.username, bookedBranch: user.branch, history: [{status: "Booked", loc: f.from, time: dObj.toLocaleString()}]};
+    const p = {...f, notes: f.payment === 'Credit' ? `[A/c: ${f.creditCustomer}] ${f.notes}` : f.notes, id: lrNumber, date: locDateStr, isoDate: isoDate, status: "Booked", price: ep, bookedBy: user.username, bookedBranch: user.branch, settledBranches: [], history: [{status: "Booked", loc: f.from, time: dObj.toLocaleString()}]};
     
     const saved = await local.get("mps_contacts") || {};
     saved[f.sPhone] = { name: f.sName, gst: f.sGst }; saved[f.rPhone] = { name: f.rName, gst: f.rGst };
     await local.set("mps_contacts", saved);
     await db.insertParcel(p); setParcels([p, ...parcels]); setDone(p); showMsg("LR Generated cleanly.");
-    
-    setTimeout(() => { openWhatsApp(p.sPhone, true, p); }, 800);
   };
 
   if(done) return (
@@ -515,7 +518,8 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
       <h2 className="text-xl md:text-2xl font-black mb-4">Parcel Registered Successfully</h2>
       <div className="bg-indigo-600/10 text-indigo-500 text-xl md:text-2xl font-mono font-bold p-3 rounded-xl mb-6">{done.id}</div>
       <button onClick={()=>{setDone(null); setF(initF); setEway("");}} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl mb-3">New Registration</button>
-      <button onClick={()=>generatePDF(done)} className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl">Download Receipt</button>
+      <button onClick={()=>generatePDF(done)} className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl mb-3">Download Receipt</button>
+      <button onClick={() => openWhatsApp(done.sPhone, true, done)} className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl">📱 Send SMS / WhatsApp (Manual)</button>
     </div>
   );
 
@@ -559,7 +563,7 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mt-2">
           <div className="flex flex-col gap-3">
             <select id="pPay" onKeyDown={e=>handleBoxTravel(e,{enter: f.payment==='Credit' ? 'pCredit' : 'btnSubmit', right: f.payment==='Credit'?'pCredit':'', up:'pQty', down:'btnSubmit'})} value={f.payment} onChange={e=>setF({...f, payment:e.target.value})} className="p-3 border rounded-xl font-bold bg-indigo-600 text-white outline-none w-full">{PAY_MODES.map(p=><option key={p} value={p}>{p.toUpperCase()}</option>)}</select>
-            {f.payment === 'Credit' && <input id="pCredit" onKeyDown={e=>handleBoxTravel(e,{enter:'btnSubmit', left:'pPay', up:'pRate', down:'btnSubmit'})} value={f.creditCustomer} onChange={e=>setF({...f, creditCustomer:e.target.value})} placeholder="Company Name Account *" className={`p-3 rounded-xl border outline-none w-full ${inputBg}`} />}
+            {f.payment === 'Credit' && <input id="pCredit" onKeyDown={e=>handleBoxTravel(e,{enter:'btnSubmit', left:'pPay', up:'pRate', down:'btnSubmit'})} value={f.creditCustomer} onChange={e=>setF({...f, creditCustomer:e.target.value})} placeholder="Company Name Account *" className={`p-3 rounded-xl border outline-none w-full ${inputBg}`} disabled={true} />}
           </div>
           <div className="bg-slate-950 p-4 rounded-xl flex justify-between items-center text-white h-full"><span className="text-sm opacity-50">Total Income Allocation</span><span className="text-xl md:text-2xl font-black text-emerald-400">₹{ep}</span></div>
         </div>
@@ -569,9 +573,6 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
   );
 }
 
-/* ══════════════════════════════════════════
-   TRACK
-══════════════════════════════════════════ */
 function Track({parcels, isDark}) {
   const [id, setId] = useState(""); const [res, setRes] = useState(null);
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-100";
@@ -597,24 +598,6 @@ function Track({parcels, isDark}) {
   );
 }
 
-/* ══════════════════════════════════════════
-   DISPATCH
-══════════════════════════════════════════ */
-function Dispatch({showMsg, isDark}) {
-  return (
-    <div className={`max-w-xl mx-auto p-4 md:p-6 rounded-2xl border ${isDark?'bg-slate-800 border-slate-700':'bg-white'}`}>
-      <h3 className="text-lg font-bold mb-4">Vehicle Manifest Load</h3>
-      <input id="dVehicle" onKeyDown={e=>handleBoxTravel(e,{enter:'dDriver', down:'dDriver'})} placeholder="Vehicle Registration Number" className={`w-full p-3 mb-4 rounded-xl border outline-none ${isDark?'bg-slate-900':'bg-transparent'}`} />
-      <input id="dDriver" onKeyDown={e=>handleBoxTravel(e,{enter:'dScan', down:'dScan', up:'dVehicle'})} placeholder="Assigned Driver Name" className={`w-full p-3 mb-4 rounded-xl border outline-none ${isDark?'bg-slate-900':'bg-transparent'}`} />
-      <input id="dScan" onKeyDown={e=>handleBoxTravel(e,{enter:'dBtn', down:'dBtn', up:'dDriver'})} placeholder="Enter LR Number to Append..." className={`w-full p-3 mb-4 rounded-xl border outline-none ${isDark?'bg-slate-900':'bg-transparent'}`} />
-      <button id="dBtn" onClick={()=>showMsg("Trip Dispatched Successfully!")} onKeyDown={e => e.key === 'Enter' && showMsg("Trip Dispatched Successfully!")} className="w-full bg-orange-500 text-white py-3 rounded-xl font-bold">Dispatch Vehicle</button>
-    </div>
-  );
-}
-
-/* ══════════════════════════════════════════
-   DELIVERY DESK
-══════════════════════════════════════════ */
 function Delivery({parcels, setParcels, db, showMsg, isDark, user}) {
   const [id, setId] = useState(""); const [activeItem, setActiveItem] = useState(null); const [payMethod, setPayMethod] = useState("");
 
@@ -672,77 +655,200 @@ function Delivery({parcels, setParcels, db, showMsg, isDark, user}) {
 }
 
 /* ══════════════════════════════════════════
-   ACCOUNTS
+   ACCOUNTS (+ NET SETTLEMENT LOGIC)
 ══════════════════════════════════════════ */
-function Accounts({parcels, isDark, user}) {
+function Accounts({parcels, setParcels, db, showMsg, isDark, user}) {
   const [acc, setAcc] = useState({ emi: 25000, diesel: 30000, other: 15000 });
+  const [payoutRate, setPayoutRate] = useState(10);
+  const [partnerCount, setPartnerCount] = useState(5);
+  const [pettyDesc, setPettyDesc] = useState("");
+  const [pettyAmt, setPettyAmt] = useState("");
+  const [pettyLedger, setPettyLedger] = useState([]);
   
-  const activeParcels = parcels.filter(p => p.status !== 'Deleted');
-  const branchParcels = activeParcels.filter(p => user.branch === 'All' || p.bookedBranch === user.branch || p.deliveredBranch === user.branch || p.from === user.branch || p.to === user.branch);
+  // For Admin settlement control
+  const [selectedBranch, setSelectedBranch] = useState(user.branch === 'All' ? CITIES[0] : user.branch);
 
-  const todayStr = new Date().toLocaleDateString('en-IN');
-  const itemsToday = branchParcels.filter(p => p.date === todayStr);
-  const cashCollectedToday = itemsToday.filter(p => p.payment === 'Paid' || (p.payment === 'To Pay' && p.deliveryMode === 'Cash')).reduce((a,b)=>a+b.price, 0);
-  const gpayCollectedToday = itemsToday.filter(p => p.payment === 'To Pay' && p.deliveryMode === 'GPay').reduce((a,b)=>a+b.price, 0);
-  const totalSystemRevenue = branchParcels.reduce((a,b)=>a+(b.price||0), 0);
+  useEffect(() => { local.get("mps_petty_cash").then(d => { if(d) setPettyLedger(d); }); }, []);
+
+  const addPetty = async () => {
+    if(!pettyDesc || !pettyAmt) return;
+    const item = { desc: pettyDesc, amt: Number(pettyAmt), date: new Date().toLocaleDateString() };
+    const newList = [item, ...pettyLedger];
+    setPettyLedger(newList); await local.set("mps_petty_cash", newList);
+    setPettyDesc(""); setPettyAmt("");
+  };
+
+  const activeParcels = parcels.filter(p => p.status !== 'Deleted');
+  
+  // Global View Variables (For Top Bar)
+  const totalSystemRevenue = activeParcels.reduce((a,b)=>a+(b.price||0), 0);
+  const totalPetty = pettyLedger.reduce((a,b)=>a+b.amt, 0);
   const exp = acc.emi + acc.diesel + acc.other;
-  const net = totalSystemRevenue - exp;
+  const net = totalSystemRevenue - exp - totalPetty; // Excludes payout logic globally for simplicity here
+
+  // 🔴 BRANCH SETTLEMENT LOGIC (For Selected Branch) 🔴
+  // Filter parcels that involve the selected branch and ARE NOT YET SETTLED
+  const unsettledBranchParcels = activeParcels.filter(p => {
+    const isRelated = p.bookedBranch === selectedBranch || p.deliveredBranch === selectedBranch;
+    const isSettled = p.settledBranches && p.settledBranches.includes(selectedBranch);
+    return isRelated && !isSettled;
+  });
+
+  // 1. Branch Cash in Hand = (Booked Paid Cash) + (Delivered To-Pay Cash)
+  const cashCollected = unsettledBranchParcels.filter(p => 
+    (p.bookedBranch === selectedBranch && p.payment === 'Paid') || 
+    (p.deliveredBranch === selectedBranch && p.payment === 'To Pay' && p.deliveryMode === 'Cash')
+  ).reduce((a,b) => a + b.price, 0);
+
+  // 2. Branch Commission = (Booked Count + Delivered Count) * Rate
+  const bookedCount = unsettledBranchParcels.filter(p => p.bookedBranch === selectedBranch).length;
+  const deliveredCount = unsettledBranchParcels.filter(p => p.deliveredBranch === selectedBranch && p.status === 'Delivered').length;
+  const branchCommission = (bookedCount + deliveredCount) * payoutRate;
+
+  // 3. Net Balance Remittance
+  const netRemittance = cashCollected - branchCommission;
+
+  const markLedgerSettled = async () => {
+    if(unsettledBranchParcels.length === 0) return showMsg("No pending transactions to settle!", "error");
+    if(!window.confirm(`Settle ledger for ${selectedBranch}? This will freeze these parcels.`)) return;
+
+    let updatedParcelsList = [...parcels];
+    for (let p of unsettledBranchParcels) {
+      const updated = {...p, settledBranches: [...(p.settledBranches || []), selectedBranch]};
+      await db.updateParcel(updated.id, updated);
+      updatedParcelsList = updatedParcelsList.map(x => x.id === updated.id ? updated : x);
+    }
+    setParcels(updatedParcelsList);
+    showMsg(`Ledger Settled for ${selectedBranch}. Frozen ${unsettledBranchParcels.length} parcels.`, "success");
+  };
+
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200";
+  const inputBg = isDark ? "bg-slate-900 border-slate-700" : "bg-slate-50";
 
   return (
     <div className="space-y-6 md:space-y-8">
+      {/* 🔴 NEW: ADVANCED BRANCH RECONCILIATION PANEL 🔴 */}
+      <div className={`${cardBg} p-6 rounded-3xl border shadow-xl`}>
+         <div className="flex justify-between items-center border-b border-slate-500/20 pb-4 mb-4">
+            <div>
+              <h3 className="font-black text-xl text-indigo-500">Franchise Reconciliation & Payout</h3>
+              <p className="text-xs opacity-60">Active Settlement View</p>
+            </div>
+            {user.role === 'superadmin' ? (
+              <select value={selectedBranch} onChange={e=>setSelectedBranch(e.target.value)} className={`p-2 rounded-xl font-bold border ${inputBg} outline-none`}>
+                {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            ) : (
+               <div className="font-black text-lg bg-indigo-500/10 text-indigo-500 px-4 py-2 rounded-xl">{selectedBranch}</div>
+            )}
+         </div>
+
+         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div className={`p-4 rounded-2xl border border-dashed border-slate-500/30 text-center`}>
+               <p className="text-[10px] uppercase font-bold opacity-60 mb-1">Unsettled Parcels</p>
+               <p className="text-2xl font-black">{bookedCount} <span className="text-sm opacity-50 font-normal">Bk</span> + {deliveredCount} <span className="text-sm opacity-50 font-normal">Dl</span></p>
+            </div>
+            <div className={`p-4 rounded-2xl border border-dashed border-emerald-500/30 text-center bg-emerald-500/5`}>
+               <p className="text-[10px] uppercase font-bold text-emerald-600 mb-1">Branch Cash in Hand</p>
+               <p className="text-2xl font-black text-emerald-600">₹{cashCollected.toLocaleString()}</p>
+               <p className="text-[8px] opacity-60 mt-1">From Paid & Cash To-Pay</p>
+            </div>
+            <div className={`p-4 rounded-2xl border border-dashed border-amber-500/30 text-center bg-amber-500/5`}>
+               <p className="text-[10px] uppercase font-bold text-amber-600 mb-1">Commission Earned</p>
+               <div className="flex justify-center items-center gap-2">
+                 <p className="text-2xl font-black text-amber-600">₹{branchCommission.toLocaleString()}</p>
+                 <input type="number" title="Rate" value={payoutRate} onChange={e=>setPayoutRate(Number(e.target.value))} className={`w-10 p-1 text-xs text-center border rounded ${inputBg}`} />
+               </div>
+               <p className="text-[8px] opacity-60 mt-1">Total Parcels × Rate</p>
+            </div>
+            <div className={`p-4 rounded-2xl border text-center text-white shadow-inner ${netRemittance >= 0 ? 'bg-indigo-600 border-indigo-700' : 'bg-red-500 border-red-600'}`}>
+               <p className="text-[10px] uppercase font-bold opacity-80 mb-1">{netRemittance >= 0 ? 'Branch Remit to HQ' : 'HQ Pays Branch'}</p>
+               <p className="text-2xl font-black">₹{Math.abs(netRemittance).toLocaleString()}</p>
+               <p className="text-[8px] opacity-80 mt-1">Net Balance Transfer</p>
+            </div>
+         </div>
+
+         <div className="flex gap-4">
+            <button className="flex-1 border border-indigo-500 text-indigo-500 font-bold py-3 rounded-xl hover:bg-indigo-500/10">📥 Download Statement PDF</button>
+            <button onClick={markLedgerSettled} className="flex-1 bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700 shadow-md">🔒 Mark Ledger as Settled</button>
+         </div>
+      </div>
+
       <div className={`${cardBg} p-4 md:p-6 rounded-3xl border border-dashed border-indigo-500/40 grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6`}>
-        <div className="md:col-span-3"><h3 className="text-base md:text-lg font-black text-indigo-500">⚡ EOD Balance Sheet ({user.branch})</h3></div>
+        <div className="md:col-span-3"><h3 className="text-base md:text-lg font-black text-indigo-500">⚡ Master Global Sheet</h3></div>
         <div className="bg-slate-950 p-4 rounded-xl text-white">
-          <p className="text-[10px] md:text-xs text-slate-400 font-bold uppercase">💵 Safe Box Cash Balance</p>
-          <p className="text-2xl md:text-3xl font-black text-emerald-400 mt-1">₹{cashCollectedToday.toLocaleString()}</p>
+          <p className="text-[10px] md:text-xs text-slate-400 font-bold uppercase">📊 Gross Network Revenue</p>
+          <p className="text-2xl md:text-3xl font-black text-blue-400 mt-1">₹{totalSystemRevenue.toLocaleString()}</p>
         </div>
         <div className="bg-slate-950 p-4 rounded-xl text-white">
-          <p className="text-[10px] md:text-xs text-slate-400 font-bold uppercase">📱 Corporate GPay Wallet</p>
-          <p className="text-2xl md:text-3xl font-black text-blue-400 mt-1">₹{gpayCollectedToday.toLocaleString()}</p>
+          <p className="text-[10px] md:text-xs text-slate-400 font-bold uppercase">📉 Total Fixed Expense</p>
+          <p className="text-2xl md:text-3xl font-black text-red-400 mt-1">₹{exp.toLocaleString()}</p>
         </div>
         <div className="bg-slate-950 p-4 rounded-xl text-white">
-          <p className="text-[10px] md:text-xs text-slate-400 font-bold uppercase">📊 Aggregate Turnover</p>
-          <p className="text-2xl md:text-3xl font-black text-indigo-400 mt-1">₹{(cashCollectedToday + gpayCollectedToday).toLocaleString()}</p>
+          <p className="text-[10px] md:text-xs text-slate-400 font-bold uppercase">☕ Total Petty Cash</p>
+          <p className="text-2xl md:text-3xl font-black text-orange-400 mt-1">₹{totalPetty.toLocaleString()}</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
         <div className={`${cardBg} p-4 md:p-6 rounded-3xl border space-y-4`}>
-          <h3 className="font-bold text-sm md:text-md text-indigo-500">Fixed Operational Expenses Ledger</h3>
-          <p className="text-[10px] md:text-xs opacity-50">Specify designated expenditures to dynamically evaluate net partner payouts:</p>
+          <h3 className="font-bold text-sm md:text-md text-indigo-500">Fixed Operational Expenses</h3>
           <div className="space-y-4">
              <div>
-               <label className="text-[10px] md:text-xs font-bold opacity-60 uppercase">Monthly Vehicle EMI Outflow (₹)</label>
-               <input id="accEmi" onKeyDown={e=>handleBoxTravel(e,{enter:'accDiesel', down:'accDiesel'})} type="number" placeholder="Enter monthly truck loan EMI amount" value={acc.emi} onChange={e=>setAcc({...acc, emi:Number(e.target.value)})} className={`w-full p-2 md:p-3 mt-1 rounded-xl border outline-none font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${isDark?'bg-slate-900 border-slate-700':'bg-slate-50'}`} />
+               <label className="text-[10px] md:text-xs font-bold opacity-60 uppercase">Monthly Vehicle EMI (₹)</label>
+               <input id="accEmi" onKeyDown={e=>handleBoxTravel(e,{enter:'accDiesel', down:'accDiesel'})} type="number" value={acc.emi} onChange={e=>setAcc({...acc, emi:Number(e.target.value)})} className={`w-full p-2 md:p-3 mt-1 rounded-xl border outline-none font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${inputBg}`} />
              </div>
              <div>
-               <label className="text-[10px] md:text-xs font-bold opacity-60 uppercase">Diesel Fuel & Highway Toll Log (₹)</label>
-               <input id="accDiesel" onKeyDown={e=>handleBoxTravel(e,{enter:'accOther', down:'accOther', up:'accEmi'})} type="number" placeholder="Enter combined diesel & transit expenditures" value={acc.diesel} onChange={e=>setAcc({...acc, diesel:Number(e.target.value)})} className={`w-full p-2 md:p-3 mt-1 rounded-xl border outline-none font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${isDark?'bg-slate-900 border-slate-700':'bg-slate-50'}`} />
+               <label className="text-[10px] md:text-xs font-bold opacity-60 uppercase">Diesel & Highway Toll Log (₹)</label>
+               <input id="accDiesel" onKeyDown={e=>handleBoxTravel(e,{enter:'accOther', down:'accOther', up:'accEmi'})} type="number" value={acc.diesel} onChange={e=>setAcc({...acc, diesel:Number(e.target.value)})} className={`w-full p-2 md:p-3 mt-1 rounded-xl border outline-none font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${inputBg}`} />
              </div>
              <div>
-               <label className="text-[10px] md:text-xs font-bold opacity-60 uppercase">Misc Office Rent & Utility Costs (₹)</label>
-               <input id="accOther" onKeyDown={e=>handleBoxTravel(e,{up:'accDiesel'})} type="number" placeholder="Enter miscellaneous administrative overheads" value={acc.other} onChange={e=>setAcc({...acc, other:Number(e.target.value)})} className={`w-full p-2 md:p-3 mt-1 rounded-xl border outline-none font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${isDark?'bg-slate-900 border-slate-700':'bg-slate-50'}`} />
+               <label className="text-[10px] md:text-xs font-bold opacity-60 uppercase">Misc Office Rent & Utilities (₹)</label>
+               <input id="accOther" onKeyDown={e=>handleBoxTravel(e,{up:'accDiesel'})} type="number" value={acc.other} onChange={e=>setAcc({...acc, other:Number(e.target.value)})} className={`w-full p-2 md:p-3 mt-1 rounded-xl border outline-none font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${inputBg}`} />
              </div>
           </div>
         </div>
-        <div className="bg-slate-950 p-6 md:p-8 rounded-3xl text-white flex flex-col justify-center">
-          <h3 className="text-lg md:text-xl font-black mb-2 md:mb-4 tracking-wider text-indigo-400">PARTNERSHIP SETTLEMENT</h3>
-          <p className="text-xs md:text-sm opacity-60">Cumulative Net Profit Share: ₹{net.toLocaleString()}</p>
+
+        <div className="bg-slate-950 p-6 md:p-8 rounded-3xl text-white flex flex-col justify-center shadow-xl">
+          <div className="flex justify-between items-center mb-2 md:mb-4">
+            <h3 className="text-lg md:text-xl font-black tracking-wider text-indigo-400">PARTNERSHIP SETTLEMENT</h3>
+            <div className="flex items-center gap-2">
+              <span className="text-xs opacity-60 uppercase">Partners:</span>
+              <input type="number" value={partnerCount} onChange={e=>setPartnerCount(Number(e.target.value))} className="w-16 bg-slate-800 text-white font-bold p-1 rounded text-center border border-slate-700 outline-none" />
+            </div>
+          </div>
+          <p className="text-xs md:text-sm opacity-60">Global Base Profit Yield: ₹{net.toLocaleString()}</p>
           <div className="mt-4 md:mt-6 bg-white/5 p-4 md:p-6 rounded-2xl text-center border border-white/10">
-            <p className="text-[10px] md:text-xs opacity-50 uppercase tracking-widest mb-1">Per Partner Yield Dividend (Div 5 Split)</p>
-            <p className="text-3xl md:text-4xl font-black text-emerald-400">₹{(net / 5).toLocaleString()}</p>
+            <p className="text-[10px] md:text-xs opacity-50 uppercase tracking-widest mb-1">Per Partner Yield (Split: {partnerCount})</p>
+            <p className="text-3xl md:text-4xl font-black text-emerald-400">₹{((net / (partnerCount||1)) || 0).toLocaleString()}</p>
           </div>
         </div>
       </div>
+
+      <div className={`${cardBg} p-4 md:p-6 rounded-3xl border flex flex-col h-full`}>
+          <h3 className="font-black text-sm md:text-md text-indigo-500 border-b pb-4 border-slate-500/20 mb-4">Petty Cash Ledger (Daily/Branch)</h3>
+          <div className="flex gap-2 mb-4">
+            <input value={pettyDesc} onChange={e=>setPettyDesc(e.target.value)} placeholder="Detail (Tea, Coolie)" className={`flex-1 p-2 border rounded-lg text-sm outline-none ${inputBg}`} />
+            <input value={pettyAmt} onChange={e=>setPettyAmt(e.target.value)} placeholder="Amt ₹" type="number" className={`w-24 p-2 border rounded-lg text-sm outline-none font-bold ${inputBg}`} />
+            <button onClick={addPetty} className="bg-orange-500 text-white px-4 rounded-lg font-bold text-sm">+</button>
+          </div>
+          <div className={`flex-1 overflow-y-auto max-h-40 border rounded-lg ${inputBg}`}>
+            {pettyLedger.map((l, i) => (
+              <div key={i} className="flex justify-between p-3 border-b border-slate-500/20 text-xs md:text-sm">
+                <span>{l.desc} <span className="text-[10px] opacity-50 ml-2">{l.date}</span></span>
+                <span className="font-bold text-orange-500">₹{l.amt}</span>
+              </div>
+            ))}
+          </div>
+        </div>
     </div>
   );
 }
 
 /* ══════════════════════════════════════════
-   ADMIN MANAGEMENT (Responsive)
+   ADMIN MANAGEMENT (+ CREDIT CONTROL)
 ══════════════════════════════════════════ */
-function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user}) {
+function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user, creditAuthList, setCreditAuthList}) {
   const [tab, setTab] = useState('parcels');
   const [editF, setEditF] = useState(null);
   
@@ -750,6 +856,9 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user}
   const [newPass, setNewPass] = useState(""); 
   const [newRole, setNewRole] = useState("staff");
   const [newBranch, setNewBranch] = useState(CITIES[0]);
+
+  const [newCPhone, setNewCPhone] = useState("");
+  const [newCName, setNewCName] = useState("");
 
   const [paymentFilter, setPaymentFilter] = useState("All");
   const [branchFilter, setBranchFilter] = useState(user.branch);
@@ -784,6 +893,18 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user}
 
     const u = {id: genUserId(), username: newUser, password: newPass, role: assignedRole, branch: assignedBranch};
     await db.insertUser(u); setUsers([u, ...users]); setNewUser(""); setNewPass(""); showMsg(`${assignedRole.toUpperCase()} Created at ${assignedBranch}!`);
+  };
+
+  const addCreditAuth = async () => {
+    if(newCPhone.length !== 10 || !newCName) return showMsg("Invalid Credit details", "error");
+    const newList = [...creditAuthList, {phone: newCPhone, company: newCName}];
+    setCreditAuthList(newList); await local.set("mps_credit_auth", newList);
+    setNewCPhone(""); setNewCName(""); showMsg("Credit Account Authorized!");
+  };
+
+  const removeCredit = async (phone) => {
+    const newList = creditAuthList.filter(c => c.phone !== phone);
+    setCreditAuthList(newList); await local.set("mps_credit_auth", newList); showMsg("Credit Auth Revoked", "error");
   };
 
   const deleteRecord = async (id) => {
@@ -849,11 +970,12 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user}
   return (
     <div className="space-y-4 md:space-y-6">
       <div className="flex flex-wrap gap-2 md:gap-4">
-        <button onClick={()=>setTab('parcels')} className={`px-4 md:px-6 py-2 rounded-full text-xs md:text-sm font-bold ${tab==='parcels'?'bg-indigo-600 text-white':cardBg}`}>📋 Audits & Analytics</button>
-        <button onClick={()=>setTab('staff')} className={`px-4 md:px-6 py-2 rounded-full text-xs md:text-sm font-bold ${tab==='staff'?'bg-indigo-600 text-white':cardBg}`}>👥 System RBAC Accounts</button>
+        <button onClick={()=>setTab('parcels')} className={`px-4 md:px-6 py-2 rounded-full text-[10px] md:text-sm font-bold ${tab==='parcels'?'bg-indigo-600 text-white':cardBg}`}>📋 Audits & Analytics</button>
+        <button onClick={()=>setTab('staff')} className={`px-4 md:px-6 py-2 rounded-full text-[10px] md:text-sm font-bold ${tab==='staff'?'bg-indigo-600 text-white':cardBg}`}>👥 System RBAC</button>
+        <button onClick={()=>setTab('credit')} className={`px-4 md:px-6 py-2 rounded-full text-[10px] md:text-sm font-bold ${tab==='credit'?'bg-amber-600 text-white':cardBg}`}>💳 Credit Control</button>
       </div>
 
-      {tab === 'staff' ? (
+      {tab === 'staff' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
           <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}>
             <h3 className="font-black text-sm md:text-base">Assign Privilege Context</h3>
@@ -870,7 +992,7 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user}
 
             <select id="stfBranch" disabled={newRole === 'superadmin' || newRole === 'admin'} onKeyDown={e=>handleBoxTravel(e,{enter:'stfBtn', up: isSuper ? 'stfRole' : 'stfPass'})} value={newRole==='superadmin'?'All':newBranch} onChange={e=>setNewBranch(e.target.value)} className={`w-full p-2 md:p-3 rounded-xl border font-bold outline-none text-sm ${inputBg} ${(newRole==='superadmin' || newRole==='admin')?'opacity-50':''}`}>
               {(isSuper && (newRole === 'admin' || newRole === 'superadmin')) && <option value="All">Global Access (All Branches)</option>}
-              {CITIES.map(c => <option key={c} value={c}>Branch: {c}</option>)}
+              {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
             
             <button id="stfBtn" onClick={handleAddUser} onKeyDown={e => e.key === 'Enter' && handleAddUser()} className="w-full bg-indigo-600 text-white font-bold py-2 md:py-3 rounded-xl text-sm md:text-base">Commit Assignment</button>
@@ -900,7 +1022,34 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user}
             </div>
           </div>
         </div>
-      ) : (
+      )}
+
+      {tab === 'credit' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}>
+            <h3 className="font-black text-sm md:text-base text-amber-500">Add Authorized Credit Account</h3>
+            <p className="text-[10px] md:text-xs opacity-60">Only registered phone numbers can use 'F9: Credit' billing.</p>
+            <input value={newCPhone} onChange={e=>setNewCPhone(e.target.value)} placeholder="Customer 10-digit Mobile" maxLength="10" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} />
+            <input value={newCName} onChange={e=>setNewCName(e.target.value)} placeholder="Company / Individual Name" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} />
+            <button onClick={addCreditAuth} className="w-full bg-amber-600 text-white font-bold py-2 md:py-3 rounded-xl text-sm md:text-base">Authorize Account</button>
+          </div>
+          <div className={`${cardBg} p-4 md:p-6 rounded-2xl border h-96 overflow-y-auto`}>
+            <h3 className="font-black text-sm md:text-base mb-4">Approved Credit Ledger</h3>
+            {creditAuthList.length === 0 ? <p className="text-sm opacity-50">No credit accounts authorized.</p> : 
+              <div className="space-y-2">
+                {creditAuthList.map((c, i) => (
+                  <div key={i} className="flex justify-between items-center p-3 border border-slate-500/20 rounded-xl bg-black/5">
+                    <div><p className="font-bold text-sm">{c.company}</p><p className="text-[10px] opacity-60">Ph: {c.phone}</p></div>
+                    <button onClick={()=>removeCredit(c.phone)} className="text-red-500 text-[10px] font-bold bg-red-500/10 px-2 py-1 rounded border border-red-500/20">Revoke</button>
+                  </div>
+                ))}
+              </div>
+            }
+          </div>
+        </div>
+      )}
+
+      {tab === 'parcels' && (
         <>
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
             <div className={`${cardBg} p-4 md:p-6 rounded-2xl border h-48 lg:col-span-3`}>
@@ -941,7 +1090,6 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user}
             </select>
           </div>
 
-          {/* 🔥 MOBILE TABLE FIX HERE (overflow-x-auto) 🔥 */}
           <div className={`${cardBg} rounded-2xl border overflow-x-auto shadow-sm`}>
             <table className="min-w-[800px] w-full text-left whitespace-nowrap">
               <thead className={`${tblBg} text-[10px] md:text-xs font-bold uppercase opacity-80`}>
