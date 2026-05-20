@@ -8,7 +8,20 @@ import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from "rechar
 const ENV_URL = import.meta.env.VITE_SUPABASE_URL || "";
 const ENV_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 
-const CITIES = ["Mecheri","Elampillai","Jalakandapuram","Salem","Coimbatore","Bhavani","Sathyamangalam","Bangalore", "Chennai"];
+// 🔥 NEW: 2-Digit Branch Code Mapping 🔥
+const BRANCH_CONFIG = {
+  "Mecheri": "01",
+  "Elampillai": "02",
+  "Jalakandapuram": "03",
+  "Salem": "04",
+  "Coimbatore": "05",
+  "Bhavani": "06",
+  "Sathyamangalam": "07",
+  "Bangalore": "08",
+  "Chennai": "09"
+};
+const CITIES = Object.keys(BRANCH_CONFIG);
+
 const TYPES = ["Box","Wooden Box","Bag","Green bag","Yellow Bag","Bale","Documents","Electronics","Furniture","Medical","Machinery"];
 const STATUSES = ["Booked","Picked Up","In Transit","Out for Delivery","Delivered", "Deleted"];
 const S_CLR  = {"Booked":"#3B82F6","Picked Up":"#F59E0B","In Transit":"#F97316","Out for Delivery":"#8B5CF6","Delivered":"#10B981", "Deleted":"#EF4444"};
@@ -16,17 +29,23 @@ const PAY_MODES = ["Paid", "To Pay", "Credit", "FOC"];
 
 const genUserId = () => `USR-${Math.floor(Math.random()*10000)}`;
 
-const generateLR = (originCity, allParcels) => {
-  if (!originCity) return `MPS${String(Math.floor(Math.random()*1000)).padStart(6,'0')}`; 
-  const prefix = originCity.substring(0, 3).toUpperCase(); 
+// 🔥 NEW: Route-wise LR Generation Logic 🔥
+const generateLR = (fromCity, toCity, allParcels) => {
+  if (!fromCity || !toCity) return `MPS${String(Math.floor(Math.random()*1000)).padStart(6,'0')}`; 
+  
+  const fCode = BRANCH_CONFIG[fromCity] || "00";
+  const tCode = BRANCH_CONFIG[toCity] || "00";
+  const routePrefix = `${fCode}/${tCode}/`;
+  
   let max = 0;
   allParcels.forEach(p => {
-    if (p.id && p.id.startsWith(prefix)) {
-      const num = parseInt(p.id.replace(prefix, ''), 10);
+    if (p.id && p.id.startsWith(routePrefix)) {
+      const numStr = p.id.replace(routePrefix, '');
+      const num = parseInt(numStr, 10);
       if (!isNaN(num) && num > max) max = num;
     }
   });
-  return `${prefix}${String(max + 1).padStart(6, '0')}`;
+  return `${routePrefix}${String(max + 1).padStart(4, '0')}`;
 };
 
 const MpsLogo = () => (
@@ -44,41 +63,185 @@ function calcPrice(from, to, ratePerUnit, count = 1, type = "Box", paymentMode =
   return Math.round((rate * (parseInt(count) || 1)) + tc);
 }
 
+// 🔥 NEW: Professional Receipt PDF Generation 🔥
 function generatePDF(p) {
   const doc = new jsPDF();
-  doc.setLineWidth(0.5); doc.rect(10, 10, 190, 270); 
-  doc.setFillColor(30, 58, 138); doc.rect(10, 10, 190, 22, "F"); 
-  doc.setFontSize(24); doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.text("MPS LOGISTICS", 15, 26);
   
-  doc.setTextColor(0, 0, 0); doc.setFontSize(12); doc.setFont("helvetica", "bold");
-  doc.text(`LR NO: ${p.id}`, 15, 42); doc.text(`DATE: ${p.date}`, 145, 42);
-  doc.line(10, 48, 200, 48); doc.line(105, 48, 105, 95); 
+  // Outer Border (Total width = 190, Height = 110)
+  doc.setLineWidth(0.5);
+  doc.rect(10, 10, 190, 110);
   
-  doc.setFontSize(10); doc.setTextColor(100, 100, 100);
-  doc.text("CONSIGNOR (SENDER)", 15, 55); doc.text("CONSIGNEE (RECEIVER)", 110, 55);
-  doc.setTextColor(0, 0, 0); doc.setFontSize(12); doc.setFont("helvetica", "bold");
-  doc.text(p.sName, 15, 63); doc.text(p.rName, 110, 63);
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // HORIZONTAL LINES
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  doc.line(10, 35, 200, 35); // Below header
+  doc.line(10, 42, 200, 42); // Below From/To branch
+  doc.line(10, 70, 145, 70); // Below Address
+  doc.line(10, 82, 145, 82); // Below Goods Header
+  doc.line(95, 92, 145, 92); // Above Door Delivery warning
+  doc.line(145, 95, 200, 95); // Above Total
+  doc.line(10, 100, 200, 100); // Above Signatures
+  
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // VERTICAL LINES
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  doc.line(145, 10, 145, 100); // Left of Particulars
+  doc.line(175, 35, 175, 100); // Left of Amount
+  doc.line(77, 35, 77, 70); // Between From/To addresses
+  
+  doc.line(16, 42, 16, 70); // Consignor vertical label split
+  doc.line(83, 42, 83, 70); // Consignee vertical label split
+  
+  // Goods section splits
+  doc.line(25, 70, 25, 100); // Articles right border
+  doc.line(95, 70, 95, 92); // Description right border
+  doc.line(110, 70, 110, 92); // Value right border
+  doc.line(125, 70, 125, 92); // Actual wt right border
+  
+  // Signatures Area Vertical Lines
+  doc.line(77, 100, 77, 120);
+  doc.line(115, 100, 115, 120);
+  doc.line(145, 100, 145, 120);
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // TEXT & CONTENT PLACEMENT
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  
+  // --- HEADER: LOGO & COMPANY NAME ---
+  doc.setFont("helvetica", "bolditalic");
+  doc.setFontSize(26);
+  doc.text("MPS", 12, 24);
+  
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.text("MECHERI", 36, 19);
+  doc.text("PARCEL SERVICE", 36, 25);
+  
   doc.setFont("helvetica", "normal");
-  doc.text(`Ph: ${p.sPhone}`, 15, 71); doc.text(`Ph: ${p.rPhone}`, 110, 71);
-  doc.text(`Route: ${p.from} ➔ ${p.to}`, 15, 79);
-  doc.line(10, 95, 200, 95);
-
-  doc.setFillColor(245, 247, 250); doc.rect(10, 95, 190, 12, "F");
-  doc.setFontSize(10); doc.setFont("helvetica", "bold");
-  doc.text("ARTICLES", 15, 103); doc.text("TYPE/DESC", 50, 103); doc.text("WEIGHT", 110, 103); doc.text("AMOUNT", 160, 103);
-  doc.line(10, 107, 200, 107);
-
-  doc.setFontSize(12); doc.setFont("helvetica", "normal");
-  doc.text(`${p.count}`, 20, 117); doc.text(p.type, 50, 117); doc.text(`${p.actualWeight || "-"} Kg`, 112, 117); doc.text(`Rs. ${p.rate}`, 160, 117);
-  doc.line(10, 140, 200, 140);
-
-  doc.setFontSize(14); doc.setFont("helvetica", "bold");
-  doc.text("PAYMENT MODE:", 15, 152);
-  doc.text(p.payment.toUpperCase(), 60, 152);
-  if(p.payment === 'Credit') { doc.setFontSize(11); doc.setTextColor(100); doc.text(`(A/c: ${p.creditCustomer || 'N/A'})`, 15, 160); }
+  doc.setFontSize(7);
+  doc.text("• WE DELIVER TRUST •", 42, 30);
   
-  doc.setTextColor(0, 0, 0); doc.setFontSize(18); doc.text(`TOTAL: Rs. ${p.price}`, 140, 152);
-  doc.save(`MPS_LR_${p.id}.pdf`);
+  // --- HEADER: ADDRESS & GSTIN ---
+  const centerX = 107;
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.text("GSTIN : 33CICPS6965E1Z1", centerX, 15, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.text("Dharmapuri Main Road,", centerX, 20, { align: "center" });
+  doc.text("Mecheri, Salem-Dt. 636 451.", centerX, 24, { align: "center" });
+  doc.setFont("helvetica", "bold");
+  doc.text("90033 77185 / 80726 72255", centerX, 29, { align: "center" });
+  doc.text("86108 07743 / 95785 02151", centerX, 33, { align: "center" });
+
+  // --- HEADER: LR INFO ---
+  doc.setFontSize(10);
+  doc.text(`LR. NO.  :  ${p.id}`, 147, 16);
+  doc.text(`Date     :  ${p.date}`, 147, 24);
+  doc.text(`Pay Mode:  ${p.payment}`, 147, 32);
+  
+  // --- FROM / TO BRANCH ---
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.text(`From Branch : ${p.from}`, 12, 40);
+  doc.text(`To Branch : ${p.to}`, 79, 40);
+  doc.text("Particulars", 152, 40);
+  doc.text("Amount", 182, 40);
+  
+  // --- ADDRESS BLOCK (CONSIGNOR / CONSIGNEE) ---
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.text("Consignor", 14, 65, { angle: 90 }); // Vertical text
+  doc.text("Consignee", 81, 65, { angle: 90 }); // Vertical text
+  
+  // Sender Data
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Tel No. : ${p.sPhone}`, 18, 55);
+  doc.text(`GSTIN   : ${p.sGst || ""}`, 18, 62);
+  doc.setFont("helvetica", "bold");
+  doc.text(`${p.sName}`, 18, 68);
+  
+  // Receiver Data
+  doc.setFont("helvetica", "normal");
+  doc.text(`Tel No. : ${p.rPhone}`, 85, 55);
+  doc.text(`GSTIN   : ${p.rGst || ""}`, 85, 62);
+  doc.setFont("helvetica", "bold");
+  doc.text(`${p.rName}`, 85, 68);
+  
+  // --- PARTICULARS (RIGHT SIDE) ---
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  const particulars = ["Freight", "Hamali", "Fuel Sur Charge", "Docket Charge", "Article Charges", "Door Collection", "Door Delivery", "Others"];
+  particulars.forEach((item, i) => {
+    doc.text(item, 147, 47 + (i * 6));
+  });
+  
+  // Print Total Amount directly mapped to Freight
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.text(`Rs. ${p.price}`, 178, 47); 
+  
+  // --- GOODS SECTION TABLE ---
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.text("No. of", 13, 75); doc.text("Articles", 12, 79);
+  doc.text("Description of Goods", 42, 75); doc.text("Said to Contain", 46, 79);
+  doc.text("Value", 98, 77);
+  doc.text("Actual", 112, 75); doc.text("Weight", 112, 79);
+  doc.text("Charged", 128, 75); doc.text("Weight", 129, 79);
+  
+  // Goods Data Population
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.text(`${p.count}`, 16, 88);
+  doc.text(`${p.type}`, 28, 88);
+  doc.text(`${p.actualWeight || "-"}`, 115, 88);
+  
+  // Door Delivery Note
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "bold");
+  doc.text("Door Delivery Service Will be", 97, 95.5);
+  doc.text("Provided for Ground Floor Only", 96, 98.5);
+  
+  // Total Box
+  doc.setFontSize(10);
+  doc.text("Total", 155, 98.5);
+  doc.text(`Rs. ${p.price}`, 178, 98.5);
+  
+  // --- FOOTER & SIGNATURE BLOCKS ---
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.text("GSTIN Payable by :", 25, 104);
+  
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  
+  // Custom Checkboxes
+  doc.rect(13, 107, 3, 3); doc.text("Consignor", 17, 110);
+  doc.rect(40, 107, 3, 3); doc.text("Consignee", 44, 110);
+  doc.rect(13, 114, 3, 3); doc.text("Transporter", 17, 117);
+  doc.rect(40, 114, 3, 3); doc.text("Agency", 44, 117);
+  
+  // Tick mark based on payment mode
+  doc.setFontSize(10);
+  if(p.payment === "Paid" || p.payment === "Credit" || p.payment === "FOC") doc.text("✔", 13.5, 109.5); // Ticks Consignor
+  if(p.payment === "To Pay") doc.text("✔", 40.5, 109.5); // Ticks Consignee
+  
+  // Signatures Text
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.text("Consignee", 79, 105);
+  doc.setFontSize(6);
+  doc.text("(Received goods in good Condition)", 79, 118);
+  
+  doc.setFontSize(8);
+  doc.text("Consignor Signature", 117, 118);
+  
+  doc.setFont("helvetica", "bold");
+  doc.text("For Mecheri Parcel Service", 147, 105);
+  
+  // Execute Save - replaces slashes with underscores for valid filename
+  doc.save(`MPS_LR_${p.id.replace(/\//g, '_')}.pdf`);
 }
 
 function openWhatsApp(phone, isSender, p) {
@@ -209,11 +372,11 @@ class DB{
     await local.set("mps_parcels", [p, ...(await local.get("mps_parcels")||[])]); 
   }
   async updateParcel(id, data){ 
-    if(this.isLive) { try { await fetch(`${this.base}/parcels?id=eq.${id}`,{method:"PATCH",headers:this.h,body:JSON.stringify(data)}); } catch(e){} }
+    if(this.isLive) { try { await fetch(`${this.base}/parcels?id=eq.${encodeURIComponent(id)}`,{method:"PATCH",headers:this.h,body:JSON.stringify(data)}); } catch(e){} }
     await local.set("mps_parcels", (await local.get("mps_parcels")||[]).map(x => x.id === id ? {...x, ...data} : x)); 
   }
   async deleteParcel(id){ 
-    if(this.isLive) { try { await fetch(`${this.base}/parcels?id=eq.${id}`,{method:"DELETE",headers:this.h}); } catch(e){} }
+    if(this.isLive) { try { await fetch(`${this.base}/parcels?id=eq.${encodeURIComponent(id)}`,{method:"DELETE",headers:this.h}); } catch(e){} }
     await local.set("mps_parcels", (await local.get("mps_parcels")||[]).filter(x => x.id !== id)); 
   }
   async getUsers(){ 
@@ -392,6 +555,13 @@ function Dashboard({parcels, isDark, user}) {
   
   const godownStock = activeParcels.filter(p => (selectedBranch === 'All' ? true : p.from === selectedBranch) && p.status === 'Booked');
 
+  // 🔥 NEW: Godown Pending Days Logic
+  const getDays = (iso) => {
+    if(!iso) return 0;
+    const diff = new Date() - new Date(iso);
+    return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
+  };
+
   return (
     <div className="space-y-6">
       {(user.role === 'superadmin' || user.branch === 'All') && (
@@ -411,7 +581,7 @@ function Dashboard({parcels, isDark, user}) {
         {[
           {l: "Total Bookings", v: branchParcels.length, c: "text-blue-500"},
           {l: "In Transit", v: branchParcels.filter(p=>p.status==="In Transit").length, c: "text-amber-500"},
-          {l: "Delivered", v: branchParcels.filter(p=>p.status==="Delivered").length, c: "textemerald-500"},
+          {l: "Delivered", v: branchParcels.filter(p=>p.status==="Delivered").length, c: "text-emerald-500"},
           {l: "Branch Revenue", v: `₹${rev}`, c: "text-indigo-500"}
         ].map((s,i) => (
           <div key={i} className={`${cardBg} p-4 md:p-6 rounded-2xl shadow-sm border flex flex-col justify-center`}>
@@ -429,14 +599,23 @@ function Dashboard({parcels, isDark, user}) {
         <div className="p-4 max-h-64 overflow-y-auto">
           {godownStock.length === 0 ? <p className="text-center opacity-50 font-bold py-4">Godown Empty. All dispatched!</p> : 
             <table className="w-full text-left text-sm">
-              <thead className="opacity-50"><tr><th className="pb-2">LR No</th><th className="pb-2">Origin</th><th className="pb-2">Destination</th><th className="pb-2">Type</th><th className="pb-2">Qty</th></tr></thead>
+              <thead className="opacity-50"><tr><th className="pb-2">LR No</th><th className="pb-2">Route</th><th className="pb-2">Type</th><th className="pb-2">Qty</th><th className="pb-2 text-right">Age</th></tr></thead>
               <tbody>
-                {godownStock.map(p => (
-                  <tr key={p.id} className="border-t border-slate-500/20">
-                    <td className="py-3 font-bold text-indigo-500">{p.id}</td><td className="py-3">{p.from}</td><td className="py-3">{p.to}</td>
-                    <td className="py-3">{p.type}</td><td className="py-3 font-black text-amber-500">{p.count}</td>
-                  </tr>
-                ))}
+                {godownStock.map(p => {
+                  const days = getDays(p.isoDate);
+                  return (
+                    <tr key={p.id} className="border-t border-slate-500/20">
+                      <td className="py-3 font-bold text-indigo-500">{p.id}</td>
+                      <td className="py-3">{p.from} ➔ {p.to}</td>
+                      <td className="py-3">{p.type}</td><td className="py-3 font-black text-amber-500">{p.count}</td>
+                      <td className="py-3 text-right">
+                        <span className={`px-2 py-1 rounded text-xs font-bold ${days > 2 ? 'bg-red-500/10 text-red-500' : 'bg-emerald-500/10 text-emerald-500'}`}>
+                          {days === 0 ? 'Today' : `${days} Days`}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           }
@@ -524,7 +703,10 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
     const dObj = new Date();
     const isoDate = dObj.toISOString();
     const locDateStr = dObj.toLocaleDateString('en-IN');
-    const lrNumber = generateLR(f.from, parcels);
+    
+    // 🔥 Generation Logic Now Supports Route-Wise System
+    const lrNumber = generateLR(f.from, f.to, parcels);
+    
     const p = {...f, notes: f.payment === 'Credit' ? `[A/c: ${f.creditCustomer}] ${f.notes}` : f.notes, id: lrNumber, date: locDateStr, isoDate: isoDate, status: "Booked", price: ep, bookedBy: user.username, bookedBranch: user.branch, settledBranches: [], history: [{status: "Booked", loc: f.from, time: dObj.toLocaleString()}]};
     
     const saved = await local.get("mps_contacts") || {};
@@ -701,6 +883,7 @@ function Accounts({parcels, setParcels, db, showMsg, isDark, user}) {
   const exp = acc.emi + acc.diesel + acc.other;
   const net = totalSystemRevenue - exp - totalPetty; 
 
+  // 🔥 JSONB Settlement Check Added Here 🔥
   const unsettledBranchParcels = activeParcels.filter(p => {
     const isRelated = p.bookedBranch === selectedBranch || p.deliveredBranch === selectedBranch;
     const isSettled = p.settledBranches && p.settledBranches.includes(selectedBranch);
@@ -724,6 +907,7 @@ function Accounts({parcels, setParcels, db, showMsg, isDark, user}) {
 
     let updatedParcelsList = [...parcels];
     for (let p of unsettledBranchParcels) {
+      // JSONB Column "settledBranches" array updated safely
       const updated = {...p, settledBranches: [...(p.settledBranches || []), selectedBranch]};
       await db.updateParcel(updated.id, updated);
       updatedParcelsList = updatedParcelsList.map(x => x.id === updated.id ? updated : x);
@@ -884,7 +1068,6 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
 
   const isSuper = user.role === 'superadmin';
 
-  // 🔥 UPDATED LOGIC HERE 🔥
   useEffect(() => {
     if (newRole === 'superadmin') {
       setNewBranch('All');
@@ -997,7 +1180,6 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
               </select>
             )}
 
-            {/* 🔥 DROPDOWN FIX: Disabled ONLY for superadmin 🔥 */}
             <select id="stfBranch" disabled={newRole === 'superadmin'} onKeyDown={e=>handleBoxTravel(e,{enter:'stfBtn', up: isSuper ? 'stfRole' : 'stfPass'})} value={newBranch} onChange={e=>setNewBranch(e.target.value)} className={`w-full p-2 md:p-3 rounded-xl border font-bold outline-none text-sm ${inputBg} ${newRole==='superadmin'?'opacity-50 cursor-not-allowed':''}`}>
               {(isSuper && (newRole === 'admin' || newRole === 'superadmin')) && <option value="All">Global Access (All Branches)</option>}
               {CITIES.map(c => <option key={c} value={c}>Branch: {c}</option>)}
