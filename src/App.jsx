@@ -378,20 +378,40 @@ export default function App() {
 }
 
 function Dashboard({parcels, isDark, user}) {
+  const [selectedBranch, setSelectedBranch] = useState(user.branch === 'All' ? 'All' : user.branch);
+
   const activeParcels = parcels.filter(p => p.status !== 'Deleted');
-  const branchParcels = activeParcels.filter(p => user.branch === 'All' || p.bookedBranch === user.branch || p.from === user.branch || p.to === user.branch);
+  
+  const branchParcels = activeParcels.filter(p => {
+    if (selectedBranch === 'All') return true;
+    return p.bookedBranch === selectedBranch || p.from === selectedBranch || p.to === selectedBranch;
+  });
+
   const rev = branchParcels.reduce((a,b)=>a+(b.price||0),0);
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-100";
   
-  const godownStock = activeParcels.filter(p => p.from === user.branch && p.status === 'Booked');
+  const godownStock = activeParcels.filter(p => (selectedBranch === 'All' ? true : p.from === selectedBranch) && p.status === 'Booked');
 
   return (
     <div className="space-y-6">
+      {(user.role === 'superadmin' || user.branch === 'All') && (
+        <div className="flex justify-end mb-2">
+          <select 
+            value={selectedBranch} 
+            onChange={e=>setSelectedBranch(e.target.value)} 
+            className={`p-2 px-4 rounded-xl font-bold border outline-none shadow-sm cursor-pointer ${isDark?'bg-slate-900 border-slate-700':'bg-white border-slate-200'}`}
+          >
+            <option value="All">🌍 Global Network (All Branches)</option>
+            {CITIES.map(c => <option key={c} value={c}>🏢 Branch: {c}</option>)}
+          </select>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
         {[
           {l: "Total Bookings", v: branchParcels.length, c: "text-blue-500"},
           {l: "In Transit", v: branchParcels.filter(p=>p.status==="In Transit").length, c: "text-amber-500"},
-          {l: "Delivered", v: branchParcels.filter(p=>p.status==="Delivered").length, c: "text-emerald-500"},
+          {l: "Delivered", v: branchParcels.filter(p=>p.status==="Delivered").length, c: "textemerald-500"},
           {l: "Branch Revenue", v: `₹${rev}`, c: "text-indigo-500"}
         ].map((s,i) => (
           <div key={i} className={`${cardBg} p-4 md:p-6 rounded-2xl shadow-sm border flex flex-col justify-center`}>
@@ -409,11 +429,11 @@ function Dashboard({parcels, isDark, user}) {
         <div className="p-4 max-h-64 overflow-y-auto">
           {godownStock.length === 0 ? <p className="text-center opacity-50 font-bold py-4">Godown Empty. All dispatched!</p> : 
             <table className="w-full text-left text-sm">
-              <thead className="opacity-50"><tr><th className="pb-2">LR No</th><th className="pb-2">Destination</th><th className="pb-2">Type</th><th className="pb-2">Qty</th></tr></thead>
+              <thead className="opacity-50"><tr><th className="pb-2">LR No</th><th className="pb-2">Origin</th><th className="pb-2">Destination</th><th className="pb-2">Type</th><th className="pb-2">Qty</th></tr></thead>
               <tbody>
                 {godownStock.map(p => (
                   <tr key={p.id} className="border-t border-slate-500/20">
-                    <td className="py-3 font-bold text-indigo-500">{p.id}</td><td className="py-3">{p.to}</td>
+                    <td className="py-3 font-bold text-indigo-500">{p.id}</td><td className="py-3">{p.from}</td><td className="py-3">{p.to}</td>
                     <td className="py-3">{p.type}</td><td className="py-3 font-black text-amber-500">{p.count}</td>
                   </tr>
                 ))}
@@ -654,9 +674,6 @@ function Delivery({parcels, setParcels, db, showMsg, isDark, user}) {
   );
 }
 
-/* ══════════════════════════════════════════
-   ACCOUNTS (+ NET SETTLEMENT LOGIC)
-══════════════════════════════════════════ */
 function Accounts({parcels, setParcels, db, showMsg, isDark, user}) {
   const [acc, setAcc] = useState({ emi: 25000, diesel: 30000, other: 15000 });
   const [payoutRate, setPayoutRate] = useState(10);
@@ -665,7 +682,6 @@ function Accounts({parcels, setParcels, db, showMsg, isDark, user}) {
   const [pettyAmt, setPettyAmt] = useState("");
   const [pettyLedger, setPettyLedger] = useState([]);
   
-  // For Admin settlement control
   const [selectedBranch, setSelectedBranch] = useState(user.branch === 'All' ? CITIES[0] : user.branch);
 
   useEffect(() => { local.get("mps_petty_cash").then(d => { if(d) setPettyLedger(d); }); }, []);
@@ -680,32 +696,26 @@ function Accounts({parcels, setParcels, db, showMsg, isDark, user}) {
 
   const activeParcels = parcels.filter(p => p.status !== 'Deleted');
   
-  // Global View Variables (For Top Bar)
   const totalSystemRevenue = activeParcels.reduce((a,b)=>a+(b.price||0), 0);
   const totalPetty = pettyLedger.reduce((a,b)=>a+b.amt, 0);
   const exp = acc.emi + acc.diesel + acc.other;
-  const net = totalSystemRevenue - exp - totalPetty; // Excludes payout logic globally for simplicity here
+  const net = totalSystemRevenue - exp - totalPetty; 
 
-  // 🔴 BRANCH SETTLEMENT LOGIC (For Selected Branch) 🔴
-  // Filter parcels that involve the selected branch and ARE NOT YET SETTLED
   const unsettledBranchParcels = activeParcels.filter(p => {
     const isRelated = p.bookedBranch === selectedBranch || p.deliveredBranch === selectedBranch;
     const isSettled = p.settledBranches && p.settledBranches.includes(selectedBranch);
     return isRelated && !isSettled;
   });
 
-  // 1. Branch Cash in Hand = (Booked Paid Cash) + (Delivered To-Pay Cash)
   const cashCollected = unsettledBranchParcels.filter(p => 
     (p.bookedBranch === selectedBranch && p.payment === 'Paid') || 
     (p.deliveredBranch === selectedBranch && p.payment === 'To Pay' && p.deliveryMode === 'Cash')
   ).reduce((a,b) => a + b.price, 0);
 
-  // 2. Branch Commission = (Booked Count + Delivered Count) * Rate
   const bookedCount = unsettledBranchParcels.filter(p => p.bookedBranch === selectedBranch).length;
   const deliveredCount = unsettledBranchParcels.filter(p => p.deliveredBranch === selectedBranch && p.status === 'Delivered').length;
   const branchCommission = (bookedCount + deliveredCount) * payoutRate;
 
-  // 3. Net Balance Remittance
   const netRemittance = cashCollected - branchCommission;
 
   const markLedgerSettled = async () => {
@@ -727,7 +737,6 @@ function Accounts({parcels, setParcels, db, showMsg, isDark, user}) {
 
   return (
     <div className="space-y-6 md:space-y-8">
-      {/* 🔴 NEW: ADVANCED BRANCH RECONCILIATION PANEL 🔴 */}
       <div className={`${cardBg} p-6 rounded-3xl border shadow-xl`}>
          <div className="flex justify-between items-center border-b border-slate-500/20 pb-4 mb-4">
             <div>
@@ -845,9 +854,6 @@ function Accounts({parcels, setParcels, db, showMsg, isDark, user}) {
   );
 }
 
-/* ══════════════════════════════════════════
-   ADMIN MANAGEMENT (+ CREDIT CONTROL)
-══════════════════════════════════════════ */
 function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user, creditAuthList, setCreditAuthList}) {
   const [tab, setTab] = useState('parcels');
   const [editF, setEditF] = useState(null);
@@ -878,10 +884,11 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
 
   const isSuper = user.role === 'superadmin';
 
+  // 🔥 UPDATED LOGIC HERE 🔥
   useEffect(() => {
-    if (newRole === 'admin' || newRole === 'superadmin') {
+    if (newRole === 'superadmin') {
       setNewBranch('All');
-    } else {
+    } else if (newRole === 'staff' && newBranch === 'All') {
       setNewBranch(CITIES[0]);
     }
   }, [newRole]);
@@ -889,7 +896,7 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
   const handleAddUser = async () => {
     if(!newUser || !newPass) return showMsg("Fill administrative requirements", "error");
     const assignedRole = isSuper ? newRole : "staff";
-    const assignedBranch = (assignedRole === 'superadmin' || assignedRole === 'admin') ? 'All' : newBranch;
+    const assignedBranch = assignedRole === 'superadmin' ? 'All' : newBranch;
 
     const u = {id: genUserId(), username: newUser, password: newPass, role: assignedRole, branch: assignedBranch};
     await db.insertUser(u); setUsers([u, ...users]); setNewUser(""); setNewPass(""); showMsg(`${assignedRole.toUpperCase()} Created at ${assignedBranch}!`);
@@ -990,9 +997,10 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
               </select>
             )}
 
-            <select id="stfBranch" disabled={newRole === 'superadmin' || newRole === 'admin'} onKeyDown={e=>handleBoxTravel(e,{enter:'stfBtn', up: isSuper ? 'stfRole' : 'stfPass'})} value={newRole==='superadmin'?'All':newBranch} onChange={e=>setNewBranch(e.target.value)} className={`w-full p-2 md:p-3 rounded-xl border font-bold outline-none text-sm ${inputBg} ${(newRole==='superadmin' || newRole==='admin')?'opacity-50':''}`}>
+            {/* 🔥 DROPDOWN FIX: Disabled ONLY for superadmin 🔥 */}
+            <select id="stfBranch" disabled={newRole === 'superadmin'} onKeyDown={e=>handleBoxTravel(e,{enter:'stfBtn', up: isSuper ? 'stfRole' : 'stfPass'})} value={newBranch} onChange={e=>setNewBranch(e.target.value)} className={`w-full p-2 md:p-3 rounded-xl border font-bold outline-none text-sm ${inputBg} ${newRole==='superadmin'?'opacity-50 cursor-not-allowed':''}`}>
               {(isSuper && (newRole === 'admin' || newRole === 'superadmin')) && <option value="All">Global Access (All Branches)</option>}
-              {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+              {CITIES.map(c => <option key={c} value={c}>Branch: {c}</option>)}
             </select>
             
             <button id="stfBtn" onClick={handleAddUser} onKeyDown={e => e.key === 'Enter' && handleAddUser()} className="w-full bg-indigo-600 text-white font-bold py-2 md:py-3 rounded-xl text-sm md:text-base">Commit Assignment</button>
