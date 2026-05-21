@@ -8,7 +8,6 @@ import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from "rechar
 const ENV_URL = import.meta.env.VITE_SUPABASE_URL || "";
 const ENV_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 
-// 🔥 NEW: 2-Digit Branch Code Mapping 🔥
 const BRANCH_CONFIG = {
   "Mecheri": "01",
   "Elampillai": "02",
@@ -29,29 +28,23 @@ const PAY_MODES = ["Paid", "To Pay", "Credit", "FOC"];
 
 const genUserId = () => `USR-${Math.floor(Math.random()*10000)}`;
 
-// 🔥 FINAL: Continuous Branch-wise Serial Logic 🔥
 const generateLR = (fromCity, toCity, allParcels) => {
   if (!fromCity || !toCity) return `MPS${String(Math.floor(Math.random()*1000)).padStart(6,'0')}`; 
   
   const fCode = BRANCH_CONFIG[fromCity] || "00";
   const tCode = BRANCH_CONFIG[toCity] || "00";
-  
-  // Namma "From" branch-ai mattum vachu theda porom
   const fromPrefix = `${fCode}/`; 
   
   let max = 0;
   allParcels.forEach(p => {
     if (p.id && p.id.startsWith(fromPrefix)) {
-      // LR number-ai 3 pieces-a udaikkirom (e.g., "01", "04", "0001")
       const parts = p.id.split('/'); 
       if (parts.length === 3) {
-        const num = parseInt(parts[2], 10); // 3rd part thaan serial number
+        const num = parseInt(parts[2], 10);
         if (!isNaN(num) && num > max) max = num;
       }
     }
   });
-  
-  // Pudhu number generate aagum
   return `${fCode}/${tCode}/${String(max + 1).padStart(4, '0')}`;
 };
 
@@ -70,51 +63,36 @@ function calcPrice(from, to, ratePerUnit, count = 1, type = "Box", paymentMode =
   return Math.round((rate * (parseInt(count) || 1)) + tc);
 }
 
-// 🔥 NEW: Professional Receipt PDF Generation 🔥
 function generatePDF(p) {
   const doc = new jsPDF();
   
-  // Outer Border (Total width = 190, Height = 110)
   doc.setLineWidth(0.5);
   doc.rect(10, 10, 190, 110);
   
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // HORIZONTAL LINES
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  doc.line(10, 35, 200, 35); // Below header
-  doc.line(10, 42, 200, 42); // Below From/To branch
-  doc.line(10, 70, 145, 70); // Below Address
-  doc.line(10, 82, 145, 82); // Below Goods Header
-  doc.line(95, 92, 145, 92); // Above Door Delivery warning
-  doc.line(145, 95, 200, 95); // Above Total
-  doc.line(10, 100, 200, 100); // Above Signatures
+  doc.line(10, 35, 200, 35); 
+  doc.line(10, 42, 200, 42); 
+  doc.line(10, 70, 145, 70); 
+  doc.line(10, 82, 145, 82); 
+  doc.line(95, 92, 145, 92); 
+  doc.line(145, 95, 200, 95); 
+  doc.line(10, 100, 200, 100); 
   
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // VERTICAL LINES
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  doc.line(145, 10, 145, 100); // Left of Particulars
-  doc.line(175, 35, 175, 100); // Left of Amount
-  doc.line(77, 35, 77, 70); // Between From/To addresses
+  doc.line(145, 10, 145, 100); 
+  doc.line(175, 35, 175, 100); 
+  doc.line(77, 35, 77, 70); 
   
-  doc.line(16, 42, 16, 70); // Consignor vertical label split
-  doc.line(83, 42, 83, 70); // Consignee vertical label split
+  doc.line(16, 42, 16, 70); 
+  doc.line(83, 42, 83, 70); 
   
-  // Goods section splits
-  doc.line(25, 70, 25, 100); // Articles right border
-  doc.line(95, 70, 95, 92); // Description right border
-  doc.line(110, 70, 110, 92); // Value right border
-  doc.line(125, 70, 125, 92); // Actual wt right border
+  doc.line(25, 70, 25, 100); 
+  doc.line(95, 70, 95, 92); 
+  doc.line(110, 70, 110, 92); 
+  doc.line(125, 70, 125, 92); 
   
-  // Signatures Area Vertical Lines
   doc.line(77, 100, 77, 120);
   doc.line(115, 100, 115, 120);
   doc.line(145, 100, 145, 120);
 
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // TEXT & CONTENT PLACEMENT
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  
-  // --- HEADER: LOGO & COMPANY NAME ---
   doc.setFont("helvetica", "bolditalic");
   doc.setFontSize(26);
   doc.text("MPS", 12, 24);
@@ -128,7 +106,6 @@ function generatePDF(p) {
   doc.setFontSize(7);
   doc.text("• WE DELIVER TRUST •", 42, 30);
   
-  // --- HEADER: ADDRESS & GSTIN ---
   const centerX = 107;
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
@@ -140,13 +117,11 @@ function generatePDF(p) {
   doc.text("90033 77185 / 80726 72255", centerX, 29, { align: "center" });
   doc.text("86108 07743 / 95785 02151", centerX, 33, { align: "center" });
 
-  // --- HEADER: LR INFO ---
   doc.setFontSize(10);
   doc.text(`LR. NO.  :  ${p.id}`, 147, 16);
   doc.text(`Date     :  ${p.date}`, 147, 24);
   doc.text(`Pay Mode:  ${p.payment}`, 147, 32);
   
-  // --- FROM / TO BRANCH ---
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.text(`From Branch : ${p.from}`, 12, 40);
@@ -154,13 +129,11 @@ function generatePDF(p) {
   doc.text("Particulars", 152, 40);
   doc.text("Amount", 182, 40);
   
-  // --- ADDRESS BLOCK (CONSIGNOR / CONSIGNEE) ---
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
-  doc.text("Consignor", 14, 65, { angle: 90 }); // Vertical text
-  doc.text("Consignee", 81, 65, { angle: 90 }); // Vertical text
+  doc.text("Consignor", 14, 65, { angle: 90 }); 
+  doc.text("Consignee", 81, 65, { angle: 90 }); 
   
-  // Sender Data
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
   doc.text(`Tel No. : ${p.sPhone}`, 18, 55);
@@ -168,14 +141,12 @@ function generatePDF(p) {
   doc.setFont("helvetica", "bold");
   doc.text(`${p.sName}`, 18, 68);
   
-  // Receiver Data
   doc.setFont("helvetica", "normal");
   doc.text(`Tel No. : ${p.rPhone}`, 85, 55);
   doc.text(`GSTIN   : ${p.rGst || ""}`, 85, 62);
   doc.setFont("helvetica", "bold");
   doc.text(`${p.rName}`, 85, 68);
   
-  // --- PARTICULARS (RIGHT SIDE) ---
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
   const particulars = ["Freight", "Hamali", "Fuel Sur Charge", "Docket Charge", "Article Charges", "Door Collection", "Door Delivery", "Others"];
@@ -183,12 +154,10 @@ function generatePDF(p) {
     doc.text(item, 147, 47 + (i * 6));
   });
   
-  // Print Total Amount directly mapped to Freight
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
   doc.text(`Rs. ${p.price}`, 178, 47); 
   
-  // --- GOODS SECTION TABLE ---
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
   doc.text("No. of", 13, 75); doc.text("Articles", 12, 79);
@@ -197,25 +166,21 @@ function generatePDF(p) {
   doc.text("Actual", 112, 75); doc.text("Weight", 112, 79);
   doc.text("Charged", 128, 75); doc.text("Weight", 129, 79);
   
-  // Goods Data Population
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
   doc.text(`${p.count}`, 16, 88);
   doc.text(`${p.type}`, 28, 88);
   doc.text(`${p.actualWeight || "-"}`, 115, 88);
   
-  // Door Delivery Note
   doc.setFontSize(7);
   doc.setFont("helvetica", "bold");
   doc.text("Door Delivery Service Will be", 97, 95.5);
   doc.text("Provided for Ground Floor Only", 96, 98.5);
   
-  // Total Box
   doc.setFontSize(10);
   doc.text("Total", 155, 98.5);
   doc.text(`Rs. ${p.price}`, 178, 98.5);
   
-  // --- FOOTER & SIGNATURE BLOCKS ---
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
   doc.text("GSTIN Payable by :", 25, 104);
@@ -223,18 +188,15 @@ function generatePDF(p) {
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
   
-  // Custom Checkboxes
   doc.rect(13, 107, 3, 3); doc.text("Consignor", 17, 110);
   doc.rect(40, 107, 3, 3); doc.text("Consignee", 44, 110);
   doc.rect(13, 114, 3, 3); doc.text("Transporter", 17, 117);
   doc.rect(40, 114, 3, 3); doc.text("Agency", 44, 117);
   
-  // Tick mark based on payment mode
   doc.setFontSize(10);
-  if(p.payment === "Paid" || p.payment === "Credit" || p.payment === "FOC") doc.text("✔", 13.5, 109.5); // Ticks Consignor
-  if(p.payment === "To Pay") doc.text("✔", 40.5, 109.5); // Ticks Consignee
+  if(p.payment === "Paid" || p.payment === "Credit" || p.payment === "FOC") doc.text("✔", 13.5, 109.5);
+  if(p.payment === "To Pay") doc.text("✔", 40.5, 109.5);
   
-  // Signatures Text
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
   doc.text("Consignee", 79, 105);
@@ -247,7 +209,6 @@ function generatePDF(p) {
   doc.setFont("helvetica", "bold");
   doc.text("For Mecheri Parcel Service", 147, 105);
   
-  // Execute Save - replaces slashes with underscores for valid filename
   doc.save(`MPS_LR_${p.id.replace(/\//g, '_')}.pdf`);
 }
 
@@ -557,12 +518,11 @@ function Dashboard({parcels, isDark, user}) {
     return p.bookedBranch === selectedBranch || p.from === selectedBranch || p.to === selectedBranch;
   });
 
-  const rev = branchParcels.reduce((a,b)=>a+(b.price||0),0);
+  const rev = branchParcels.reduce((a,b)=>a+(Number(b.price)||0),0);
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-100";
   
   const godownStock = activeParcels.filter(p => (selectedBranch === 'All' ? true : p.from === selectedBranch) && p.status === 'Booked');
 
-  // 🔥 NEW: Godown Pending Days Logic
   const getDays = (iso) => {
     if(!iso) return 0;
     const diff = new Date() - new Date(iso);
@@ -711,7 +671,6 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
     const isoDate = dObj.toISOString();
     const locDateStr = dObj.toLocaleDateString('en-IN');
     
-    // 🔥 Generation Logic Now Supports Route-Wise System
     const lrNumber = generateLR(f.from, f.to, parcels);
     
     const p = {...f, notes: f.payment === 'Credit' ? `[A/c: ${f.creditCustomer}] ${f.notes}` : f.notes, id: lrNumber, date: locDateStr, isoDate: isoDate, status: "Booked", price: ep, bookedBy: user.username, bookedBranch: user.branch, settledBranches: [], history: [{status: "Booked", loc: f.from, time: dObj.toLocaleString()}]};
@@ -885,26 +844,26 @@ function Accounts({parcels, setParcels, db, showMsg, isDark, user}) {
 
   const activeParcels = parcels.filter(p => p.status !== 'Deleted');
   
-  const totalSystemRevenue = activeParcels.reduce((a,b)=>a+(b.price||0), 0);
-  const totalPetty = pettyLedger.reduce((a,b)=>a+b.amt, 0);
-  const exp = acc.emi + acc.diesel + acc.other;
+  // 🔥 FINAL FIX: Tracking by 'from' and 'to' route instead of bookedBranch
+  const unsettledBranchParcels = activeParcels.filter(p => {
+    const isRelated = p.from === selectedBranch || p.to === selectedBranch;
+    const isSettled = p.settledBranches && p.settledBranches.includes(selectedBranch);
+    return isRelated && !isSettled;
+  });
+
+  const totalSystemRevenue = activeParcels.reduce((a,b)=>a+(Number(b.price)||0), 0);
+  const totalPetty = pettyLedger.reduce((a,b)=>a+(Number(b.amt)||0), 0);
+  const exp = Number(acc.emi) + Number(acc.diesel) + Number(acc.other);
   const net = totalSystemRevenue - exp - totalPetty; 
 
-  // 🔥 JSONB Settlement Check Added Here 🔥
-  const unsettledBranchParcels = activeParcels.filter(p => {
-  const isRelated = p.bookedBranch === selectedBranch || p.deliveredBranch === selectedBranch;
-  const isSettled = p.settledBranches && p.settledBranches.includes(selectedBranch);
-  return isRelated && !isSettled;
-});
-
   const cashCollected = unsettledBranchParcels.filter(p => 
-    (p.bookedBranch === selectedBranch && p.payment === 'Paid') || 
-    (p.deliveredBranch === selectedBranch && p.payment === 'To Pay' && p.deliveryMode === 'Cash')
-  ).reduce((a,b) => a + b.price, 0);
+    (p.from === selectedBranch && p.payment === 'Paid') || 
+    (p.to === selectedBranch && p.payment === 'To Pay' && p.deliveryMode === 'Cash')
+  ).reduce((a,b) => a + (Number(b.price) || 0), 0);
 
-  const bookedCount = unsettledBranchParcels.filter(p => p.bookedBranch === selectedBranch).length;
-  const deliveredCount = unsettledBranchParcels.filter(p => p.deliveredBranch === selectedBranch && p.status === 'Delivered').length;
-  const branchCommission = (bookedCount + deliveredCount) * payoutRate;
+  const bookedCount = unsettledBranchParcels.filter(p => p.from === selectedBranch).length;
+  const deliveredCount = unsettledBranchParcels.filter(p => p.to === selectedBranch && p.status === 'Delivered').length;
+  const branchCommission = (bookedCount + deliveredCount) * Number(payoutRate);
 
   const netRemittance = cashCollected - branchCommission;
 
@@ -914,7 +873,6 @@ function Accounts({parcels, setParcels, db, showMsg, isDark, user}) {
 
     let updatedParcelsList = [...parcels];
     for (let p of unsettledBranchParcels) {
-      // JSONB Column "settledBranches" array updated safely
       const updated = {...p, settledBranches: [...(p.settledBranches || []), selectedBranch]};
       await db.updateParcel(updated.id, updated);
       updatedParcelsList = updatedParcelsList.map(x => x.id === updated.id ? updated : x);
@@ -1160,9 +1118,9 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
 
   const chartData = STATUSES.filter(s=>s!=='Deleted').map(s => ({ name: s, count: sortedTableData.filter(p=>p.status===s).length, fill: S_CLR[s] }));
 
-  const statCash = sortedTableData.filter(p => p.status !== 'Deleted' && (p.payment === 'Paid' || (p.payment === 'To Pay' && p.deliveryMode === 'Cash'))).reduce((a,b)=>a+b.price, 0);
-  const statGpay = sortedTableData.filter(p => p.status !== 'Deleted' && (p.payment === 'To Pay' && p.deliveryMode === 'GPay')).reduce((a,b)=>a+b.price, 0);
-  const statPending = sortedTableData.filter(p => p.status !== 'Deleted' && (p.payment === 'To Pay' && p.status !== 'Delivered')).reduce((a,b)=>a+b.price, 0);
+  const statCash = sortedTableData.filter(p => p.status !== 'Deleted' && (p.payment === 'Paid' || (p.payment === 'To Pay' && p.deliveryMode === 'Cash'))).reduce((a,b)=>a+(Number(b.price)||0), 0);
+  const statGpay = sortedTableData.filter(p => p.status !== 'Deleted' && (p.payment === 'To Pay' && p.deliveryMode === 'GPay')).reduce((a,b)=>a+(Number(b.price)||0), 0);
+  const statPending = sortedTableData.filter(p => p.status !== 'Deleted' && (p.payment === 'To Pay' && p.status !== 'Delivered')).reduce((a,b)=>a+(Number(b.price)||0), 0);
 
   return (
     <div className="space-y-4 md:space-y-6">
