@@ -29,23 +29,30 @@ const PAY_MODES = ["Paid", "To Pay", "Credit", "FOC"];
 
 const genUserId = () => `USR-${Math.floor(Math.random()*10000)}`;
 
-// 🔥 NEW: Route-wise LR Generation Logic 🔥
+// 🔥 FINAL: Continuous Branch-wise Serial Logic 🔥
 const generateLR = (fromCity, toCity, allParcels) => {
   if (!fromCity || !toCity) return `MPS${String(Math.floor(Math.random()*1000)).padStart(6,'0')}`; 
   
   const fCode = BRANCH_CONFIG[fromCity] || "00";
   const tCode = BRANCH_CONFIG[toCity] || "00";
-  const routePrefix = `${fCode}/${tCode}/`;
+  
+  // Namma "From" branch-ai mattum vachu theda porom
+  const fromPrefix = `${fCode}/`; 
   
   let max = 0;
   allParcels.forEach(p => {
-    if (p.id && p.id.startsWith(routePrefix)) {
-      const numStr = p.id.replace(routePrefix, '');
-      const num = parseInt(numStr, 10);
-      if (!isNaN(num) && num > max) max = num;
+    if (p.id && p.id.startsWith(fromPrefix)) {
+      // LR number-ai 3 pieces-a udaikkirom (e.g., "01", "04", "0001")
+      const parts = p.id.split('/'); 
+      if (parts.length === 3) {
+        const num = parseInt(parts[2], 10); // 3rd part thaan serial number
+        if (!isNaN(num) && num > max) max = num;
+      }
     }
   });
-  return `${routePrefix}${String(max + 1).padStart(4, '0')}`;
+  
+  // Pudhu number generate aagum
+  return `${fCode}/${tCode}/${String(max + 1).padStart(4, '0')}`;
 };
 
 const MpsLogo = () => (
@@ -885,10 +892,10 @@ function Accounts({parcels, setParcels, db, showMsg, isDark, user}) {
 
   // 🔥 JSONB Settlement Check Added Here 🔥
   const unsettledBranchParcels = activeParcels.filter(p => {
-    const isRelated = p.bookedBranch === selectedBranch || p.deliveredBranch === selectedBranch;
-    const isSettled = p.settledBranches && p.settledBranches.includes(selectedBranch);
-    return isRelated && !isSettled;
-  });
+  const isRelated = p.bookedBranch === selectedBranch || p.deliveredBranch === selectedBranch;
+  const isSettled = p.settledBranches && p.settledBranches.includes(selectedBranch);
+  return isRelated && !isSettled;
+});
 
   const cashCollected = unsettledBranchParcels.filter(p => 
     (p.bookedBranch === selectedBranch && p.payment === 'Paid') || 
