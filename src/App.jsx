@@ -600,7 +600,24 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
   const [contacts, setContacts] = useState([]);
 
   useEffect(() => { if(shortcutMode) setF(prev => ({...prev, payment: shortcutMode})); }, [shortcutMode]);
-  useEffect(() => { async function load() { const c = await local.get("mps_contacts") || {}; setContacts(Object.entries(c).map(([phone, data]) => ({ phone, ...data }))); } load(); }, []);
+  
+  // 🔥 FIXED: Supabase Database Auto-Fill Logic
+  useEffect(() => { 
+    async function load() { 
+      const cMap = {};
+      // 1. Database-la irukka ella contact-um thedi eduthu list-la podu
+      parcels.forEach(p => {
+        if (p.sPhone && !cMap[p.sPhone]) cMap[p.sPhone] = { name: p.sName, gst: p.sGst || "" };
+        if (p.rPhone && !cMap[p.rPhone]) cMap[p.rPhone] = { name: p.rName, gst: p.rGst || "" };
+      });
+      // 2. Local-la save aagirukka pudhu contacts-um eduthu combine pannu
+      const localC = await local.get("mps_contacts") || {}; 
+      Object.assign(cMap, localC);
+      
+      setContacts(Object.entries(cMap).map(([phone, data]) => ({ phone, ...data }))); 
+    } 
+    load(); 
+  }, [parcels]);
 
   const smartFocus = (d, isSender) => {
     setTimeout(() => {
@@ -621,8 +638,8 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
     const fieldPrefix = isSender ? 's' : 'r';
     setF(prev => ({ ...prev, [`${fieldPrefix}Phone`]: value }));
     if (value.length === 10) {
-      const saved = await local.get("mps_contacts") || {};
-      const found = saved[value];
+      // Find from the newly loaded database contacts
+      const found = contacts.find(c => c.phone === value);
       if (found) {
         setF(prev => ({...prev, [`${fieldPrefix}Name`]: found.name || "", [`${fieldPrefix}Gst`]: found.gst || "" }));
         showMsg("Customer details loaded automatically!", "success");
@@ -844,7 +861,6 @@ function Accounts({parcels, setParcels, db, showMsg, isDark, user}) {
 
   const activeParcels = parcels.filter(p => p.status !== 'Deleted');
   
-  // 🔥 FINAL FIX: Tracking by 'from' and 'to' route instead of bookedBranch
   const unsettledBranchParcels = activeParcels.filter(p => {
     const isRelated = p.from === selectedBranch || p.to === selectedBranch;
     const isSettled = p.settledBranches && p.settledBranches.includes(selectedBranch);
@@ -861,10 +877,16 @@ function Accounts({parcels, setParcels, db, showMsg, isDark, user}) {
     (p.to === selectedBranch && p.payment === 'To Pay' && p.deliveryMode === 'Cash')
   ).reduce((a,b) => a + (Number(b.price) || 0), 0);
 
-  const bookedCount = unsettledBranchParcels.filter(p => p.from === selectedBranch).length;
-  const deliveredCount = unsettledBranchParcels.filter(p => p.to === selectedBranch && p.status === 'Delivered').length;
-  const branchCommission = (bookedCount + deliveredCount) * Number(payoutRate);
+  // 🔥 FIXED: Quantity based Commission calculation
+  const bookedCount = unsettledBranchParcels
+    .filter(p => p.from === selectedBranch)
+    .reduce((total, p) => total + (Number(p.count) || 0), 0);
+    
+  const deliveredCount = unsettledBranchParcels
+    .filter(p => p.to === selectedBranch && p.status === 'Delivered')
+    .reduce((total, p) => total + (Number(p.count) || 0), 0);
 
+  const branchCommission = (bookedCount + deliveredCount) * Number(payoutRate);
   const netRemittance = cashCollected - branchCommission;
 
   const markLedgerSettled = async () => {
@@ -1147,7 +1169,7 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
 
             <select id="stfBranch" disabled={newRole === 'superadmin'} onKeyDown={e=>handleBoxTravel(e,{enter:'stfBtn', up: isSuper ? 'stfRole' : 'stfPass'})} value={newBranch} onChange={e=>setNewBranch(e.target.value)} className={`w-full p-2 md:p-3 rounded-xl border font-bold outline-none text-sm ${inputBg} ${newRole==='superadmin'?'opacity-50 cursor-not-allowed':''}`}>
               {(isSuper && (newRole === 'admin' || newRole === 'superadmin')) && <option value="All">Global Access (All Branches)</option>}
-              {CITIES.map(c => <option key={c} value={c}>Branch: {c}</option>)}
+              {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
             
             <button id="stfBtn" onClick={handleAddUser} onKeyDown={e => e.key === 'Enter' && handleAddUser()} className="w-full bg-indigo-600 text-white font-bold py-2 md:py-3 rounded-xl text-sm md:text-base">Commit Assignment</button>
