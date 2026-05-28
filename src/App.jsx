@@ -36,7 +36,6 @@ function calcPrice(from, to, ratePerUnit, count = 1, type = "Box", paymentMode =
   return Math.round((rate * (parseInt(count) || 1)) + tc);
 }
 
-// 🔥 PDF GENERATORS 🔥
 function generatePDF(p) {
   const doc = new jsPDF(); doc.setLineWidth(0.5); doc.rect(10, 10, 190, 110);
   doc.line(10, 35, 200, 35); doc.line(10, 42, 200, 42); doc.line(10, 70, 145, 70); doc.line(10, 82, 145, 82); doc.line(95, 92, 145, 92); doc.line(145, 95, 200, 95); doc.line(10, 100, 200, 100); 
@@ -94,7 +93,6 @@ function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList) {
   doc.save(`Invoice_${customer}_${fromD}.pdf`);
 }
 
-// 🔥 FEATURE: CLEAN WHATSAPP MSG 🔥
 function openWhatsApp(phone, isSender, p) {
   const text = `📦 *MPS Logistics*\n\nHello *${isSender ? p.sName : p.rName}*,\nYour parcel is booked successfully!\n\n*LR No:* ${p.id}\n*Route:* ${p.from} ➔ ${p.to}\n*Items:* ${p.count} ${p.type}\n*Mode:* ${p.payment}\n*Amount:* ₹${p.price}\n\nThank you for choosing MPS!`;
   window.open(`https://api.whatsapp.com/send?phone=91${phone}&text=${encodeURIComponent(text)}`, '_blank');
@@ -131,6 +129,7 @@ function SuggestInput({ id, label, value, onChange, onSelect, dataList, isPhone,
 }
 
 const local={ async get(k){try{const r=window.localStorage.getItem(k);return r?JSON.parse(r):null;}catch{return null;}}, async set(k,v){try{window.localStorage.setItem(k,JSON.stringify(v));}catch{}}, async remove(k){try{window.localStorage.removeItem(k);}catch{}} };
+
 class DB{
   constructor(url, key){ this.isLive = Boolean(url && key); if(this.isLive) { this.base = url.replace(/\/+$/,"")+"/rest/v1"; this.h = {"apikey":key,"Authorization":`Bearer ${key}`,"Content-Type":"application/json"}; } } 
   async getParcels(){ if(this.isLive) { try { const r=await fetch(`${this.base}/parcels?select=*`,{headers:this.h}); if(r.ok) return await r.json(); } catch(e){} } return await local.get("mps_parcels")||[]; }
@@ -141,6 +140,11 @@ class DB{
   async insertUser(u){ if(this.isLive) { try { await fetch(`${this.base}/app_users`,{method:"POST",headers:this.h,body:JSON.stringify(u)}); } catch(e){} } await local.set("mps_users", [u, ...(await this.getUsers())]); }
   async deleteUser(id){ if(this.isLive) { try { await fetch(`${this.base}/app_users?id=eq.${id}`,{method:"DELETE",headers:this.h}); } catch(e){} } await local.set("mps_users", (await this.getUsers()).filter(u => u.id !== id)); }
   async updateUser(id, data){ if(this.isLive) { try { await fetch(`${this.base}/app_users?id=eq.${id}`,{method:"PATCH",headers:this.h,body:JSON.stringify(data)}); } catch(e){} } await local.set("mps_users", (await this.getUsers()).map(u => u.id === id ? {...u, ...data} : u)); }
+  
+  // 🔥 DATABASE CONNECTION FIX FOR CREDIT_AUTH 🔥
+  async getCreditAuth(){ if(this.isLive) { try { const r=await fetch(`${this.base}/credit_auth?select=*`,{headers:this.h}); if(r.ok) return await r.json(); } catch(e){} } return await local.get("mps_credit_auth")||[]; }
+  async insertCreditAuth(data){ if(this.isLive) { try { await fetch(`${this.base}/credit_auth`,{method:"POST",headers:this.h,body:JSON.stringify(data)}); } catch(e){} } await local.set("mps_credit_auth", [data, ...(await local.get("mps_credit_auth")||[])]); }
+  async deleteCreditAuth(phone){ if(this.isLive) { try { await fetch(`${this.base}/credit_auth?phone=eq.${phone}`,{method:"DELETE",headers:this.h}); } catch(e){} } await local.set("mps_credit_auth", (await local.get("mps_credit_auth")||[]).filter(c => c.phone !== phone)); }
 }
 
 export default function App() {
@@ -150,7 +154,18 @@ export default function App() {
   const [db] = useState(new DB(ENV_URL, ENV_KEY));
   const showMsg = (msg, type='success') => { setToast({msg, type}); setTimeout(() => setToast(null), 3000); };
 
-  useEffect(() => { async function init() { const ps = await db.getParcels(); setParcels(ps); const usrs = await db.getUsers(); setUsers(usrs); const session = await local.get("mps_session"); if(session) setUser(session); const savedTheme = await local.get("mps_theme"); if(savedTheme) setTheme(savedTheme); const cList = await local.get("mps_credit_auth") || []; setCreditAuthList(cList); } init(); }, []);
+  useEffect(() => { 
+      async function init() { 
+          const ps = await db.getParcels(); setParcels(ps); 
+          const usrs = await db.getUsers(); setUsers(usrs); 
+          const session = await local.get("mps_session"); if(session) setUser(session); 
+          const savedTheme = await local.get("mps_theme"); if(savedTheme) setTheme(savedTheme); 
+          // 🔥 SUPABASE DB CALL FOR CREDIT AUTH 🔥
+          const cList = await db.getCreditAuth(); setCreditAuthList(cList); 
+      } 
+      init(); 
+  }, []);
+  
   const toggleTheme = () => { const nt = theme === "dark" ? "light" : "dark"; setTheme(nt); local.set("mps_theme", nt); };
 
   useEffect(() => {
@@ -480,6 +495,7 @@ function Accounts({parcels, setParcels, db, showMsg, isDark, user}) {
   const [eodDate, setEodDate] = useState(new Date().toISOString().split('T')[0]);
 
   useEffect(() => { local.get("mps_petty_cash").then(d => { if(d) setPettyLedger(d); }); }, []);
+  // 🔥 FIX: PETTY CASH DATE MATCHES EOD DATE PICKER 🔥
   const addPetty = async () => { if(!pettyDesc || !pettyAmt) return; const item = { desc: pettyDesc, amt: Number(pettyAmt), date: eodDate }; const newList = [item, ...pettyLedger]; setPettyLedger(newList); await local.set("mps_petty_cash", newList); setPettyDesc(""); setPettyAmt(""); };
 
   const activeParcels = parcels.filter(p => p.status !== 'Deleted');
@@ -517,8 +533,24 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
   useEffect(() => { if (newRole === 'superadmin') setNewBranch('All'); else if (newRole === 'staff' && newBranch === 'All') setNewBranch(CITIES[0]); }, [newRole]);
 
   const handleAddUser = async () => { if(!newUser || !newPass) return showMsg("Fill administrative requirements", "error"); const assignedRole = isSuper ? newRole : "staff"; const assignedBranch = assignedRole === 'superadmin' ? 'All' : newBranch; const u = {id: genUserId(), username: newUser, password: newPass, role: assignedRole, branch: assignedBranch}; await db.insertUser(u); setUsers([u, ...users]); setNewUser(""); setNewPass(""); showMsg(`${assignedRole.toUpperCase()} Created!`); };
-  const addCreditAuth = async () => { if(newCPhone.length !== 10 || !newCName) return showMsg("Invalid Credit details", "error"); const newList = [...creditAuthList, {phone: newCPhone, company: newCName}]; setCreditAuthList(newList); await local.set("mps_credit_auth", newList); setNewCPhone(""); setNewCName(""); showMsg("Credit Account Authorized!"); };
-  const removeCredit = async (phone) => { const newList = creditAuthList.filter(c => c.phone !== phone); setCreditAuthList(newList); await local.set("mps_credit_auth", newList); showMsg("Credit Auth Revoked", "error"); };
+  
+  // 🔥 SUPABASE DB CALL FOR INSERT/DELETE CREDIT AUTH 🔥
+  const addCreditAuth = async () => { 
+    if(newCPhone.length !== 10 || !newCName) return showMsg("Invalid Credit details", "error"); 
+    const newData = {phone: newCPhone, company: newCName}; 
+    const newList = [...creditAuthList, newData]; 
+    setCreditAuthList(newList); 
+    await db.insertCreditAuth(newData); 
+    setNewCPhone(""); setNewCName(""); 
+    showMsg("Credit Account Authorized!"); 
+  };
+  
+  const removeCredit = async (phone) => { 
+    const newList = creditAuthList.filter(c => c.phone !== phone); 
+    setCreditAuthList(newList); 
+    await db.deleteCreditAuth(phone); 
+    showMsg("Credit Auth Revoked", "error"); 
+  };
 
   const deleteRecord = async (id) => { const reason = window.prompt(`Exact reason for deleting ${id}:`); if (!reason || reason.trim() === "") return showMsg("Deletion reason mandatory.", "error"); const target = parcels.find(p => p.id === id); const updatedHistory = [...target.history, {status: "Deleted", loc: user.branch, time: new Date().toLocaleString(), reason: reason}]; const updatedParcel = { ...target, status: 'Deleted', deletedBy: user.username, deleteReason: reason, history: updatedHistory }; await db.updateParcel(id, updatedParcel); setParcels(parcels.map(p => p.id === id ? updatedParcel : p)); showMsg("Consignment dropped.", "error"); };
   const saveOverrides = async () => { await db.updateParcel(editF.id, editF); setParcels(parcels.map(p => p.id === editF.id ? editF : p)); setEditF(null); showMsg("Consignment updated"); };
