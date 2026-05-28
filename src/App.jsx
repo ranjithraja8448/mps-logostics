@@ -36,6 +36,7 @@ function calcPrice(from, to, ratePerUnit, count = 1, type = "Box", paymentMode =
   return Math.round((rate * (parseInt(count) || 1)) + tc);
 }
 
+// 🔥 PDF GENERATORS 🔥
 function generatePDF(p) {
   const doc = new jsPDF(); doc.setLineWidth(0.5); doc.rect(10, 10, 190, 110);
   doc.line(10, 35, 200, 35); doc.line(10, 42, 200, 42); doc.line(10, 70, 145, 70); doc.line(10, 82, 145, 82); doc.line(95, 92, 145, 92); doc.line(145, 95, 200, 95); doc.line(10, 100, 200, 100); 
@@ -156,12 +157,13 @@ export default function App() {
 
   useEffect(() => { 
       async function init() { 
-          const ps = await db.getParcels(); setParcels(ps); 
-          const usrs = await db.getUsers(); setUsers(usrs); 
+          // 1. FAST LOGIN (Optimistic UI)
           const session = await local.get("mps_session"); if(session) setUser(session); 
           const savedTheme = await local.get("mps_theme"); if(savedTheme) setTheme(savedTheme); 
-          // 🔥 SUPABASE DB CALL FOR CREDIT AUTH 🔥
+          // 2. BACKGROUND DATA LOAD
           const cList = await db.getCreditAuth(); setCreditAuthList(cList); 
+          const ps = await db.getParcels(); setParcels(ps); 
+          const usrs = await db.getUsers(); setUsers(usrs); 
       } 
       init(); 
   }, []);
@@ -320,6 +322,7 @@ function Dashboard({parcels, isDark, user}) {
   );
 }
 
+// 🔥 NAME SEARCH ADDED IN PENDING 🔥
 function Pending({parcels, isDark, user, setGlobalView}) {
   const [fLR, setFLR] = useState(""); const [fFrom, setFFrom] = useState("All"); const [fTo, setFTo] = useState("All"); const [fDate, setFDate] = useState("");
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-100"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800"; const tblBg = isDark ? "bg-slate-800/40" : "bg-slate-50";
@@ -328,7 +331,11 @@ function Pending({parcels, isDark, user, setGlobalView}) {
   const pendingParcels = parcels.filter(p => {
     if (p.status !== 'Booked' && p.status !== 'In Transit') return false;
     if (user.role !== 'superadmin' && p.from !== user.branch && p.to !== user.branch) return false;
-    if (fLR && !p.id.includes(fLR.toUpperCase()) && !p.sPhone.includes(fLR)) return false;
+    
+    // NAME, PHONE & LR SEARCH LOGIC
+    const sTerm = fLR.toLowerCase();
+    if (fLR && !p.id.toLowerCase().includes(sTerm) && !p.sPhone.includes(sTerm) && !(p.sName && p.sName.toLowerCase().includes(sTerm)) && !(p.rName && p.rName.toLowerCase().includes(sTerm))) return false;
+    
     if (fFrom !== "All" && p.from !== fFrom) return false;
     if (fTo !== "All" && p.to !== fTo) return false;
     if (fDate && (!p.isoDate || !p.isoDate.startsWith(fDate))) return false;
@@ -340,7 +347,7 @@ function Pending({parcels, isDark, user, setGlobalView}) {
       <div className={`${cardBg} p-4 rounded-2xl border space-y-3`}>
         <h3 className="font-bold text-sm text-amber-500">Filter Pending Stock</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-          <input value={fLR} onChange={e=>setFLR(e.target.value)} placeholder="LR No / Phone" className={`p-2 rounded-xl border text-sm ${inputBg}`} />
+          <input value={fLR} onChange={e=>setFLR(e.target.value)} placeholder="LR / Phone / Name" className={`p-2 rounded-xl border text-sm ${inputBg}`} />
           <select value={fFrom} onChange={e=>setFFrom(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`}><option value="All">Any Origin</option>{CITIES.map(c => <option key={c}>{c}</option>)}</select>
           <select value={fTo} onChange={e=>setFTo(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`}><option value="All">Any Destination</option>{CITIES.map(c => <option key={c}>{c}</option>)}</select>
           <input type="date" value={fDate} onChange={e=>setFDate(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`} />
@@ -429,12 +436,16 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
   );
 }
 
+// 🔥 NAME SEARCH ADDED IN TRACK 🔥
 function Track({parcels, isDark, user, setGlobalView}) {
   const [fLR, setFLR] = useState(""); const [fFrom, setFFrom] = useState("All"); const [fTo, setFTo] = useState("All"); const [fStatus, setFStatus] = useState("All"); const [fDate, setFDate] = useState("");
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-100"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800"; const tblBg = isDark ? "bg-slate-800/40" : "bg-slate-50";
 
   const results = parcels.filter(p => {
-    if (fLR && !p.id.includes(fLR.toUpperCase()) && !p.sPhone.includes(fLR) && !p.rPhone.includes(fLR)) return false;
+    // NAME, PHONE & LR SEARCH LOGIC
+    const sTerm = fLR.toLowerCase();
+    if (fLR && !p.id.toLowerCase().includes(sTerm) && !p.sPhone.includes(sTerm) && !p.rPhone.includes(sTerm) && !(p.sName && p.sName.toLowerCase().includes(sTerm)) && !(p.rName && p.rName.toLowerCase().includes(sTerm))) return false;
+    
     if (fFrom !== "All" && p.from !== fFrom) return false;
     if (fTo !== "All" && p.to !== fTo) return false;
     if (fStatus !== "All" && p.status !== fStatus) return false;
@@ -448,7 +459,7 @@ function Track({parcels, isDark, user, setGlobalView}) {
       <div className={`${cardBg} p-4 rounded-2xl border space-y-3`}>
         <h3 className="font-bold text-sm text-indigo-500">Advanced Search Filter</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
-          <input value={fLR} onChange={e=>setFLR(e.target.value)} placeholder="LR No / Phone" className={`p-2 rounded-xl border text-sm ${inputBg}`} />
+          <input value={fLR} onChange={e=>setFLR(e.target.value)} placeholder="LR / Phone / Name" className={`p-2 rounded-xl border text-sm ${inputBg}`} />
           <select value={fFrom} onChange={e=>setFFrom(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`}><option value="All">Any Origin</option>{CITIES.map(c => <option key={c}>{c}</option>)}</select>
           <select value={fTo} onChange={e=>setFTo(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`}><option value="All">Any Destination</option>{CITIES.map(c => <option key={c}>{c}</option>)}</select>
           <select value={fStatus} onChange={e=>setFStatus(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`}><option value="All">Any Status</option>{STATUSES.map(s => <option key={s}>{s}</option>)}</select>
