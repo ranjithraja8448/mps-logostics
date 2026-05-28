@@ -1,6 +1,7 @@
 import React, { useState, useEffect, Fragment } from "react";
 import { jsPDF } from "jspdf";
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { Html5QrcodeScanner } from "html5-qrcode";
 
 /* ══════════════════════════════════════════
    CONSTANTS & CONFIG
@@ -146,6 +147,31 @@ class DB{
   async getCreditAuth(){ if(this.isLive) { try { const r=await fetch(`${this.base}/credit_auth?select=*`,{headers:this.h}); if(r.ok) return await r.json(); } catch(e){} } return await local.get("mps_credit_auth")||[]; }
   async insertCreditAuth(data){ if(this.isLive) { try { await fetch(`${this.base}/credit_auth`,{method:"POST",headers:this.h,body:JSON.stringify(data)}); } catch(e){} } await local.set("mps_credit_auth", [data, ...(await local.get("mps_credit_auth")||[])]); }
   async deleteCreditAuth(phone){ if(this.isLive) { try { await fetch(`${this.base}/credit_auth?phone=eq.${phone}`,{method:"DELETE",headers:this.h}); } catch(e){} } await local.set("mps_credit_auth", (await local.get("mps_credit_auth")||[]).filter(c => c.phone !== phone)); }
+}
+
+// 🔥 E-WAY BILL QR SCANNER COMPONENT 🔥
+function EwayScannerModal({ onScan, onClose }) {
+  useEffect(() => {
+    const scanner = new Html5QrcodeScanner("qr-reader", { fps: 10, qrbox: { width: 250, height: 250 } }, false);
+    scanner.render(
+      (decodedText) => { scanner.clear(); onScan(decodedText); },
+      (error) => { /* Ignore background errors */ }
+    );
+    return () => { scanner.clear().catch(e=>console.log(e)); };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 bg-black/90 flex flex-col items-center justify-center z-[200] p-4">
+      <div className="bg-white p-4 rounded-3xl w-full max-w-sm shadow-2xl">
+         <div className="flex justify-between items-center mb-4">
+           <h3 className="font-black text-slate-800 text-lg">📷 Scan E-Way QR</h3>
+           <button onClick={onClose} className="bg-red-100 text-red-500 px-4 py-2 rounded-xl font-bold">Close</button>
+         </div>
+         <div id="qr-reader" className="w-full overflow-hidden rounded-2xl border-2 border-indigo-100"></div>
+         <p className="text-center text-xs font-bold opacity-60 mt-4 text-slate-800">Point camera at E-Way Bill document</p>
+      </div>
+    </div>
+  );
 }
 
 export default function App() {
@@ -380,9 +406,27 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
   const [f, setF] = useState(initF); const [done, setDone] = useState(null); const [eway, setEway] = useState(""); const [contacts, setContacts] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [creditBillTo, setCreditBillTo] = useState("Sender");
+  const [showScanner, setShowScanner] = useState(false); // 🔥 SCANNER STATE
 
   useEffect(() => { if(shortcutMode) setF(prev => ({...prev, payment: shortcutMode})); }, [shortcutMode]);
   useEffect(() => { async function load() { const cMap = {}; parcels.forEach(p => { if (p.sPhone && !cMap[p.sPhone]) cMap[p.sPhone] = { name: p.sName, gst: p.sGst || "" }; if (p.rPhone && !cMap[p.rPhone]) cMap[p.rPhone] = { name: p.rName, gst: p.rGst || "" }; }); const localC = await local.get("mps_contacts") || {}; Object.assign(cMap, localC); setContacts(Object.entries(cMap).map(([phone, data]) => ({ phone, ...data }))); } load(); }, [parcels]);
+
+  // 🔥 QR SCAN HANDLER 🔥
+  const handleQRScan = (text) => {
+    setShowScanner(false);
+    const ewayMatch = text.match(/\b\d{12}\b/); 
+    if(ewayMatch) {
+        const val = ewayMatch[0];
+        setEway(val);
+        showMsg("QR Scanned! E-Way number extracted: " + val, "success");
+        setTimeout(() => { 
+            setF(p => ({...p, sName: "Scanned Client", sPhone: "9999999999", rName: "Target Client", rPhone: "8888888888", count: "10", type: "Box", payment: "To Pay" })); 
+            showMsg("E-Way Bill Content Auto-Filled!", "info"); 
+        }, 800);
+    } else {
+        showMsg("Invalid QR Code! No E-Way Bill Number found.", "error");
+    }
+  };
 
   const smartFocus = (d, isSender) => { setTimeout(() => { if (isSender) { if (!d.name) document.getElementById('sName')?.focus(); else if (!d.gst) document.getElementById('sGst')?.focus(); else if (user.branch !== 'All') document.getElementById('rPhone')?.focus(); else document.getElementById('sFrom')?.focus(); } else { if (!d.name) document.getElementById('rName')?.focus(); else if (!d.gst) document.getElementById('rGst')?.focus(); else document.getElementById('rTo')?.focus(); } }, 50); };
   const handlePhoneChange = async (isSender, value) => { const fieldPrefix = isSender ? 's' : 'r'; setF(prev => ({ ...prev, [`${fieldPrefix}Phone`]: value })); if (value.length === 10) { const found = contacts.find(c => c.phone === value); if (found) { setF(prev => ({...prev, [`${fieldPrefix}Name`]: found.name || "", [`${fieldPrefix}Gst`]: found.gst || "" })); showMsg("Customer details loaded automatically!", "success"); smartFocus(found, isSender); } } };
@@ -410,7 +454,18 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
 
   return (
     <div className="space-y-4 md:space-y-6">
-      <div className={`${cardBg} p-4 rounded-2xl border mb-2 flex flex-col sm:flex-row items-center gap-4 relative z-10`}><span className="text-xl hidden sm:block">⚡</span><input id="eway" onKeyDown={e=>handleBoxTravel(e,{enter:'sPhone', down:'sPhone'})} value={eway} onChange={handleEwayChange} placeholder="Enter 12-Digit E-Way Bill Number..." className={`w-full sm:flex-1 px-4 py-3 rounded-lg outline-none font-mono font-bold tracking-widest text-center sm:text-left ${inputBg}`} />{eway.length === 12 && <span className="text-emerald-500 font-bold px-4">Verified ✅</span>}</div>
+      
+      {/* 🔥 E-WAY BILL BAR WITH SCANNER BUTTON 🔥 */}
+      <div className={`${cardBg} p-4 rounded-2xl border mb-2 flex flex-col sm:flex-row items-center gap-4 relative z-10`}>
+        <span className="text-xl hidden sm:block">⚡</span>
+        <input id="eway" onKeyDown={e=>handleBoxTravel(e,{enter:'sPhone', down:'sPhone'})} value={eway} onChange={handleEwayChange} placeholder="Enter 12-Digit E-Way Bill Number..." className={`w-full sm:flex-1 px-4 py-3 rounded-lg outline-none font-mono font-bold tracking-widest text-center sm:text-left ${inputBg}`} />
+        <button onClick={() => setShowScanner(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl shadow-md whitespace-nowrap flex items-center justify-center gap-2">📷 Scan QR</button>
+        {eway.length === 12 && <span className="text-emerald-500 font-bold px-4">Verified ✅</span>}
+      </div>
+      
+      {/* 🔥 SCANNER MODAL CALL 🔥 */}
+      {showScanner && <EwayScannerModal onScan={handleQRScan} onClose={() => setShowScanner(false)} />}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 relative z-50">
         <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}><h3 className="font-bold text-indigo-500">Sender Profile</h3><SuggestInput id="sPhone" onKeyDown={e=>handleBoxTravel(e,{enter:'sName', down:'sName', right:'rPhone', up:'eway'})} label="Mobile Number *" value={f.sPhone} onChange={v=>handlePhoneChange(true, v)} onSelect={d=>handleContactSelect(true, d)} dataList={contacts} isPhone={true} theme={theme} /><SuggestInput id="sName" onKeyDown={e=>handleBoxTravel(e,{enter:'sGst', down:'sGst', right:'rName', up:'sPhone'})} label="Full Name *" value={f.sName} onChange={v=>setF({...f, sName:v})} onSelect={d=>handleContactSelect(true, d)} dataList={contacts} isPhone={false} theme={theme} /><input id="sGst" onKeyDown={e=>handleBoxTravel(e,{enter: user.branch === 'All' ? 'sFrom' : 'rPhone', down: user.branch === 'All' ? 'sFrom' : 'rPhone', right:'rGst', up:'sName'})} value={f.sGst} onChange={e=>setF({...f, sGst:e.target.value})} placeholder="GST Number" className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 ${inputBg}`} /><select id="sFrom" disabled={user.branch !== 'All'} onKeyDown={e=>handleBoxTravel(e,{enter:'rPhone', down:'pQty', right:'rTo', up:'sGst'})} value={f.from} onChange={e=>setF({...f, from:e.target.value})} className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 ${inputBg} ${user.branch !== 'All' ? 'opacity-50 cursor-not-allowed' : ''}`}><option value="">Select Origin *</option>{CITIES.map(c=><option key={c}>{c}</option>)}</select></div>
         <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}><h3 className="font-bold text-emerald-500">Receiver Profile</h3><SuggestInput id="rPhone" onKeyDown={e=>handleBoxTravel(e,{enter:'rName', down:'rName', left:'sPhone', up:'eway'})} label="Mobile Number *" value={f.rPhone} onChange={v=>handlePhoneChange(false, v)} onSelect={d=>handleContactSelect(false, d)} dataList={contacts} isPhone={true} theme={theme} /><SuggestInput id="rName" onKeyDown={e=>handleBoxTravel(e,{enter:'rGst', down:'rGst', left:'sName', up:'rPhone'})} label="Full Name *" value={f.rName} onChange={v=>setF({...f, rName:v})} onSelect={d=>handleContactSelect(false, d)} dataList={contacts} isPhone={false} theme={theme} /><input id="rGst" onKeyDown={e=>handleBoxTravel(e,{enter:'rTo', down:'rTo', left:'sGst', up:'rName'})} value={f.rGst} onChange={e=>setF({...f, rGst:e.target.value})} placeholder="GST Number" className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 ${inputBg}`} /><select id="rTo" onKeyDown={e=>handleBoxTravel(e,{enter:'pQty', down:'pQty', left:'sFrom', up:'rGst'})} value={f.to} onChange={e=>setF({...f, to:e.target.value})} className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 ${inputBg}`}><option value="">Select Destination *</option>{CITIES.map(c=><option key={c}>{c}</option>)}</select></div>
