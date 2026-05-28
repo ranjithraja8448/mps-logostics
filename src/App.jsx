@@ -11,8 +11,10 @@ const ENV_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 const BRANCH_CONFIG = { "Mecheri": "01", "Elampillai": "02", "Jalakandapuram": "03", "Salem": "04", "Coimbatore": "05", "Bhavani": "06", "Sathyamangalam": "07", "Bangalore": "08", "Chennai": "09" };
 const CITIES = Object.keys(BRANCH_CONFIG);
 const TYPES = ["Box","Wooden Box","Bag","Green bag","Yellow Bag","Bale","Documents","Electronics","Furniture","Medical","Machinery"];
-const STATUSES = ["Booked","Picked Up","In Transit","Out for Delivery","Delivered", "Deleted"];
-const S_CLR  = {"Booked":"#3B82F6","Picked Up":"#F59E0B","In Transit":"#F97316","Out for Delivery":"#8B5CF6","Delivered":"#10B981", "Deleted":"#EF4444"};
+
+// 🔥 STATUS & COLORS 🔥
+const STATUSES = ["Booked","Picked Up","In Transit","Out for Delivery","Delivered", "RTO", "Deleted"];
+const S_CLR  = {"Booked":"#3B82F6","Picked Up":"#F59E0B","In Transit":"#F97316","Out for Delivery":"#8B5CF6","Delivered":"#10B981", "RTO":"#EAB308", "Deleted":"#EF4444"};
 const PAY_MODES = ["Paid", "To Pay", "Credit", "FOC"];
 
 const genUserId = () => `USR-${Math.floor(Math.random()*10000)}`;
@@ -38,8 +40,7 @@ function calcPrice(from, to, ratePerUnit, count = 1, type = "Box", paymentMode =
 function generatePDF(p) {
   const doc = new jsPDF(); doc.setLineWidth(0.5); doc.rect(10, 10, 190, 110);
   doc.line(10, 35, 200, 35); doc.line(10, 42, 200, 42); doc.line(10, 70, 145, 70); doc.line(10, 82, 145, 82); doc.line(95, 92, 145, 92); doc.line(145, 95, 200, 95); doc.line(10, 100, 200, 100); 
-  doc.line(145, 10, 145, 100); doc.line(175, 35, 175, 100); doc.line(77, 35, 77, 70); 
-  doc.line(16, 42, 16, 70); doc.line(83, 42, 83, 70); doc.line(25, 70, 25, 100); doc.line(95, 70, 95, 92); doc.line(110, 70, 110, 92); doc.line(125, 70, 125, 92); doc.line(77, 100, 77, 120); doc.line(115, 100, 115, 120); doc.line(145, 100, 145, 120);
+  doc.line(145, 10, 145, 100); doc.line(175, 35, 175, 100); doc.line(77, 35, 77, 70); doc.line(16, 42, 16, 70); doc.line(83, 42, 83, 70); doc.line(25, 70, 25, 100); doc.line(95, 70, 95, 92); doc.line(110, 70, 110, 92); doc.line(125, 70, 125, 92); doc.line(77, 100, 77, 120); doc.line(115, 100, 115, 120); doc.line(145, 100, 145, 120);
   doc.setFont("helvetica", "bolditalic"); doc.setFontSize(26); doc.text("MPS", 12, 24); doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.text("MECHERI", 36, 19); doc.text("PARCEL SERVICE", 36, 25);
   doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.text("• WE DELIVER TRUST •", 42, 30);
   const centerX = 107; doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.text("GSTIN : 33CICPS6965E1Z1", centerX, 15, { align: "center" }); doc.setFont("helvetica", "normal"); doc.text("Dharmapuri Main Road,", centerX, 20, { align: "center" }); doc.text("Mecheri, Salem-Dt. 636 451.", centerX, 24, { align: "center" }); doc.setFont("helvetica", "bold"); doc.text("90033 77185 / 80726 72255", centerX, 29, { align: "center" }); doc.text("86108 07743 / 95785 02151", centerX, 33, { align: "center" });
@@ -64,7 +65,8 @@ function generateEOD_PDF(dateStr, branch, parcelsList, pettyList) {
   let y = 32; doc.setFontSize(10); doc.text("Cash Collections (Paid Booking & Delivered To-Pay):", 10, y); y+=6; doc.setFont("helvetica", "normal");
   let totalCash = 0;
   parcelsList.forEach(p => {
-     if((p.from === branch && p.payment === 'Paid' && p.date === dateStr) || (p.to === branch && p.payment === 'To Pay' && p.deliveryMode === 'Cash' && p.status==='Delivered')){
+     const pDate = p.isoDate ? p.isoDate.split('T')[0] : ""; 
+     if((p.from === branch && p.payment === 'Paid' && pDate === dateStr) || (p.to === branch && p.payment === 'To Pay' && p.deliveryMode === 'Cash' && p.status==='Delivered' && pDate === dateStr)){
         doc.text(`LR: ${p.id} | Rs. ${p.price} | Mode: ${p.payment}`, 10, y); totalCash += p.price; y+=6;
         if(y>280){ doc.addPage(); y=20; }
      }
@@ -81,17 +83,18 @@ function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList) {
   const doc = new jsPDF(); doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.text("MONTHLY CREDIT INVOICE", 105, 15, { align: "center" });
   doc.setFontSize(12); doc.text(`MPS PARCEL SERVICE`, 105, 22, { align: "center" }); doc.line(10, 25, 200, 25);
   doc.setFontSize(10); doc.text(`Customer / Company: ${customer}`, 10, 32); doc.text(`Phone: ${customerPhone}`, 10, 38); doc.text(`Billing Period: ${fromD} to ${toD}`, 10, 44); doc.line(10, 48, 200, 48);
-  doc.text("LR No.", 10, 54); doc.text("Date", 40, 54); doc.text("Route", 70, 54); doc.text("Items", 130, 54); doc.text("Amount", 170, 54); doc.line(10, 56, 200, 56);
+  doc.text("LR No.", 10, 54); doc.text("Date", 40, 54); doc.text("Route", 70, 54); doc.text("Items", 130, 54); doc.text("Amount", 170, 54); doc.text("Status", 195, 54); doc.line(10, 56, 200, 56);
   let y = 62; let total = 0; doc.setFont("helvetica", "normal");
   parcelsList.forEach(p => {
-     doc.text(p.id, 10, y); doc.text(p.date, 40, y); doc.text(`${p.from}-${p.to}`, 70, y); doc.text(`${p.count} ${p.type}`, 130, y); doc.text(`Rs. ${p.price}`, 170, y);
-     total += p.price; y += 6; if(y>270){ doc.addPage(); y=20; }
+     doc.text(p.id, 10, y); doc.text(p.date, 40, y); doc.text(`${p.from}-${p.to}`, 70, y); doc.text(`${p.count} ${p.type}`, 130, y); doc.text(`Rs. ${p.price}`, 170, y); doc.text(p.creditSettled ? "Paid" : "Due", 195, y);
+     if(!p.creditSettled) total += p.price; y += 6; if(y>270){ doc.addPage(); y=20; }
   });
   doc.line(10, y, 200, y); y+=8; doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.text(`TOTAL DUE AMOUNT: Rs. ${total}`, 130, y); y+=20;
   doc.setFontSize(10); doc.text("Bank Details for Payment:", 10, y); y+=6; doc.setFont("helvetica", "normal"); doc.text("Bank: State Bank of India\nA/C Name: MPS Logistics\nA/C No: 12345678901\nIFSC: SBIN0001234", 10, y);
   doc.save(`Invoice_${customer}_${fromD}.pdf`);
 }
 
+// 🔥 FEATURE: CLEAN WHATSAPP MSG 🔥
 function openWhatsApp(phone, isSender, p) {
   const text = `📦 *MPS Logistics*\n\nHello *${isSender ? p.sName : p.rName}*,\nYour parcel is booked successfully!\n\n*LR No:* ${p.id}\n*Route:* ${p.from} ➔ ${p.to}\n*Items:* ${p.count} ${p.type}\n*Mode:* ${p.payment}\n*Amount:* ₹${p.price}\n\nThank you for choosing MPS!`;
   window.open(`https://api.whatsapp.com/send?phone=91${phone}&text=${encodeURIComponent(text)}`, '_blank');
@@ -142,8 +145,6 @@ class DB{
 
 export default function App() {
   const [page, setPage] = useState("dashboard"); const [parcels, setParcels] = useState([]); const [users, setUsers] = useState([]); const [user, setUser] = useState(null); const [toast, setToast] = useState(null); const [shortcutMode, setShortcutMode] = useState(""); const [theme, setTheme] = useState("light"); const [sidebarExpanded, setSidebarExpanded] = useState(false); const [creditAuthList, setCreditAuthList] = useState([]); 
-  
-  // 🔥 GLOBAL MODAL STATE 🔥
   const [globalViewItem, setGlobalViewItem] = useState(null);
 
   const [db] = useState(new DB(ENV_URL, ENV_KEY));
@@ -153,7 +154,12 @@ export default function App() {
   const toggleTheme = () => { const nt = theme === "dark" ? "light" : "dark"; setTheme(nt); local.set("mps_theme", nt); };
 
   useEffect(() => {
-    const handleKey = (e) => { if(!user || globalViewItem) return; let mode = ""; if (e.key === 'F7') mode = 'Paid'; else if (e.key === 'F8') mode = 'To Pay'; else if (e.key === 'F9') mode = 'Credit'; else if (e.key === 'F10') mode = 'FOC'; if(mode) { e.preventDefault(); setPage('book'); setShortcutMode(mode); showMsg(`${mode} Mode Activated!`, "info"); } };
+    const handleKey = (e) => { 
+      if(!user || globalViewItem) return; let mode = ""; 
+      if (e.key === 'F7') mode = 'Paid'; else if (e.key === 'F8') mode = 'To Pay'; else if (e.key === 'F9') mode = 'Credit'; else if (e.key === 'F10') mode = 'FOC'; 
+      else if (e.key === 'F6') { e.preventDefault(); setPage('delivery'); showMsg("Delivery Scanner Activated!", "info"); }
+      if(mode) { e.preventDefault(); setPage('book'); setShortcutMode(mode); showMsg(`${mode} Mode Activated!`, "info"); } 
+    };
     window.addEventListener('keydown', handleKey); return () => window.removeEventListener('keydown', handleKey);
   }, [user, globalViewItem]);
 
@@ -173,7 +179,7 @@ export default function App() {
             { id: 'book', icon: '📦', label: 'Book Parcel', role: 'staff' },
             { id: 'pending', icon: '⏳', label: 'Pending', role: 'staff' },
             { id: 'track', icon: '🔍', label: 'Track', role: 'staff' },
-            { id: 'delivery', icon: '🤝', label: 'Delivery', role: 'staff' },
+            { id: 'delivery', icon: '🤝', label: 'Delivery [F6]', role: 'staff' },
             { id: 'accounts', icon: '💰', label: 'Accounts', role: 'admin' },
             { id: 'admin', icon: '⚙️', label: 'System', role: 'admin' }
           ].map(item => {
@@ -194,7 +200,7 @@ export default function App() {
             {page === 'pending' && <Pending parcels={parcels} isDark={isDark} user={user} setGlobalView={setGlobalViewItem}/>}
             {page === 'book' && <Book shortcutMode={shortcutMode} parcels={parcels} setParcels={setParcels} db={db} showMsg={showMsg} isDark={isDark} theme={theme} user={user} creditAuthList={creditAuthList} />}
             {page === 'track' && <Track parcels={parcels} isDark={isDark} user={user} setGlobalView={setGlobalViewItem}/>}
-            {page === 'delivery' && <Delivery parcels={parcels} setParcels={setParcels} db={db} showMsg={showMsg} isDark={isDark} user={user} setGlobalView={setGlobalViewItem}/>}
+            {page === 'delivery' && <Delivery parcels={parcels} setParcels={setParcels} db={db} showMsg={showMsg} isDark={isDark} user={user} creditAuthList={creditAuthList} setGlobalView={setGlobalViewItem}/>}
             {page === 'accounts' && (user.role === 'admin' || user.role === 'superadmin') && <Accounts parcels={parcels} setParcels={setParcels} db={db} showMsg={showMsg} isDark={isDark} user={user} />}
             {page === 'admin' && (user.role === 'admin' || user.role === 'superadmin') && <Admin parcels={parcels} users={users} setUsers={setUsers} setParcels={setParcels} db={db} showMsg={showMsg} isDark={isDark} user={user} creditAuthList={creditAuthList} setCreditAuthList={setCreditAuthList} setGlobalView={setGlobalViewItem}/>}
           </div>
@@ -202,14 +208,13 @@ export default function App() {
       </main>
       {toast && ( <div className={`fixed bottom-4 right-4 md:bottom-8 md:right-8 px-4 md:px-6 py-2 md:py-3 rounded-xl shadow-2xl font-bold text-white z-50 animate-bounce-in text-sm md:text-base ${toast.type==='error'?'bg-red-500':'bg-emerald-500'}`}>{toast.msg}</div> )}
       
-      {/* 🔥 GLOBAL PARCEL MODAL 🔥 */}
-      {globalViewItem && <ParcelModal item={globalViewItem} onClose={()=>setGlobalViewItem(null)} db={db} parcels={parcels} setParcels={setParcels} user={user} showMsg={showMsg} isDark={isDark} />}
+      {/* 🔥 GLOBAL PARCEL MODAL & QUICK DELIVERY 🔥 */}
+      {globalViewItem && <ParcelModal item={globalViewItem} creditAuthList={creditAuthList} onClose={()=>setGlobalViewItem(null)} db={db} parcels={parcels} setParcels={setParcels} user={user} showMsg={showMsg} isDark={isDark} />}
     </div>
   );
 }
 
-// 🔥 UNIVERSAL PARCEL DETAILS & QUICK DELIVERY MODAL 🔥
-function ParcelModal({item, onClose, db, parcels, setParcels, user, showMsg, isDark}) {
+function ParcelModal({item, creditAuthList, onClose, db, parcels, setParcels, user, showMsg, isDark}) {
   const [payMethod, setPayMethod] = useState("");
   const cardBg = isDark ? "bg-slate-800 border-slate-700 text-white" : "bg-white border-slate-200 text-slate-900";
   
@@ -225,6 +230,7 @@ function ParcelModal({item, onClose, db, parcels, setParcels, user, showMsg, isD
   };
 
   const isPending = item.status === "Booked" || item.status === "In Transit";
+  const isCreditAuthorized = creditAuthList.some(c => c.phone === item.sPhone || c.phone === item.rPhone);
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[100]">
@@ -242,7 +248,6 @@ function ParcelModal({item, onClose, db, parcels, setParcels, user, showMsg, isD
           <div><p className="opacity-50">Financial Parameter</p><p className="font-bold text-emerald-500">₹{item.price} ({item.payment})</p></div>
         </div>
         
-        {/* QUICK DELIVERY SECTION */}
         {(isPending && (user.branch === item.to || user.role === 'superadmin')) && (
           <div className="mt-4 p-4 border border-indigo-500/30 bg-indigo-500/5 rounded-2xl space-y-3">
              <h4 className="text-xs font-bold text-indigo-500 uppercase">⚡ Quick Delivery Check</h4>
@@ -252,7 +257,7 @@ function ParcelModal({item, onClose, db, parcels, setParcels, user, showMsg, isD
                     <option value="" className="text-slate-900">Select Payment Collected...</option>
                     <option value="Cash" className="text-slate-900">💵 Physical Cash</option>
                     <option value="GPay" className="text-slate-900">📱 UPI / GPay</option>
-                    <option value="Credit" className="text-slate-900">💳 Credit A/C</option>
+                    {isCreditAuthorized && <option value="Credit" className="text-slate-900">💳 Credit A/C</option>}
                   </select>
                 </div>
              )}
@@ -269,7 +274,6 @@ function ParcelModal({item, onClose, db, parcels, setParcels, user, showMsg, isD
   );
 }
 
-// 🔥 REVISED DASHBOARD (Only Stats & Chart) 🔥
 function Dashboard({parcels, isDark, user}) {
   const [selectedBranch, setSelectedBranch] = useState(user.branch === 'All' ? 'All' : user.branch);
   const activeParcels = parcels.filter(p => p.status !== 'Deleted');
@@ -301,34 +305,49 @@ function Dashboard({parcels, isDark, user}) {
   );
 }
 
-// 🔥 NEW PENDING PAGE 🔥
 function Pending({parcels, isDark, user, setGlobalView}) {
-  const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-100";
-  const tblBg = isDark ? "bg-slate-800/40" : "bg-slate-50";
+  const [fLR, setFLR] = useState(""); const [fFrom, setFFrom] = useState("All"); const [fTo, setFTo] = useState("All"); const [fDate, setFDate] = useState("");
+  const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-100"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800"; const tblBg = isDark ? "bg-slate-800/40" : "bg-slate-50";
   const getDays = (iso) => { if(!iso) return 0; const diff = new Date() - new Date(iso); return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24))); };
   
-  const pendingParcels = parcels.filter(p => (p.status === 'Booked' || p.status === 'In Transit') && (user.role === 'superadmin' || p.from === user.branch || p.to === user.branch));
+  const pendingParcels = parcels.filter(p => {
+    if (p.status !== 'Booked' && p.status !== 'In Transit') return false;
+    if (user.role !== 'superadmin' && p.from !== user.branch && p.to !== user.branch) return false;
+    if (fLR && !p.id.includes(fLR.toUpperCase()) && !p.sPhone.includes(fLR)) return false;
+    if (fFrom !== "All" && p.from !== fFrom) return false;
+    if (fTo !== "All" && p.to !== fTo) return false;
+    if (fDate && (!p.isoDate || !p.isoDate.startsWith(fDate))) return false;
+    return true;
+  });
 
   return (
-    <div className={`${cardBg} rounded-2xl shadow-sm border overflow-hidden mt-2`}>
-      <div className="bg-amber-500/10 text-amber-600 p-4 font-bold md:text-lg flex justify-between items-center border-b border-amber-500/20"><span>⏳ Global Pending / Undelivered Parcels</span><span className="bg-amber-500 text-white px-3 py-1 rounded-full text-xs md:text-sm">{pendingParcels.length} Items</span></div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm whitespace-nowrap">
-          <thead className={`${tblBg} opacity-70 text-[10px] uppercase font-bold`}><tr><th className="p-4">LR No</th><th className="p-4">Route</th><th className="p-4">Qty</th><th className="p-4">Status</th><th className="p-4">Pending Age</th></tr></thead>
-          <tbody>
-            {pendingParcels.length === 0 ? <tr><td colSpan="5" className="p-8 text-center opacity-50 font-bold">No pending parcels! All cleared.</td></tr> : pendingParcels.map(p => {
-              const days = getDays(p.isoDate);
-              return (
-                <tr key={p.id} className="border-t border-slate-500/10 hover:bg-black/5 cursor-pointer" onClick={() => setGlobalView(p)}>
-                  <td className="p-4 font-black text-indigo-500 hover:underline">{p.id}</td>
-                  <td className="p-4 font-bold">{p.from} ➔ {p.to}</td><td className="p-4 font-black text-amber-500">{p.count} {p.type}</td>
-                  <td className="p-4"><span className="px-2 py-1 rounded-full text-[10px] font-bold" style={{backgroundColor: S_CLR[p.status]+'22', color: S_CLR[p.status]}}>{p.status}</span></td>
-                  <td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold ${days > 2 ? 'bg-red-500/10 text-red-500' : 'bg-emerald-500/10 text-emerald-500'}`}>{days === 0 ? 'Today' : `${days} Days`}</span></td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+    <div className="space-y-4">
+      <div className={`${cardBg} p-4 rounded-2xl border space-y-3`}>
+        <h3 className="font-bold text-sm text-amber-500">Filter Pending Stock</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+          <input value={fLR} onChange={e=>setFLR(e.target.value)} placeholder="LR No / Phone" className={`p-2 rounded-xl border text-sm ${inputBg}`} />
+          <select value={fFrom} onChange={e=>setFFrom(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`}><option value="All">Any Origin</option>{CITIES.map(c => <option key={c}>{c}</option>)}</select>
+          <select value={fTo} onChange={e=>setFTo(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`}><option value="All">Any Destination</option>{CITIES.map(c => <option key={c}>{c}</option>)}</select>
+          <input type="date" value={fDate} onChange={e=>setFDate(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`} />
+        </div>
+      </div>
+      <div className={`${cardBg} rounded-2xl shadow-sm border overflow-hidden`}>
+        <div className="bg-amber-500/10 text-amber-600 p-4 font-bold md:text-lg flex justify-between items-center border-b border-amber-500/20"><span>⏳ Global Pending Parcels</span><span className="bg-amber-500 text-white px-3 py-1 rounded-full text-xs md:text-sm">{pendingParcels.length} Items</span></div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm whitespace-nowrap">
+            <thead className={`${tblBg} opacity-70 text-[10px] uppercase font-bold`}><tr><th className="p-4">LR No</th><th className="p-4">Route</th><th className="p-4">Qty</th><th className="p-4">Status</th><th className="p-4">Age</th></tr></thead>
+            <tbody>
+              {pendingParcels.length === 0 ? <tr><td colSpan="5" className="p-8 text-center opacity-50 font-bold">No pending parcels! All cleared.</td></tr> : pendingParcels.map(p => {
+                const days = getDays(p.isoDate);
+                return (
+                  <tr key={p.id} className="border-t border-slate-500/10 hover:bg-black/5 cursor-pointer" onClick={() => setGlobalView(p)}>
+                    <td className="p-4 font-black text-indigo-500 hover:underline">{p.id}</td><td className="p-4 font-bold">{p.from} ➔ {p.to}</td><td className="p-4 font-black text-amber-500">{p.count} {p.type}</td><td className="p-4"><span className="px-2 py-1 rounded-full text-[10px] font-bold" style={{backgroundColor: S_CLR[p.status]+'22', color: S_CLR[p.status]}}>{p.status}</span></td><td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold ${days > 2 ? 'bg-red-500/10 text-red-500' : 'bg-emerald-500/10 text-emerald-500'}`}>{days === 0 ? 'Today' : `${days} Days`}</span></td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -338,6 +357,7 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
   const initF = {sName:"", sPhone:"", sGst:"", rName:"", rPhone:"", rGst:"", from: user.branch === 'All' ? "" : user.branch, to:"", rate:"", count:"1", actualWeight:"", type:"Box", payment:"Paid", creditCustomer:"", notes:""};
   const [f, setF] = useState(initF); const [done, setDone] = useState(null); const [eway, setEway] = useState(""); const [contacts, setContacts] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [creditBillTo, setCreditBillTo] = useState("Sender");
 
   useEffect(() => { if(shortcutMode) setF(prev => ({...prev, payment: shortcutMode})); }, [shortcutMode]);
   useEffect(() => { async function load() { const cMap = {}; parcels.forEach(p => { if (p.sPhone && !cMap[p.sPhone]) cMap[p.sPhone] = { name: p.sName, gst: p.sGst || "" }; if (p.rPhone && !cMap[p.rPhone]) cMap[p.rPhone] = { name: p.rName, gst: p.rGst || "" }; }); const localC = await local.get("mps_contacts") || {}; Object.assign(cMap, localC); setContacts(Object.entries(cMap).map(([phone, data]) => ({ phone, ...data }))); } load(); }, [parcels]);
@@ -352,9 +372,14 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
 
   const submit = async () => {
     if(isSubmitting) return; if(!f.sName || !f.sPhone || !f.from || !f.rName || !f.rPhone || !f.to || !f.count || !f.rate || !f.type) return showMsg("Please fill all mandatory fields marked with (*)", "error");
-    if(f.payment === "Credit") { const isAuth = creditAuthList.find(c => c.phone === f.sPhone); if(!isAuth) return showMsg("Unauthorized Phone Number for Credit Billing!", "error"); f.creditCustomer = isAuth.company; }
+    if(f.payment === "Credit") { 
+      const targetPhone = creditBillTo === "Sender" ? f.sPhone : f.rPhone;
+      const isAuth = creditAuthList.find(c => c.phone === targetPhone); 
+      if(!isAuth) return showMsg(`Unauthorized ${creditBillTo} Phone Number for Credit!`, "error"); 
+      f.creditCustomer = isAuth.company; 
+    }
     setIsSubmitting(true); const dObj = new Date(); const isoDate = dObj.toISOString(); const locDateStr = dObj.toLocaleDateString('en-IN'); const lrNumber = generateLR(f.from, f.to, parcels);
-    const p = {...f, notes: f.payment === 'Credit' ? `[A/c: ${f.creditCustomer}] ${f.notes}` : f.notes, id: lrNumber, date: locDateStr, isoDate: isoDate, status: "Booked", price: ep, bookedBy: user.username, bookedBranch: user.branch, settledBranches: [], history: [{status: "Booked", loc: f.from, time: dObj.toLocaleString()}]};
+    const p = {...f, notes: f.payment === 'Credit' ? `[A/c: ${f.creditCustomer}] ${f.notes}` : f.notes, creditSettled: false, id: lrNumber, date: locDateStr, isoDate: isoDate, status: "Booked", price: ep, bookedBy: user.username, bookedBranch: user.branch, settledBranches: [], history: [{status: "Booked", loc: f.from, time: dObj.toLocaleString()}]};
     const saved = await local.get("mps_contacts") || {}; saved[f.sPhone] = { name: f.sName, gst: f.sGst }; saved[f.rPhone] = { name: f.rName, gst: f.rGst }; await local.set("mps_contacts", saved);
     await db.insertParcel(p); setParcels([p, ...parcels]); setDone(p); showMsg("LR Generated cleanly."); setIsSubmitting(false);
   };
@@ -372,7 +397,15 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
         <h3 className="font-bold">Cargo Details</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4"><input id="pQty" onKeyDown={e=>handleBoxTravel(e,{enter:'pType', down:'pPay', right:'pType', up:user.branch==='All'?'sFrom':'sGst'})} type="number" value={f.count} onChange={e=>setF({...f, count:e.target.value})} placeholder="Quantity *" className={`p-3 rounded-xl border outline-none [appearance:textfield] ${inputBg}`} /><select id="pType" onKeyDown={e=>handleBoxTravel(e,{enter:'pWgt', down:'pPay', left:'pQty', right:'pWgt', up:'rTo'})} value={f.type} onChange={e=>setF({...f, type:e.target.value})} className={`p-3 rounded-xl border outline-none ${inputBg}`}>{TYPES.map(t=><option key={t}>{t}</option>)}</select><input id="pWgt" onKeyDown={e=>handleBoxTravel(e,{enter:'pRate', down:'btnSubmit', left:'pType', right:'pRate', up:'rTo'})} type="number" value={f.actualWeight} onChange={e=>setF({...f, actualWeight:e.target.value})} placeholder="Weight (Kg)" className={`p-3 rounded-xl border outline-none [appearance:textfield] ${inputBg}`} /><input id="pRate" onKeyDown={e=>handleBoxTravel(e,{enter:'pPay', down:'btnSubmit', left:'pWgt', up:'rTo'})} type="number" value={f.rate} onChange={e=>setF({...f, rate:e.target.value})} placeholder="Rate Per Unit *" className={`p-3 rounded-xl border outline-none font-bold [appearance:textfield] ${inputBg}`} /></div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mt-2">
-          <div className="flex flex-col gap-3"><select id="pPay" onKeyDown={e=>handleBoxTravel(e,{enter: f.payment==='Credit' ? 'pCredit' : 'btnSubmit', right: f.payment==='Credit'?'pCredit':'', up:'pQty', down:'btnSubmit'})} value={f.payment} onChange={e=>setF({...f, payment:e.target.value})} className="p-3 border rounded-xl font-bold bg-indigo-600 text-white outline-none w-full">{PAY_MODES.map(p=><option key={p} value={p}>{p.toUpperCase()}</option>)}</select>{f.payment === 'Credit' && <input id="pCredit" value={f.creditCustomer} placeholder="Company Name Account *" className={`p-3 rounded-xl border outline-none w-full ${inputBg}`} disabled={true} />}</div>
+          <div className="flex flex-col gap-3">
+            <select id="pPay" onKeyDown={e=>handleBoxTravel(e,{enter:'btnSubmit', up:'pQty', down:'btnSubmit'})} value={f.payment} onChange={e=>setF({...f, payment:e.target.value})} className="p-3 border rounded-xl font-bold bg-indigo-600 text-white outline-none w-full">{PAY_MODES.map(p=><option key={p} value={p}>{p.toUpperCase()}</option>)}</select>
+            {f.payment === 'Credit' && (
+              <div className="flex gap-2">
+                <select value={creditBillTo} onChange={e=>setCreditBillTo(e.target.value)} className={`p-3 rounded-xl border outline-none w-1/3 ${inputBg}`}><option value="Sender">Sender A/C</option><option value="Receiver">Receiver A/C</option></select>
+                <div className={`p-3 rounded-xl border opacity-50 w-2/3 flex items-center text-sm ${inputBg}`}>Bill applied to Auth A/C</div>
+              </div>
+            )}
+          </div>
           <div className="bg-slate-950 p-4 rounded-xl flex justify-between items-center text-white h-full"><span className="text-sm opacity-50">Total Income Allocation</span><span className="text-xl md:text-2xl font-black text-emerald-400">₹{ep}</span></div>
         </div>
       </div>
@@ -381,7 +414,6 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
   );
 }
 
-// 🔥 ADVANCED FILTER TRACKING 🔥
 function Track({parcels, isDark, user, setGlobalView}) {
   const [fLR, setFLR] = useState(""); const [fFrom, setFFrom] = useState("All"); const [fTo, setFTo] = useState("All"); const [fStatus, setFStatus] = useState("All"); const [fDate, setFDate] = useState("");
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-100"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800"; const tblBg = isDark ? "bg-slate-800/40" : "bg-slate-50";
@@ -394,7 +426,7 @@ function Track({parcels, isDark, user, setGlobalView}) {
     if (fDate && (!p.isoDate || !p.isoDate.startsWith(fDate))) return false;
     if (user.role === 'staff' && p.from !== user.branch && p.to !== user.branch) return false;
     return true;
-  }).slice(0, 50); // Limit to 50 for performance
+  }).slice(0, 50);
 
   return (
     <div className="space-y-4">
@@ -427,29 +459,28 @@ function Track({parcels, isDark, user, setGlobalView}) {
   );
 }
 
-function Delivery({parcels, setParcels, db, showMsg, isDark, user, setGlobalView}) {
+function Delivery({parcels, setParcels, db, showMsg, isDark, user, creditAuthList, setGlobalView}) {
   const [id, setId] = useState(""); 
-  const searchLR = () => { const item = parcels.find(p=>p.id === id.toUpperCase()); if(item) { if(item.status === 'Deleted') return showMsg("Consignment has been deleted by an administrator.", "error"); setGlobalView(item); setId(""); } else showMsg("No consignment found", "error"); };
+  const searchLR = () => { const item = parcels.find(p=>p.id === id.toUpperCase()); if(item) { if(item.status === 'Deleted') return showMsg("Consignment deleted by admin.", "error"); setGlobalView(item); setId(""); } else showMsg("No consignment found", "error"); };
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200";
   return (
     <div className="max-w-xl mx-auto space-y-4 md:space-y-6">
       <div className={`${cardBg} p-6 rounded-2xl text-center space-y-4`}>
-         <h2 className="text-xl font-black text-indigo-500">Fast Delivery Scanner</h2>
+         <h2 className="text-xl font-black text-indigo-500">Fast Delivery Scanner [F6]</h2>
          <p className="text-sm opacity-60">Scan barcode or type LR Code to quick-deliver.</p>
-         <div className="flex gap-2 flex-col sm:flex-row"><input id="delScan" onKeyDown={e=> e.key==='Enter'?searchLR():null} value={id} onChange={e=>setId(e.target.value)} placeholder="Enter LR Code" className={`flex-1 p-4 text-center text-lg md:text-xl font-bold border rounded-xl outline-none ${isDark?'bg-slate-900 border-slate-700':'bg-slate-50'}`} /><button id="delFetch" onClick={searchLR} className="bg-indigo-600 text-white py-3 px-6 rounded-xl font-bold">Open Manifest</button></div>
+         <div className="flex gap-2 flex-col sm:flex-row"><input id="delScan" autoFocus onKeyDown={e=> e.key==='Enter'?searchLR():null} value={id} onChange={e=>setId(e.target.value)} placeholder="Enter LR Code" className={`flex-1 p-4 text-center text-lg md:text-xl font-bold border rounded-xl outline-none ${isDark?'bg-slate-900 border-slate-700':'bg-slate-50'}`} /><button id="delFetch" onClick={searchLR} className="bg-indigo-600 text-white py-3 px-6 rounded-xl font-bold">Open Manifest</button></div>
       </div>
     </div>
   );
 }
 
-// 🔥 EOD SETTLEMENT FEATURE ADDED 🔥
 function Accounts({parcels, setParcels, db, showMsg, isDark, user}) {
   const [acc, setAcc] = useState({ emi: 25000, diesel: 30000, other: 15000 }); const [payoutRate, setPayoutRate] = useState(10); const [partnerCount, setPartnerCount] = useState(5); const [pettyDesc, setPettyDesc] = useState(""); const [pettyAmt, setPettyAmt] = useState(""); const [pettyLedger, setPettyLedger] = useState([]);
   const [selectedBranch, setSelectedBranch] = useState(user.branch === 'All' ? CITIES[0] : user.branch);
   const [eodDate, setEodDate] = useState(new Date().toISOString().split('T')[0]);
 
   useEffect(() => { local.get("mps_petty_cash").then(d => { if(d) setPettyLedger(d); }); }, []);
-  const addPetty = async () => { if(!pettyDesc || !pettyAmt) return; const item = { desc: pettyDesc, amt: Number(pettyAmt), date: new Date().toLocaleDateString('en-CA').split('/').reverse().join('-') }; const newList = [item, ...pettyLedger]; setPettyLedger(newList); await local.set("mps_petty_cash", newList); setPettyDesc(""); setPettyAmt(""); };
+  const addPetty = async () => { if(!pettyDesc || !pettyAmt) return; const item = { desc: pettyDesc, amt: Number(pettyAmt), date: eodDate }; const newList = [item, ...pettyLedger]; setPettyLedger(newList); await local.set("mps_petty_cash", newList); setPettyDesc(""); setPettyAmt(""); };
 
   const activeParcels = parcels.filter(p => p.status !== 'Deleted');
   const unsettledBranchParcels = activeParcels.filter(p => { const isRelated = p.from === selectedBranch || p.to === selectedBranch; const isSettled = p.settledBranches && p.settledBranches.includes(selectedBranch); return isRelated && !isSettled; });
@@ -459,30 +490,17 @@ function Accounts({parcels, setParcels, db, showMsg, isDark, user}) {
   const deliveredCount = unsettledBranchParcels.filter(p => p.to === selectedBranch && p.status === 'Delivered').reduce((total, p) => total + (Number(p.count) || 0), 0);
   const branchCommission = (bookedCount + deliveredCount) * Number(payoutRate); const netRemittance = cashCollected - branchCommission;
 
-  const markLedgerSettled = async () => { if(unsettledBranchParcels.length === 0) return showMsg("No pending transactions to settle!", "error"); if(!window.confirm(`Settle ledger for ${selectedBranch}? This will freeze these parcels.`)) return; let updatedParcelsList = [...parcels]; for (let p of unsettledBranchParcels) { const updated = {...p, settledBranches: [...(p.settledBranches || []), selectedBranch]}; await db.updateParcel(updated.id, updated); updatedParcelsList = updatedParcelsList.map(x => x.id === updated.id ? updated : x); } setParcels(updatedParcelsList); showMsg(`Ledger Settled for ${selectedBranch}. Frozen ${unsettledBranchParcels.length} parcels.`, "success"); };
+  const markLedgerSettled = async () => { if(unsettledBranchParcels.length === 0) return showMsg("No transactions to settle!", "error"); if(!window.confirm(`Settle ledger for ${selectedBranch}?`)) return; let updatedParcelsList = [...parcels]; for (let p of unsettledBranchParcels) { const updated = {...p, settledBranches: [...(p.settledBranches || []), selectedBranch]}; await db.updateParcel(updated.id, updated); updatedParcelsList = updatedParcelsList.map(x => x.id === updated.id ? updated : x); } setParcels(updatedParcelsList); showMsg(`Ledger Settled for ${selectedBranch}.`, "success"); };
   const triggerEOD = () => { generateEOD_PDF(eodDate, selectedBranch, activeParcels, pettyLedger); showMsg("Day-Book Report Generated!"); };
 
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200"; const inputBg = isDark ? "bg-slate-900 border-slate-700" : "bg-slate-50";
 
   return (
     <div className="space-y-6 md:space-y-8">
-      {/* 💵 DAILY EOD SETTLEMENT 💵 */}
-      <div className={`${cardBg} p-6 rounded-3xl border border-indigo-500/30 flex flex-col md:flex-row items-center justify-between gap-4`}>
-         <div><h3 className="font-black text-lg text-indigo-500">💵 Daily EOD Settlement (Day-Book)</h3><p className="text-xs opacity-60">Generate complete collection & expense report for any date.</p></div>
-         <div className="flex gap-2 w-full md:w-auto"><input type="date" value={eodDate} onChange={e=>setEodDate(e.target.value)} className={`p-3 rounded-xl border font-bold text-sm ${inputBg}`} /><button onClick={triggerEOD} className="bg-indigo-600 text-white font-bold py-3 px-6 rounded-xl shadow-md whitespace-nowrap">Print EOD Report</button></div>
-      </div>
-
-      <div className={`${cardBg} p-6 rounded-3xl border shadow-xl`}>
-         <div className="flex justify-between items-center border-b border-slate-500/20 pb-4 mb-4"><div><h3 className="font-black text-xl text-indigo-500">Franchise Reconciliation & Payout</h3><p className="text-xs opacity-60">Active Settlement View</p></div>{user.role === 'superadmin' ? ( <select value={selectedBranch} onChange={e=>setSelectedBranch(e.target.value)} className={`p-2 rounded-xl font-bold border ${inputBg} outline-none`}>{CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select> ) : ( <div className="font-black text-lg bg-indigo-500/10 text-indigo-500 px-4 py-2 rounded-xl">{selectedBranch}</div> )}</div>
-         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6"><div className={`p-4 rounded-2xl border border-dashed border-slate-500/30 text-center`}><p className="text-[10px] uppercase font-bold opacity-60 mb-1">Unsettled Box Count</p><p className="text-2xl font-black">{bookedCount} <span className="text-sm opacity-50 font-normal">Bk</span> + {deliveredCount} <span className="text-sm opacity-50 font-normal">Dl</span></p></div><div className={`p-4 rounded-2xl border border-dashed border-emerald-500/30 text-center bg-emerald-500/5`}><p className="text-[10px] uppercase font-bold text-emerald-600 mb-1">Branch Cash in Hand</p><p className="text-2xl font-black text-emerald-600">₹{cashCollected.toLocaleString()}</p><p className="text-[8px] opacity-60 mt-1">From Paid & Cash To-Pay</p></div><div className={`p-4 rounded-2xl border border-dashed border-amber-500/30 text-center bg-amber-500/5`}><p className="text-[10px] uppercase font-bold text-amber-600 mb-1">Commission Earned</p><div className="flex justify-center items-center gap-2"><p className="text-2xl font-black text-amber-600">₹{branchCommission.toLocaleString()}</p><input type="number" title="Rate" value={payoutRate} onChange={e=>setPayoutRate(Number(e.target.value))} className={`w-10 p-1 text-xs text-center border rounded ${inputBg}`} /></div><p className="text-[8px] opacity-60 mt-1">Total Parcels × Rate</p></div><div className={`p-4 rounded-2xl border text-center text-white shadow-inner ${netRemittance >= 0 ? 'bg-indigo-600 border-indigo-700' : 'bg-red-500 border-red-600'}`}><p className="text-[10px] uppercase font-bold opacity-80 mb-1">{netRemittance >= 0 ? 'Branch Remit to HQ' : 'HQ Pays Branch'}</p><p className="text-2xl font-black">₹{Math.abs(netRemittance).toLocaleString()}</p><p className="text-[8px] opacity-80 mt-1">Net Balance Transfer</p></div></div>
-         <div className="flex gap-4"><button className="flex-1 border border-indigo-500 text-indigo-500 font-bold py-3 rounded-xl hover:bg-indigo-500/10">📥 Download Statement PDF</button><button onClick={markLedgerSettled} className="flex-1 bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700 shadow-md">🔒 Mark Ledger as Settled</button></div>
-      </div>
-
+      <div className={`${cardBg} p-6 rounded-3xl border border-indigo-500/30 flex flex-col md:flex-row items-center justify-between gap-4`}><div><h3 className="font-black text-lg text-indigo-500">💵 Daily EOD Settlement (Day-Book)</h3><p className="text-xs opacity-60">Generate complete collection & expense report for any date.</p></div><div className="flex gap-2 w-full md:w-auto"><input type="date" value={eodDate} onChange={e=>setEodDate(e.target.value)} className={`p-3 rounded-xl border font-bold text-sm ${inputBg}`} /><button onClick={triggerEOD} className="bg-indigo-600 text-white font-bold py-3 px-6 rounded-xl shadow-md whitespace-nowrap">Print EOD Report</button></div></div>
+      <div className={`${cardBg} p-6 rounded-3xl border shadow-xl`}><div className="flex justify-between items-center border-b border-slate-500/20 pb-4 mb-4"><div><h3 className="font-black text-xl text-indigo-500">Franchise Reconciliation & Payout</h3><p className="text-xs opacity-60">Active Settlement View</p></div>{user.role === 'superadmin' ? ( <select value={selectedBranch} onChange={e=>setSelectedBranch(e.target.value)} className={`p-2 rounded-xl font-bold border ${inputBg} outline-none`}>{CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select> ) : ( <div className="font-black text-lg bg-indigo-500/10 text-indigo-500 px-4 py-2 rounded-xl">{selectedBranch}</div> )}</div><div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6"><div className={`p-4 rounded-2xl border border-dashed border-slate-500/30 text-center`}><p className="text-[10px] uppercase font-bold opacity-60 mb-1">Unsettled Box Count</p><p className="text-2xl font-black">{bookedCount} <span className="text-sm opacity-50 font-normal">Bk</span> + {deliveredCount} <span className="text-sm opacity-50 font-normal">Dl</span></p></div><div className={`p-4 rounded-2xl border border-dashed border-emerald-500/30 text-center bg-emerald-500/5`}><p className="text-[10px] uppercase font-bold text-emerald-600 mb-1">Branch Cash in Hand</p><p className="text-2xl font-black text-emerald-600">₹{cashCollected.toLocaleString()}</p><p className="text-[8px] opacity-60 mt-1">From Paid & Cash To-Pay</p></div><div className={`p-4 rounded-2xl border border-dashed border-amber-500/30 text-center bg-amber-500/5`}><p className="text-[10px] uppercase font-bold text-amber-600 mb-1">Commission Earned</p><div className="flex justify-center items-center gap-2"><p className="text-2xl font-black text-amber-600">₹{branchCommission.toLocaleString()}</p><input type="number" title="Rate" value={payoutRate} onChange={e=>setPayoutRate(Number(e.target.value))} className={`w-10 p-1 text-xs text-center border rounded ${inputBg}`} /></div><p className="text-[8px] opacity-60 mt-1">Total Parcels × Rate</p></div><div className={`p-4 rounded-2xl border text-center text-white shadow-inner ${netRemittance >= 0 ? 'bg-indigo-600 border-indigo-700' : 'bg-red-500 border-red-600'}`}><p className="text-[10px] uppercase font-bold opacity-80 mb-1">{netRemittance >= 0 ? 'Branch Remit to HQ' : 'HQ Pays Branch'}</p><p className="text-2xl font-black">₹{Math.abs(netRemittance).toLocaleString()}</p><p className="text-[8px] opacity-80 mt-1">Net Balance Transfer</p></div></div><div className="flex gap-4"><button className="flex-1 border border-indigo-500 text-indigo-500 font-bold py-3 rounded-xl hover:bg-indigo-500/10">📥 Download Statement PDF</button><button onClick={markLedgerSettled} className="flex-1 bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700 shadow-md">🔒 Mark Ledger as Settled</button></div></div>
       <div className={`${cardBg} p-4 md:p-6 rounded-3xl border border-dashed border-indigo-500/40 grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6`}><div className="md:col-span-3"><h3 className="text-base md:text-lg font-black text-indigo-500">⚡ Master Global Sheet</h3></div><div className="bg-slate-950 p-4 rounded-xl text-white"><p className="text-[10px] md:text-xs text-slate-400 font-bold uppercase">📊 Gross Network Revenue</p><p className="text-2xl md:text-3xl font-black text-blue-400 mt-1">₹{totalSystemRevenue.toLocaleString()}</p></div><div className="bg-slate-950 p-4 rounded-xl text-white"><p className="text-[10px] md:text-xs text-slate-400 font-bold uppercase">📉 Total Fixed Expense</p><p className="text-2xl md:text-3xl font-black text-red-400 mt-1">₹{exp.toLocaleString()}</p></div><div className="bg-slate-950 p-4 rounded-xl text-white"><p className="text-[10px] md:text-xs text-slate-400 font-bold uppercase">☕ Total Petty Cash</p><p className="text-2xl md:text-3xl font-black text-orange-400 mt-1">₹{totalPetty.toLocaleString()}</p></div></div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
-        <div className={`${cardBg} p-4 md:p-6 rounded-3xl border space-y-4`}><h3 className="font-bold text-sm md:text-md text-indigo-500">Fixed Operational Expenses</h3><div className="space-y-4"><div><label className="text-[10px] md:text-xs font-bold opacity-60 uppercase">Monthly Vehicle EMI (₹)</label><input type="number" value={acc.emi} onChange={e=>setAcc({...acc, emi:Number(e.target.value)})} className={`w-full p-2 md:p-3 mt-1 rounded-xl border outline-none font-bold [appearance:textfield] ${inputBg}`} /></div><div><label className="text-[10px] md:text-xs font-bold opacity-60 uppercase">Diesel & Highway Toll Log (₹)</label><input type="number" value={acc.diesel} onChange={e=>setAcc({...acc, diesel:Number(e.target.value)})} className={`w-full p-2 md:p-3 mt-1 rounded-xl border outline-none font-bold [appearance:textfield] ${inputBg}`} /></div><div><label className="text-[10px] md:text-xs font-bold opacity-60 uppercase">Misc Office Rent & Utilities (₹)</label><input type="number" value={acc.other} onChange={e=>setAcc({...acc, other:Number(e.target.value)})} className={`w-full p-2 md:p-3 mt-1 rounded-xl border outline-none font-bold [appearance:textfield] ${inputBg}`} /></div></div></div>
-        <div className="bg-slate-950 p-6 md:p-8 rounded-3xl text-white flex flex-col justify-center shadow-xl"><div className="flex justify-between items-center mb-2 md:mb-4"><h3 className="text-lg md:text-xl font-black tracking-wider text-indigo-400">PARTNERSHIP SETTLEMENT</h3><div className="flex items-center gap-2"><span className="text-xs opacity-60 uppercase">Partners:</span><input type="number" value={partnerCount} onChange={e=>setPartnerCount(Number(e.target.value))} className="w-16 bg-slate-800 text-white font-bold p-1 rounded text-center border border-slate-700 outline-none" /></div></div><p className="text-xs md:text-sm opacity-60">Global Base Profit Yield: ₹{net.toLocaleString()}</p><div className="mt-4 md:mt-6 bg-white/5 p-4 md:p-6 rounded-2xl text-center border border-white/10"><p className="text-[10px] md:text-xs opacity-50 uppercase tracking-widest mb-1">Per Partner Yield</p><p className="text-3xl md:text-4xl font-black text-emerald-400">₹{((net / (partnerCount||1)) || 0).toLocaleString()}</p></div></div>
-      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8"><div className={`${cardBg} p-4 md:p-6 rounded-3xl border space-y-4`}><h3 className="font-bold text-sm md:text-md text-indigo-500">Fixed Operational Expenses</h3><div className="space-y-4"><div><label className="text-[10px] md:text-xs font-bold opacity-60 uppercase">Monthly Vehicle EMI (₹)</label><input type="number" value={acc.emi} onChange={e=>setAcc({...acc, emi:Number(e.target.value)})} className={`w-full p-2 md:p-3 mt-1 rounded-xl border outline-none font-bold [appearance:textfield] ${inputBg}`} /></div><div><label className="text-[10px] md:text-xs font-bold opacity-60 uppercase">Diesel & Highway Toll Log (₹)</label><input type="number" value={acc.diesel} onChange={e=>setAcc({...acc, diesel:Number(e.target.value)})} className={`w-full p-2 md:p-3 mt-1 rounded-xl border outline-none font-bold [appearance:textfield] ${inputBg}`} /></div><div><label className="text-[10px] md:text-xs font-bold opacity-60 uppercase">Misc Office Rent & Utilities (₹)</label><input type="number" value={acc.other} onChange={e=>setAcc({...acc, other:Number(e.target.value)})} className={`w-full p-2 md:p-3 mt-1 rounded-xl border outline-none font-bold [appearance:textfield] ${inputBg}`} /></div></div></div><div className="bg-slate-950 p-6 md:p-8 rounded-3xl text-white flex flex-col justify-center shadow-xl"><div className="flex justify-between items-center mb-2 md:mb-4"><h3 className="text-lg md:text-xl font-black tracking-wider text-indigo-400">PARTNERSHIP SETTLEMENT</h3><div className="flex items-center gap-2"><span className="text-xs opacity-60 uppercase">Partners:</span><input type="number" value={partnerCount} onChange={e=>setPartnerCount(Number(e.target.value))} className="w-16 bg-slate-800 text-white font-bold p-1 rounded text-center border border-slate-700 outline-none" /></div></div><p className="text-xs md:text-sm opacity-60">Global Base Profit Yield: ₹{net.toLocaleString()}</p><div className="mt-4 md:mt-6 bg-white/5 p-4 md:p-6 rounded-2xl text-center border border-white/10"><p className="text-[10px] md:text-xs opacity-50 uppercase tracking-widest mb-1">Per Partner Yield</p><p className="text-3xl md:text-4xl font-black text-emerald-400">₹{((net / (partnerCount||1)) || 0).toLocaleString()}</p></div></div></div>
       <div className={`${cardBg} p-4 md:p-6 rounded-3xl border flex flex-col h-full`}><h3 className="font-black text-sm md:text-md text-indigo-500 border-b pb-4 border-slate-500/20 mb-4">Petty Cash Ledger (Daily/Branch)</h3><div className="flex gap-2 mb-4"><input value={pettyDesc} onChange={e=>setPettyDesc(e.target.value)} placeholder="Detail (Tea, Coolie)" className={`flex-1 p-2 border rounded-lg text-sm outline-none ${inputBg}`} /><input value={pettyAmt} onChange={e=>setPettyAmt(e.target.value)} placeholder="Amt ₹" type="number" className={`w-24 p-2 border rounded-lg text-sm outline-none font-bold ${inputBg}`} /><button onClick={addPetty} className="bg-orange-500 text-white px-4 rounded-lg font-bold text-sm">+</button></div><div className={`flex-1 overflow-y-auto max-h-40 border rounded-lg ${inputBg}`}>{pettyLedger.map((l, i) => ( <div key={i} className="flex justify-between p-3 border-b border-slate-500/20 text-xs md:text-sm"><span>{l.desc} <span className="text-[10px] opacity-50 ml-2">{l.date}</span></span><span className="font-bold text-orange-500">₹{l.amt}</span></div> ))}</div></div>
     </div>
   );
@@ -492,12 +510,8 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
   const [tab, setTab] = useState('parcels'); const [editF, setEditF] = useState(null); 
   const [newUser, setNewUser] = useState(""); const [newPass, setNewPass] = useState(""); const [newRole, setNewRole] = useState("staff"); const [newBranch, setNewBranch] = useState(CITIES[0]);
   const [newCPhone, setNewCPhone] = useState(""); const [newCName, setNewCName] = useState(""); const [paymentFilter, setPaymentFilter] = useState("All"); const [branchFilter, setBranchFilter] = useState(user.branch); const [searchQuery, setSearchQuery] = useState("");
-  
-  // 🔥 CREDIT INVOICE STATE 🔥
   const d = new Date(); const todayStr = d.toISOString().split('T')[0]; d.setDate(1); const firstDayStr = d.toISOString().split('T')[0];
-  const [fromDate, setFromDate] = useState(firstDayStr); const [toDate, setToDate] = useState(todayStr);
-  const [invCustomer, setInvCustomer] = useState("");
-
+  const [fromDate, setFromDate] = useState(firstDayStr); const [toDate, setToDate] = useState(todayStr); const [invCustomer, setInvCustomer] = useState("");
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800"; const tblBg = isDark ? "bg-slate-800/40" : "bg-slate-50"; const isSuper = user.role === 'superadmin';
 
   useEffect(() => { if (newRole === 'superadmin') setNewBranch('All'); else if (newRole === 'staff' && newBranch === 'All') setNewBranch(CITIES[0]); }, [newRole]);
@@ -520,73 +534,62 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
 
   const exportData = () => { if (sortedTableData.length === 0) return showMsg("No data to export", "error"); const headers = ["LR No", "Date", "Sender", "Receiver", "Origin", "Destination", "Payment Mode", "Amount", "Status", "Booked By"]; const rows = sortedTableData.map(p => [p.id, p.date, p.sName, p.rName, p.from, p.to, p.payment, p.price, p.status, p.bookedBy].join(',')); const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join('\n'); const encodedUri = encodeURI(csvContent); const link = document.createElement("a"); link.setAttribute("href", encodedUri); link.setAttribute("download", `MPS_Report.csv`); document.body.appendChild(link); link.click(); link.remove(); showMsg("Report Downloaded!"); };
   
-  // 🔥 TRIGGER CREDIT INVOICE 🔥
-  const triggerInvoice = () => {
+  const triggerInvoice = () => { if(!invCustomer) return showMsg("Select a Customer Account!", "error"); const cObj = creditAuthList.find(c => c.company === invCustomer); const invoiceParcels = parcels.filter(p => p.payment === "Credit" && p.creditCustomer === invCustomer && p.isoDate >= fromDate && p.isoDate <= toDate + "T23:59:59"); if(invoiceParcels.length === 0) return showMsg("No credit bills found for this period.", "error"); generateInvoicePDF(invCustomer, cObj.phone, fromDate, toDate, invoiceParcels); showMsg(`Invoice Generated for ${invCustomer}`); };
+
+  const settleCreditBill = async () => {
     if(!invCustomer) return showMsg("Select a Customer Account!", "error");
-    const cObj = creditAuthList.find(c => c.company === invCustomer);
-    const invoiceParcels = parcels.filter(p => p.payment === "Credit" && p.creditCustomer === invCustomer && p.isoDate >= fromDate && p.isoDate <= toDate + "T23:59:59");
-    if(invoiceParcels.length === 0) return showMsg("No credit bills found for this period.", "error");
-    generateInvoicePDF(invCustomer, cObj.phone, fromDate, toDate, invoiceParcels);
-    showMsg(`Invoice Generated for ${invCustomer}`);
+    if(!window.confirm(`Mark all bills for ${invCustomer} (${fromDate} to ${toDate}) as PAID?`)) return;
+    const invoiceParcels = parcels.filter(p => p.payment === "Credit" && p.creditCustomer === invCustomer && p.isoDate >= fromDate && p.isoDate <= toDate + "T23:59:59" && !p.creditSettled);
+    if(invoiceParcels.length === 0) return showMsg("No unpaid bills found in this date range.", "error");
+    let updatedParcelsList = [...parcels];
+    for (let p of invoiceParcels) { const updated = {...p, creditSettled: true}; await db.updateParcel(updated.id, updated); updatedParcelsList = updatedParcelsList.map(x => x.id === updated.id ? updated : x); }
+    setParcels(updatedParcelsList); showMsg(`Successfully settled ${invoiceParcels.length} parcels for ${invCustomer}!`);
   };
 
   return (
     <div className="space-y-4 md:space-y-6">
       <div className="flex flex-wrap gap-2 md:gap-4"><button onClick={()=>setTab('parcels')} className={`px-4 md:px-6 py-2 rounded-full text-[10px] md:text-sm font-bold ${tab==='parcels'?'bg-indigo-600 text-white':cardBg}`}>📋 Audits & Analytics</button><button onClick={()=>setTab('staff')} className={`px-4 md:px-6 py-2 rounded-full text-[10px] md:text-sm font-bold ${tab==='staff'?'bg-indigo-600 text-white':cardBg}`}>👥 System RBAC</button><button onClick={()=>setTab('credit')} className={`px-4 md:px-6 py-2 rounded-full text-[10px] md:text-sm font-bold ${tab==='credit'?'bg-amber-600 text-white':cardBg}`}>💳 Credit Control</button></div>
-      {tab === 'staff' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-          <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}><h3 className="font-black text-sm md:text-base">Assign Privilege Context</h3><input value={newUser} onChange={e=>setNewUser(e.target.value)} placeholder="Username Identifier" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} /><input value={newPass} onChange={e=>setNewPass(e.target.value)} type="password" placeholder="Account Password" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} />{isSuper && ( <select value={newRole} onChange={e=>setNewRole(e.target.value)} className={`w-full p-2 md:p-3 rounded-xl border font-bold outline-none text-sm ${inputBg}`}><option value="staff">Privilege Level: STAFF</option><option value="admin">Privilege Level: ADMIN</option><option value="superadmin">Privilege Level: SUPERADMIN</option></select> )}<select disabled={newRole === 'superadmin'} value={newBranch} onChange={e=>setNewBranch(e.target.value)} className={`w-full p-2 md:p-3 rounded-xl border font-bold outline-none text-sm ${inputBg} ${newRole==='superadmin'?'opacity-50 cursor-not-allowed':''}`}>{(isSuper && (newRole === 'admin' || newRole === 'superadmin')) && <option value="All">Global Access (All Branches)</option>}{CITIES.map(c => <option key={c} value={c}>Branch: {c}</option>)}</select><button onClick={handleAddUser} className="w-full bg-indigo-600 text-white font-bold py-2 md:py-3 rounded-xl text-sm md:text-base">Commit Assignment</button></div>
-          <div className={`${cardBg} p-4 md:p-6 rounded-2xl border lg:col-span-2 space-y-3`}><h3 className="font-black text-sm md:text-base">Identity Mapping Matrix</h3><div className="space-y-2 max-h-64 overflow-y-auto pr-2">{users.filter(u => isSuper ? true : u.role === 'staff').map(u => { const canManage = isSuper ? (u.username !== user.username) : true; return ( <div key={u.id} className="flex flex-col sm:flex-row justify-between sm:items-center p-3 border rounded-xl bg-black/5 gap-2"><div><p className="font-bold text-sm">{u.username} <span className="text-[10px] ml-1 opacity-50">({u.branch})</span></p><p className={`text-[10px] uppercase font-black ${u.role === 'superadmin' ? 'text-amber-500' : 'text-indigo-500'}`}>{u.role}</p></div>{canManage && ( <div className="flex items-center gap-2"><button onClick={async ()=>{ await db.deleteUser(u.id); setUsers(users.filter(x=>x.id!==u.id)); showMsg("Access revoked", "error"); }} className="text-red-500 text-[10px] font-bold border border-red-500/20 px-2 py-1 rounded bg-red-500/10">Revoke 🗑️</button></div> )}</div> ) })}</div></div>
-        </div>
-      )}
+      {tab === 'staff' && ( <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6"><div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}><h3 className="font-black text-sm md:text-base">Assign Privilege Context</h3><input value={newUser} onChange={e=>setNewUser(e.target.value)} placeholder="Username Identifier" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} /><input value={newPass} onChange={e=>setNewPass(e.target.value)} type="password" placeholder="Account Password" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} />{isSuper && ( <select value={newRole} onChange={e=>setNewRole(e.target.value)} className={`w-full p-2 md:p-3 rounded-xl border font-bold outline-none text-sm ${inputBg}`}><option value="staff">Privilege Level: STAFF</option><option value="admin">Privilege Level: ADMIN</option><option value="superadmin">Privilege Level: SUPERADMIN</option></select> )}<select disabled={newRole === 'superadmin'} value={newBranch} onChange={e=>setNewBranch(e.target.value)} className={`w-full p-2 md:p-3 rounded-xl border font-bold outline-none text-sm ${inputBg} ${newRole==='superadmin'?'opacity-50 cursor-not-allowed':''}`}>{(isSuper && (newRole === 'admin' || newRole === 'superadmin')) && <option value="All">Global Access (All Branches)</option>}{CITIES.map(c => <option key={c} value={c}>Branch: {c}</option>)}</select><button onClick={handleAddUser} className="w-full bg-indigo-600 text-white font-bold py-2 md:py-3 rounded-xl text-sm md:text-base">Commit Assignment</button></div><div className={`${cardBg} p-4 md:p-6 rounded-2xl border lg:col-span-2 space-y-3`}><h3 className="font-black text-sm md:text-base">Identity Mapping Matrix</h3><div className="space-y-2 max-h-64 overflow-y-auto pr-2">{users.filter(u => isSuper ? true : u.role === 'staff').map(u => { const canManage = isSuper ? (u.username !== user.username) : true; return ( <div key={u.id} className="flex flex-col sm:flex-row justify-between sm:items-center p-3 border rounded-xl bg-black/5 gap-2"><div><p className="font-bold text-sm">{u.username} <span className="text-[10px] ml-1 opacity-50">({u.branch})</span></p><p className={`text-[10px] uppercase font-black ${u.role === 'superadmin' ? 'text-amber-500' : 'text-indigo-500'}`}>{u.role}</p></div>{canManage && ( <div className="flex items-center gap-2"><button onClick={async ()=>{ await db.deleteUser(u.id); setUsers(users.filter(x=>x.id!==u.id)); showMsg("Access revoked", "error"); }} className="text-red-500 text-[10px] font-bold border border-red-500/20 px-2 py-1 rounded bg-red-500/10">Revoke 🗑️</button></div> )}</div> ) })}</div></div></div> )}
       {tab === 'credit' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}><h3 className="font-black text-sm md:text-base text-amber-500">Add Authorized Credit Account</h3><p className="text-[10px] md:text-xs opacity-60">Only registered phone numbers can use 'F9: Credit' billing.</p><input value={newCPhone} onChange={e=>setNewCPhone(e.target.value)} placeholder="Customer 10-digit Mobile" maxLength="10" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} /><input value={newCName} onChange={e=>setNewCName(e.target.value)} placeholder="Company / Individual Name" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} /><button onClick={addCreditAuth} className="w-full bg-amber-600 text-white font-bold py-2 md:py-3 rounded-xl text-sm md:text-base">Authorize Account</button></div>
           <div className={`${cardBg} p-4 md:p-6 rounded-2xl border h-96 overflow-y-auto`}><h3 className="font-black text-sm md:text-base mb-4">Approved Credit Ledger</h3>{creditAuthList.length === 0 ? <p className="text-sm opacity-50">No credit accounts authorized.</p> : <div className="space-y-2">{creditAuthList.map((c, i) => ( <div key={i} className="flex justify-between items-center p-3 border border-slate-500/20 rounded-xl bg-black/5"><div><p className="font-bold text-sm">{c.company}</p><p className="text-[10px] opacity-60">Ph: {c.phone}</p></div><button onClick={()=>removeCredit(c.phone)} className="text-red-500 text-[10px] font-bold bg-red-500/10 px-2 py-1 rounded border border-red-500/20">Revoke</button></div> ))}</div> }</div>
-          {/* 🔥 MONTHLY CREDIT BILLING 🔥 */}
           <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4 lg:col-span-2 border-indigo-500/30`}>
              <h3 className="font-black text-sm md:text-base text-indigo-500">📑 Generate Monthly Credit Invoice</h3>
-             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                <select value={invCustomer} onChange={e=>setInvCustomer(e.target.value)} className={`sm:col-span-2 p-3 rounded-xl border font-bold text-sm ${inputBg}`}>
-                  <option value="">Select Account...</option>
-                  {creditAuthList.map((c,i) => <option key={i} value={c.company}>{c.company}</option>)}
-                </select>
-                <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} className={`p-3 rounded-xl border text-sm font-bold ${inputBg}`} />
-                <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} className={`p-3 rounded-xl border text-sm font-bold ${inputBg}`} />
-             </div>
-             <button onClick={triggerInvoice} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl shadow-md">🖨️ Print Consolidated Invoice</button>
+             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4"><select value={invCustomer} onChange={e=>setInvCustomer(e.target.value)} className={`sm:col-span-2 p-3 rounded-xl border font-bold text-sm ${inputBg}`}><option value="">Select Account...</option>{creditAuthList.map((c,i) => <option key={i} value={c.company}>{c.company}</option>)}</select><input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} className={`p-3 rounded-xl border text-sm font-bold ${inputBg}`} /><input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} className={`p-3 rounded-xl border text-sm font-bold ${inputBg}`} /></div>
+             <div className="flex gap-2 flex-col md:flex-row"><button onClick={triggerInvoice} className="flex-1 bg-indigo-600 text-white font-bold py-3 rounded-xl shadow-md">🖨️ Print Consolidated Invoice</button><button onClick={settleCreditBill} className="flex-1 bg-emerald-600 text-white font-bold py-3 rounded-xl shadow-md">✅ Mark Bill as PAID</button></div>
           </div>
         </div>
       )}
       {tab === 'parcels' && (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
-            <input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="🔍 Keyword" className={`p-2 md:p-3 rounded-xl border text-sm ${cardBg}`} />
-            <select disabled={!isSuper} value={branchFilter} onChange={e=>setBranchFilter(e.target.value)} className={`p-2 md:p-3 rounded-xl border font-bold text-sm ${cardBg} ${!isSuper && 'opacity-50 cursor-not-allowed'}`}>{isSuper && <option value="All">All Branches</option>}{CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
-            <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} className={`p-2 md:p-3 rounded-xl border font-bold text-sm ${cardBg}`} title="From Date" />
-            <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} className={`p-2 md:p-3 rounded-xl border font-bold text-sm ${cardBg}`} title="To Date" />
-            <select value={paymentFilter} onChange={e=>setPaymentFilter(e.target.value)} className={`p-2 md:p-3 rounded-xl border font-bold text-sm ${cardBg}`}><option value="All">All Modes</option><option value="Paid">Paid</option><option value="To Pay">To Pay</option><option value="Credit">Credit</option></select>
-          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4"><input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="🔍 Keyword" className={`p-2 md:p-3 rounded-xl border text-sm ${cardBg}`} /><select disabled={!isSuper} value={branchFilter} onChange={e=>setBranchFilter(e.target.value)} className={`p-2 md:p-3 rounded-xl border font-bold text-sm ${cardBg} ${!isSuper && 'opacity-50 cursor-not-allowed'}`}>{isSuper && <option value="All">All Branches</option>}{CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select><input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} className={`p-2 md:p-3 rounded-xl border font-bold text-sm ${cardBg}`} title="From Date" /><input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} className={`p-2 md:p-3 rounded-xl border font-bold text-sm ${cardBg}`} title="To Date" /><select value={paymentFilter} onChange={e=>setPaymentFilter(e.target.value)} className={`p-2 md:p-3 rounded-xl border font-bold text-sm ${cardBg}`}><option value="All">All Modes</option><option value="Paid">Paid</option><option value="To Pay">To Pay</option><option value="Credit">Credit</option></select></div>
           <button onClick={exportData} className="w-full py-2 bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500 hover:text-white transition-colors text-[10px] md:text-xs font-bold rounded-lg border border-indigo-500/20">📥 Export CSV Record</button>
           <div className={`${cardBg} rounded-2xl border overflow-x-auto shadow-sm`}>
             <table className="min-w-[800px] w-full text-left whitespace-nowrap">
               <thead className={`${tblBg} text-[10px] md:text-xs font-bold uppercase opacity-80`}><tr><th className="p-3 md:p-4">LR Code</th><th className="p-3 md:p-4">Route Info</th><th className="p-3 md:p-4">Billing Parameters</th><th className="p-3 md:p-4">Tracking Node</th><th className="p-3 md:p-4">Operations Control</th></tr></thead>
               <tbody>
-                {sortedTableData.length === 0 ? <tr><td colSpan="5" className="p-8 text-center opacity-50 font-bold">No records found.</td></tr> : sortedTableData.map(p => (
+                {sortedTableData.length === 0 ? <tr><td colSpan="5" className="p-8 text-center opacity-50 font-bold">No records found.</td></tr> : sortedTableData.map(p => {
+                  const canEditDrop = p.status !== 'Delivered' && p.status !== 'RTO' && p.status !== 'Deleted';
+                  return (
                   <tr key={p.id} className={`border-t hover:bg-black/5 ${p.status === 'Deleted' ? 'bg-red-500/5 border-red-500/10' : 'border-slate-500/10'}`}>
                     <td className="p-3 md:p-4 font-black text-indigo-500 text-sm cursor-pointer hover:underline" onClick={() => setGlobalView(p)}>{p.id} <span className="block text-[10px] opacity-50 font-normal">{p.date}</span></td>
                     <td className="p-3 md:p-4 text-xs md:text-sm font-bold">{p.from} ➔ {p.to}</td>
                     <td className="p-3 md:p-4 text-xs md:text-sm">₹{p.price} <b className="text-[10px] md:text-xs opacity-60">({p.payment})</b></td>
-                    <td className="p-3 md:p-4"><span className="px-2 md:px-3 py-1 rounded-full text-[10px] md:text-xs font-bold" style={{backgroundColor: S_CLR[p.status]+'22', color: S_CLR[p.status]}}>{p.status}</span>{p.status === 'Deleted' && isSuper && ( <div className="text-[10px] text-red-500 font-bold mt-1"><p>By: {p.deletedBy}</p><p>Reason: {p.deleteReason}</p></div> )}</td>
-                    <td className="p-3 md:p-4 space-x-1 md:space-x-2">{p.status !== 'Deleted' && ( <><button onClick={()=>setEditF(p)} className="text-amber-500 text-[10px] md:text-xs font-bold border border-amber-500/20 px-2 py-1 rounded bg-amber-500/5">✏️ Edit</button><button onClick={()=>deleteRecord(p.id)} className="text-red-500 text-[10px] md:text-xs font-bold border border-red-500/20 px-2 py-1 rounded bg-red-500/5">🗑️ Drop</button></> )}<button onClick={()=>generatePDF(p)} className="text-blue-500 text-[10px] md:text-xs font-bold border border-blue-500/20 px-2 py-1 rounded bg-blue-500/5">🖨️ Print</button></td>
+                    <td className="p-3 md:p-4"><span className="px-2 md:px-3 py-1 rounded-full text-[10px] md:text-xs font-bold uppercase" style={{backgroundColor: S_CLR[p.status]+'22', color: S_CLR[p.status]}}>{p.status}</span>{p.status === 'Deleted' && isSuper && ( <div className="text-[10px] text-red-500 font-bold mt-1"><p>By: {p.deletedBy}</p><p>Reason: {p.deleteReason}</p></div> )}</td>
+                    <td className="p-3 md:p-4 space-x-1 md:space-x-2">
+                      {(canEditDrop || isSuper) && p.status !== 'Deleted' && ( <><button onClick={()=>setEditF(p)} className="text-amber-500 text-[10px] md:text-xs font-bold border border-amber-500/20 px-2 py-1 rounded bg-amber-500/5">✏️ Edit</button><button onClick={()=>deleteRecord(p.id)} className="text-red-500 text-[10px] md:text-xs font-bold border border-red-500/20 px-2 py-1 rounded bg-red-500/5">🗑️ Drop</button></> )}
+                      {!canEditDrop && !isSuper && p.status !== 'Deleted' && <span className="text-[10px] opacity-50 italic">🔒 Locked</span>}
+                      <button onClick={()=>generatePDF(p)} className="text-blue-500 text-[10px] md:text-xs font-bold border border-blue-500/20 px-2 py-1 rounded bg-blue-500/5">🖨️ Print</button>
+                    </td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
           </div>
         </>
       )}
-      {editF && ( <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50"><div className={`${cardBg} p-6 rounded-2xl max-w-lg w-full space-y-4 animate-bounce-in`}><h3 className="font-black text-lg">Modify Manifest Parameters: {editF.id}</h3><div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><input value={editF.sName} onChange={e=>setEditF({...editF, sName:e.target.value})} placeholder="Sender Identity" className={`p-2 border rounded text-sm ${inputBg}`} /><input value={editF.rName} onChange={e=>setEditF({...editF, rName:e.target.value})} placeholder="Receiver Identity" className={`p-2 border rounded text-sm ${inputBg}`} /><input type="number" value={editF.price} onChange={e=>setEditF({...editF, price:Number(e.target.value)})} placeholder="Price Override" className={`p-2 border rounded font-bold text-sm ${inputBg}`} /></div><div className="flex gap-2 mt-4"><button onClick={saveOverrides} className="bg-indigo-600 text-white font-bold py-2 px-4 rounded-xl flex-1 text-sm">Save Changes</button><button onClick={()=>setEditF(null)} className="bg-slate-500 text-white py-2 px-4 rounded-xl text-sm">Dismiss</button></div></div></div> )}
+      {editF && ( <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50"><div className={`${cardBg} p-6 rounded-2xl max-w-lg w-full space-y-4 animate-bounce-in`}><h3 className="font-black text-lg">Modify Manifest Parameters: {editF.id}</h3><div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><input value={editF.sName} onChange={e=>setEditF({...editF, sName:e.target.value})} placeholder="Sender Identity" className={`p-2 border rounded text-sm ${inputBg}`} /><input value={editF.rName} onChange={e=>setEditF({...editF, rName:e.target.value})} placeholder="Receiver Identity" className={`p-2 border rounded text-sm ${inputBg}`} /><select value={editF.status} onChange={e=>setEditF({...editF, status:e.target.value})} className={`p-2 border rounded text-sm ${inputBg}`}>{STATUSES.filter(s=>s!=='Deleted').map(s=><option key={s}>{s}</option>)}</select><input type="number" value={editF.price} onChange={e=>setEditF({...editF, price:Number(e.target.value)})} placeholder="Price Override" className={`p-2 border rounded font-bold text-sm ${inputBg}`} /></div><div className="flex gap-2 mt-4"><button onClick={saveOverrides} className="bg-indigo-600 text-white font-bold py-2 px-4 rounded-xl flex-1 text-sm">Save Changes</button><button onClick={()=>setEditF(null)} className="bg-slate-500 text-white py-2 px-4 rounded-xl text-sm">Dismiss</button></div></div></div> )}
     </div>
   );
 }
