@@ -105,7 +105,7 @@ function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList) {
   // 🏢 HEADER SECTION
   doc.setFont("helvetica", "bold"); 
   doc.setFontSize(18); 
-  doc.text("MPS Logistics, Unit of MPS Parcel Service", 105, 15, { align: "center" });
+  doc.text("MPS Parcel Service", 105, 15, { align: "center" });
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
   doc.text("Address : Dharmapuri Main Road, Mecheri, Salem-Dt. 636 451. GST : 33CICPS6965E1Z1", 105, 20, { align: "center" });
