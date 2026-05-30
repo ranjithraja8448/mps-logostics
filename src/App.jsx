@@ -2,6 +2,7 @@ import React, { useState, useEffect, Fragment } from "react";
 import { jsPDF } from "jspdf";
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { Html5QrcodeScanner } from "html5-qrcode";
+import autoTable from "jspdf-autotable";
 
 /* ══════════════════════════════════════════
    CONSTANTS & CONFIG
@@ -56,7 +57,9 @@ function generatePDF(p) {
   doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.text("GSTIN Payable by :", 25, 104); doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.rect(13, 107, 3, 3); doc.text("Consignor", 17, 110); doc.rect(40, 107, 3, 3); doc.text("Consignee", 44, 110); doc.rect(13, 114, 3, 3); doc.text("Transporter", 17, 117); doc.rect(40, 114, 3, 3); doc.text("Agency", 44, 117);
   doc.setFontSize(10); if(p.payment === "Paid" || p.payment === "Credit" || p.payment === "FOC") doc.text("✔", 13.5, 109.5); if(p.payment === "To Pay") doc.text("✔", 40.5, 109.5);
   doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.text("Consignee", 79, 105); doc.setFontSize(6); doc.text("(Received goods in good Condition)", 79, 118); doc.text("Consignor Signature", 117, 118); doc.setFont("helvetica", "bold"); doc.text("For Mecheri Parcel Service", 147, 105);
-  doc.save(`MPS_LR_${p.id.replace(/\//g, '_')}.pdf`);
+  
+  // 🔥 Download-kku bathila Browser Tab-la open aagum
+  window.open(doc.output('bloburl'), '_blank');
 }
 
 function generateEOD_PDF(dateStr, branch, parcelsList, pettyList) {
@@ -77,22 +80,120 @@ function generateEOD_PDF(dateStr, branch, parcelsList, pettyList) {
   pettyList.forEach(pt => { if(pt.date === dateStr) { doc.text(`${pt.desc} - Rs. ${pt.amt}`, 10, y); totalExp += pt.amt; y+=6; } });
   y+=4; doc.setFont("helvetica", "bold"); doc.text(`Total Expenses: Rs. ${totalExp}`, 10, y); y+=12;
   doc.setFontSize(12); doc.text(`NET CASH TO HANDOVER: Rs. ${totalCash - totalExp}`, 10, y); doc.line(10, y+4, 200, y+4);
-  doc.save(`EOD_${branch}_${dateStr.replace(/\//g,'-')}.pdf`);
+  window.open(doc.output('bloburl'), '_blank');window.open(doc.output('bloburl'), '_blank');
 }
 
+// 🔥 HELPER: NUMBER TO WORDS CONVERTER (For "RUPEES ... ONLY") 🔥
+function numberToWords(num) {
+  const a = ['','One ','Two ','Three ','Four ', 'Five ','Six ','Seven ','Eight ','Nine ','Ten ','Eleven ','Twelve ','Thirteen ','Fourteen ','Fifteen ','Sixteen ','Seventeen ','Eighteen ','Nineteen '];
+  const b = ['', '', 'Twenty','Thirty','Forty','Fifty', 'Sixty','Seventy','Eighty','Ninety'];
+  if ((num = num.toString()).length > 9) return 'Overflow';
+  let n = ('000000000' + num).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
+  if (!n) return; let str = '';
+  str += (n[1] != 0) ? (a[Number(n[1])] || b[n[1][0]] + ' ' + a[n[1][1]]) + 'Crore ' : '';
+  str += (n[2] != 0) ? (a[Number(n[2])] || b[n[2][0]] + ' ' + a[n[2][1]]) + 'Lakh ' : '';
+  str += (n[3] != 0) ? (a[Number(n[3])] || b[n[3][0]] + ' ' + a[n[3][1]]) + 'Thousand ' : '';
+  str += (n[4] != 0) ? (a[Number(n[4])] || b[n[4][0]] + ' ' + a[n[4][1]]) + 'Hundred ' : '';
+  str += (n[5] != 0) ? ((str != '') ? 'and ' : '') + (a[Number(n[5])] || b[n[5][0]] + ' ' + a[n[5][1]]) + 'Only' : 'Only';
+  return str.toUpperCase();
+}
+
+// 🔥 UPGRADED INVOICE GENERATOR (NO DESTINATION + S.No ADDED) 🔥
 function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList) {
-  const doc = new jsPDF(); doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.text("MONTHLY CREDIT INVOICE", 105, 15, { align: "center" });
-  doc.setFontSize(12); doc.text(`MPS PARCEL SERVICE`, 105, 22, { align: "center" }); doc.line(10, 25, 200, 25);
-  doc.setFontSize(10); doc.text(`Customer / Company: ${customer}`, 10, 32); doc.text(`Phone: ${customerPhone}`, 10, 38); doc.text(`Billing Period: ${fromD} to ${toD}`, 10, 44); doc.line(10, 48, 200, 48);
-  doc.text("LR No.", 10, 54); doc.text("Date", 40, 54); doc.text("Route", 70, 54); doc.text("Items", 130, 54); doc.text("Amount", 170, 54); doc.text("Status", 195, 54); doc.line(10, 56, 200, 56);
-  let y = 62; let total = 0; doc.setFont("helvetica", "normal");
-  parcelsList.forEach(p => {
-     doc.text(p.id, 10, y); doc.text(p.date, 40, y); doc.text(`${p.from}-${p.to}`, 70, y); doc.text(`${p.count} ${p.type}`, 130, y); doc.text(`Rs. ${p.price}`, 170, y); doc.text(p.creditSettled ? "Paid" : "Due", 195, y);
-     if(!p.creditSettled) total += p.price; y += 6; if(y>270){ doc.addPage(); y=20; }
+  const doc = new jsPDF();
+  
+  // 🏢 HEADER SECTION
+  doc.setFont("helvetica", "bold"); 
+  doc.setFontSize(18); 
+  doc.text("MPS Logistics, Unit of MPS Parcel Service", 105, 15, { align: "center" });
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text("Address : Dharmapuri Main Road, Mecheri, Salem-Dt. 636 451. GST : 33CICPS6965E1Z1", 105, 20, { align: "center" });
+  doc.text("Phone Number : 90033 77185 / 80726 72255", 105, 24, { align: "center" });
+  
+  // 📑 TITLE
+  doc.setFontSize(14); 
+  doc.setFont("helvetica", "bold");
+  doc.text("INVOICE", 105, 34, { align: "center" });
+  
+  // 👤 CUSTOMER & INVOICE META
+  const invoiceNo = Math.floor(1000 + Math.random() * 9000);
+  const printDate = new Date().toLocaleDateString('en-IN');
+
+  doc.setContentForm = "property";
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.text(`Party Name : ${customer}`, 14, 45);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Phone No : ${customerPhone}`, 14, 50);
+  doc.text(`Billing Period : ${fromD} to ${toD}`, 14, 55);
+  
+  doc.setFont("helvetica", "bold");
+  doc.text(`Invoice no.: ${invoiceNo}`, 150, 45);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Invoice Date: ${printDate}`, 150, 50);
+  
+  // 📊 WAY BILL DETAILS TABLE (S.No Added, Destination Removed)
+  const tableColumn = ["S.No", "WB Number", "Booking Date", "Consignor", "Consignee", "Packages", "Amount"];
+  const tableRows = [];
+  let totalAmount = 0;
+  let totalPackages = 0;
+  
+  parcelsList.forEach((p, index) => {
+      const parcelData = [
+          index + 1,
+          p.id,
+          p.date,
+          p.sName,
+          p.rName,
+          `${p.count} ${p.type}`,
+          p.price
+      ];
+      tableRows.push(parcelData);
+      totalAmount += Number(p.price) || 0;
+      totalPackages += Number(p.count) || 0;
   });
-  doc.line(10, y, 200, y); y+=8; doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.text(`TOTAL DUE AMOUNT: Rs. ${total}`, 130, y); y+=20;
-  doc.setFontSize(10); doc.text("Bank Details for Payment:", 10, y); y+=6; doc.setFont("helvetica", "normal"); doc.text("Bank: State Bank of India\nA/C Name: MPS Logistics\nA/C No: 12345678901\nIFSC: SBIN0001234", 10, y);
-  doc.save(`Invoice_${customer}_${fromD}.pdf`);
+  
+  // Total Row Alignment Fix
+  tableRows.push(["Total", "", "", "", "", totalPackages.toString(), totalAmount.toString()]);
+  
+  // Draw Table
+  autoTable(doc, {
+      startY: 60,
+      head: [tableColumn],
+      body: tableRows,
+      theme: 'grid',
+      headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 9, halign: 'center' },
+      bodyStyles: { fontSize: 8, textColor: [0, 0, 0] },
+      columnStyles: {
+          0: { halign: 'center' },
+          1: { fontStyle: 'bold' },
+          5: { halign: 'center' },
+          6: { halign: 'right', fontStyle: 'bold' }
+      },
+      willDrawCell: function (data) {
+          if (data.row.index === tableRows.length - 1) {
+              data.cell.styles.fontStyle = 'bold';
+              data.cell.styles.fillColor = [245, 245, 245];
+          }
+      }
+  });
+  
+  const finalY = doc.lastAutoTable.finalY || 60;
+  
+  // 💰 NET PAYABLE AMOUNT IN WORDS
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.text(`Net Payable Amount : RUPEES ${numberToWords(totalAmount)}`, 14, finalY + 8);
+  
+  // 📝 FOOTER REMARKS
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Print DateTime : ${new Date().toLocaleString('en-IN')}`, 14, finalY + 20);
+  doc.setFont("helvetica", "bold");
+  doc.text("Remark : Respected and Dear Valued Customer, Kindly ensure to make the payment earliest.", 14, finalY + 25);
+  
+  window.open(doc.output('bloburl'), '_blank');
 }
 
 function openWhatsApp(phone, isSender, p) {
