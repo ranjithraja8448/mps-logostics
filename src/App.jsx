@@ -1,8 +1,8 @@
 import React, { useState, useEffect, Fragment } from "react";
 import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { Html5QrcodeScanner } from "html5-qrcode";
-import autoTable from "jspdf-autotable";
 
 /* ══════════════════════════════════════════
    CONSTANTS & CONFIG
@@ -38,7 +38,22 @@ function calcPrice(from, to, ratePerUnit, count = 1, type = "Box", paymentMode =
   return Math.round((rate * (parseInt(count) || 1)) + tc);
 }
 
-// 🔥 PDF GENERATORS 🔥
+// 🔥 NUMBER TO WORDS HELPER 🔥
+function numberToWords(num) {
+  const a = ['','One ','Two ','Three ','Four ', 'Five ','Six ','Seven ','Eight ','Nine ','Ten ','Eleven ','Twelve ','Thirteen ','Fourteen ','Fifteen ','Sixteen ','Seventeen ','Eighteen ','Nineteen '];
+  const b = ['', '', 'Twenty','Thirty','Forty','Fifty', 'Sixty','Seventy','Eighty','Ninety'];
+  if ((num = num.toString()).length > 9) return 'Overflow';
+  let n = ('000000000' + num).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
+  if (!n) return; let str = '';
+  str += (n[1] != 0) ? (a[Number(n[1])] || b[n[1][0]] + ' ' + a[n[1][1]]) + 'Crore ' : '';
+  str += (n[2] != 0) ? (a[Number(n[2])] || b[n[2][0]] + ' ' + a[n[2][1]]) + 'Lakh ' : '';
+  str += (n[3] != 0) ? (a[Number(n[3])] || b[n[3][0]] + ' ' + a[n[3][1]]) + 'Thousand ' : '';
+  str += (n[4] != 0) ? (a[Number(n[4])] || b[n[4][0]] + ' ' + a[n[4][1]]) + 'Hundred ' : '';
+  str += (n[5] != 0) ? ((str != '') ? 'and ' : '') + (a[Number(n[5])] || b[n[5][0]] + ' ' + a[n[5][1]]) + 'Only' : 'Only';
+  return str.toUpperCase();
+}
+
+// 🔥 INDIVIDUAL LR PRINT GENERATOR 🔥
 function generatePDF(p) {
   const doc = new jsPDF(); doc.setLineWidth(0.5); doc.rect(10, 10, 190, 110);
   doc.line(10, 35, 200, 35); doc.line(10, 42, 200, 42); doc.line(10, 70, 145, 70); doc.line(10, 82, 145, 82); doc.line(95, 92, 145, 92); doc.line(145, 95, 200, 95); doc.line(10, 100, 200, 100); 
@@ -58,10 +73,10 @@ function generatePDF(p) {
   doc.setFontSize(10); if(p.payment === "Paid" || p.payment === "Credit" || p.payment === "FOC") doc.text("✔", 13.5, 109.5); if(p.payment === "To Pay") doc.text("✔", 40.5, 109.5);
   doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.text("Consignee", 79, 105); doc.setFontSize(6); doc.text("(Received goods in good Condition)", 79, 118); doc.text("Consignor Signature", 117, 118); doc.setFont("helvetica", "bold"); doc.text("For Mecheri Parcel Service", 147, 105);
   
-  // 🔥 Download-kku bathila Browser Tab-la open aagum
   window.open(doc.output('bloburl'), '_blank');
 }
 
+// 🔥 EOD SETTLEMENT PRINT GENERATOR 🔥
 function generateEOD_PDF(dateStr, branch, parcelsList, pettyList) {
   const doc = new jsPDF();
   doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.text("END OF DAY (EOD) SETTLEMENT", 105, 15, { align: "center" });
@@ -80,49 +95,27 @@ function generateEOD_PDF(dateStr, branch, parcelsList, pettyList) {
   pettyList.forEach(pt => { if(pt.date === dateStr) { doc.text(`${pt.desc} - Rs. ${pt.amt}`, 10, y); totalExp += pt.amt; y+=6; } });
   y+=4; doc.setFont("helvetica", "bold"); doc.text(`Total Expenses: Rs. ${totalExp}`, 10, y); y+=12;
   doc.setFontSize(12); doc.text(`NET CASH TO HANDOVER: Rs. ${totalCash - totalExp}`, 10, y); doc.line(10, y+4, 200, y+4);
-  window.open(doc.output('bloburl'), '_blank');window.open(doc.output('bloburl'), '_blank');
+  
+  window.open(doc.output('bloburl'), '_blank');
 }
 
-// 🔥 HELPER: NUMBER TO WORDS CONVERTER (For "RUPEES ... ONLY") 🔥
-function numberToWords(num) {
-  const a = ['','One ','Two ','Three ','Four ', 'Five ','Six ','Seven ','Eight ','Nine ','Ten ','Eleven ','Twelve ','Thirteen ','Fourteen ','Fifteen ','Sixteen ','Seventeen ','Eighteen ','Nineteen '];
-  const b = ['', '', 'Twenty','Thirty','Forty','Fifty', 'Sixty','Seventy','Eighty','Ninety'];
-  if ((num = num.toString()).length > 9) return 'Overflow';
-  let n = ('000000000' + num).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
-  if (!n) return; let str = '';
-  str += (n[1] != 0) ? (a[Number(n[1])] || b[n[1][0]] + ' ' + a[n[1][1]]) + 'Crore ' : '';
-  str += (n[2] != 0) ? (a[Number(n[2])] || b[n[2][0]] + ' ' + a[n[2][1]]) + 'Lakh ' : '';
-  str += (n[3] != 0) ? (a[Number(n[3])] || b[n[3][0]] + ' ' + a[n[3][1]]) + 'Thousand ' : '';
-  str += (n[4] != 0) ? (a[Number(n[4])] || b[n[4][0]] + ' ' + a[n[4][1]]) + 'Hundred ' : '';
-  str += (n[5] != 0) ? ((str != '') ? 'and ' : '') + (a[Number(n[5])] || b[n[5][0]] + ' ' + a[n[5][1]]) + 'Only' : 'Only';
-  return str.toUpperCase();
-}
-
-// 🔥 UPGRADED INVOICE GENERATOR (NO DESTINATION + S.No ADDED) 🔥
+// 🔥 CREDIT INVOICE GENERATOR (GRID TABLE) 🔥
 function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList) {
   const doc = new jsPDF();
   
-  // 🏢 HEADER SECTION
-  doc.setFont("helvetica", "bold"); 
-  doc.setFontSize(18); 
-  doc.text("MPS Parcel Service", 105, 15, { align: "center" });
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
+  doc.setFont("helvetica", "bold"); doc.setFontSize(18); 
+  doc.text("MPS Logistics, Unit of MPS Parcel Service", 105, 15, { align: "center" });
+  doc.setFontSize(9); doc.setFont("helvetica", "normal");
   doc.text("Address : Dharmapuri Main Road, Mecheri, Salem-Dt. 636 451. GST : 33CICPS6965E1Z1", 105, 20, { align: "center" });
   doc.text("Phone Number : 90033 77185 / 80726 72255", 105, 24, { align: "center" });
   
-  // 📑 TITLE
-  doc.setFontSize(14); 
-  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14); doc.setFont("helvetica", "bold");
   doc.text("INVOICE", 105, 34, { align: "center" });
   
-  // 👤 CUSTOMER & INVOICE META
   const invoiceNo = Math.floor(1000 + Math.random() * 9000);
   const printDate = new Date().toLocaleDateString('en-IN');
 
-  doc.setContentForm = "property";
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10); doc.setFont("helvetica", "bold");
   doc.text(`Party Name : ${customer}`, 14, 45);
   doc.setFont("helvetica", "normal");
   doc.text(`Phone No : ${customerPhone}`, 14, 50);
@@ -133,65 +126,51 @@ function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList) {
   doc.setFont("helvetica", "normal");
   doc.text(`Invoice Date: ${printDate}`, 150, 50);
   
-  // 📊 WAY BILL DETAILS TABLE (S.No Added, Destination Removed)
-  const tableColumn = ["S.No", "WB Number", "Booking Date", "Consignor", "Consignee", "Packages", "Amount"];
+  // 🔥 WB Number is now changed to LR Number 👇
+  const tableColumn = ["S.No", "LR Number", "Booking Date", "Consignor", "Consignee", "Packages", "Amount"];
   const tableRows = [];
-  let totalAmount = 0;
-  let totalPackages = 0;
+  let totalAmount = 0; let totalPackages = 0;
   
   parcelsList.forEach((p, index) => {
       const parcelData = [
-          index + 1,
-          p.id,
-          p.date,
-          p.sName,
-          p.rName,
-          `${p.count} ${p.type}`,
-          p.price
+          index + 1, p.id, p.date, p.sName, p.rName, `${p.count} ${p.type}`, p.price
       ];
       tableRows.push(parcelData);
       totalAmount += Number(p.price) || 0;
       totalPackages += Number(p.count) || 0;
   });
   
-  // Total Row Alignment Fix
   tableRows.push(["Total", "", "", "", "", totalPackages.toString(), totalAmount.toString()]);
   
-  // Draw Table
   autoTable(doc, {
-      startY: 60,
-      head: [tableColumn],
-      body: tableRows,
-      theme: 'grid',
+      startY: 60, head: [tableColumn], body: tableRows, theme: 'grid',
       headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 9, halign: 'center' },
       bodyStyles: { fontSize: 8, textColor: [0, 0, 0] },
-      columnStyles: {
-          0: { halign: 'center' },
-          1: { fontStyle: 'bold' },
-          5: { halign: 'center' },
-          6: { halign: 'right', fontStyle: 'bold' }
-      },
+      columnStyles: { 0: { halign: 'center' }, 1: { fontStyle: 'bold' }, 5: { halign: 'center' }, 6: { halign: 'right', fontStyle: 'bold' } },
       willDrawCell: function (data) {
           if (data.row.index === tableRows.length - 1) {
-              data.cell.styles.fontStyle = 'bold';
-              data.cell.styles.fillColor = [245, 245, 245];
+              data.cell.styles.fontStyle = 'bold'; data.cell.styles.fillColor = [245, 245, 245];
           }
       }
   });
   
   const finalY = doc.lastAutoTable.finalY || 60;
   
-  // 💰 NET PAYABLE AMOUNT IN WORDS
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9); doc.setFont("helvetica", "bold");
   doc.text(`Net Payable Amount : RUPEES ${numberToWords(totalAmount)}`, 14, finalY + 8);
   
-  // 📝 FOOTER REMARKS
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  doc.text(`Print DateTime : ${new Date().toLocaleString('en-IN')}`, 14, finalY + 20);
+  doc.setFontSize(8); doc.setFont("helvetica", "normal");
+  doc.text(`Print DateTime : ${new Date().toLocaleString('en-IN')}`, 14, finalY + 16);
   doc.setFont("helvetica", "bold");
-  doc.text("Remark : Respected and Dear Valued Customer, Kindly ensure to make the payment earliest.", 14, finalY + 25);
+  doc.text("Remark : Respected and Dear Valued Customer, Kindly ensure to make the payment earliest.", 14, finalY + 22);
+  
+  // 🔥 ADDED BANK ACCOUNT DETAILS HERE 🔥
+  doc.text("Bank Details for Payment:", 14, finalY + 32);
+  doc.setFont("helvetica", "normal");
+  doc.text("Bank Name : State Bank of India", 14, finalY + 38);
+  doc.text("A/C Name  : MPS Logistics", 14, finalY + 43);
+  doc.text("A/C No    : 12345678901", 14, finalY + 48);
+  doc.text("IFSC Code : SBIN0001234", 14, finalY + 53);
   
   window.open(doc.output('bloburl'), '_blank');
 }
@@ -244,7 +223,6 @@ class DB{
   async deleteUser(id){ if(this.isLive) { try { await fetch(`${this.base}/app_users?id=eq.${id}`,{method:"DELETE",headers:this.h}); } catch(e){} } await local.set("mps_users", (await this.getUsers()).filter(u => u.id !== id)); }
   async updateUser(id, data){ if(this.isLive) { try { await fetch(`${this.base}/app_users?id=eq.${id}`,{method:"PATCH",headers:this.h,body:JSON.stringify(data)}); } catch(e){} } await local.set("mps_users", (await this.getUsers()).map(u => u.id === id ? {...u, ...data} : u)); }
   
-  // 🔥 DATABASE CONNECTION FIX FOR CREDIT_AUTH 🔥
   async getCreditAuth(){ if(this.isLive) { try { const r=await fetch(`${this.base}/credit_auth?select=*`,{headers:this.h}); if(r.ok) return await r.json(); } catch(e){} } return await local.get("mps_credit_auth")||[]; }
   async insertCreditAuth(data){ if(this.isLive) { try { await fetch(`${this.base}/credit_auth`,{method:"POST",headers:this.h,body:JSON.stringify(data)}); } catch(e){} } await local.set("mps_credit_auth", [data, ...(await local.get("mps_credit_auth")||[])]); }
   async deleteCreditAuth(phone){ if(this.isLive) { try { await fetch(`${this.base}/credit_auth?phone=eq.${phone}`,{method:"DELETE",headers:this.h}); } catch(e){} } await local.set("mps_credit_auth", (await local.get("mps_credit_auth")||[]).filter(c => c.phone !== phone)); }
@@ -253,7 +231,6 @@ class DB{
 // 🔥 DIRECT BACK-CAMERA E-WAY SCANNER 🔥
 function EwayScannerModal({ onScan, onClose }) {
   useEffect(() => {
-    // facingMode: "environment" forces the back camera to open
     const config = { fps: 10, qrbox: { width: 250, height: 250 }, videoConstraints: { facingMode: "environment" } };
     const scanner = new Html5QrcodeScanner("qr-reader", config, false);
     scanner.render(
@@ -286,10 +263,8 @@ export default function App() {
 
   useEffect(() => { 
       async function init() { 
-          // 1. FAST LOGIN (Optimistic UI)
           const session = await local.get("mps_session"); if(session) setUser(session); 
           const savedTheme = await local.get("mps_theme"); if(savedTheme) setTheme(savedTheme); 
-          // 2. BACKGROUND DATA LOAD
           const cList = await db.getCreditAuth(); setCreditAuthList(cList); 
           const ps = await db.getParcels(); setParcels(ps); 
           const usrs = await db.getUsers(); setUsers(usrs); 
@@ -354,13 +329,12 @@ export default function App() {
       </main>
       {toast && ( <div className={`fixed bottom-4 right-4 md:bottom-8 md:right-8 px-4 md:px-6 py-2 md:py-3 rounded-xl shadow-2xl font-bold text-white z-50 animate-bounce-in text-sm md:text-base ${toast.type==='error'?'bg-red-500':'bg-emerald-500'}`}>{toast.msg}</div> )}
       
-      {/* 🔥 GLOBAL PARCEL MODAL & QUICK DELIVERY 🔥 */}
       {globalViewItem && <ParcelModal item={globalViewItem} creditAuthList={creditAuthList} onClose={()=>setGlobalViewItem(null)} db={db} parcels={parcels} setParcels={setParcels} user={user} showMsg={showMsg} isDark={isDark} />}
     </div>
   );
 }
 
-// 🔥 DELIVERY CREDIT SYNC UPGRADED 🔥
+// 🔥 UPGRADED PARCEL MODAL (DELIVERY PAYMENT DETAILS ADDED) 🔥
 function ParcelModal({item, creditAuthList, onClose, db, parcels, setParcels, user, showMsg, isDark}) {
   const [payMethod, setPayMethod] = useState("");
   const cardBg = isDark ? "bg-slate-800 border-slate-700 text-white" : "bg-white border-slate-200 text-slate-900";
@@ -373,7 +347,7 @@ function ParcelModal({item, creditAuthList, onClose, db, parcels, setParcels, us
     if (item.payment === "To Pay" && payMethod === "Credit") {
         const matchedAuth = creditAuthList.find(c => c.phone === item.sPhone || c.phone === item.rPhone);
         if (matchedAuth) {
-            finalCreditCustomer = matchedAuth.company;
+            finalCreditCustomer = matchedAuth.company; 
             showMsg(`Bill assigned to ${finalCreditCustomer}'s Account!`, "info");
         } else {
             return showMsg("No registered credit account found for this customer!", "error");
@@ -418,6 +392,21 @@ function ParcelModal({item, creditAuthList, onClose, db, parcels, setParcels, us
           <div className="col-span-2"><p className="opacity-50">Consignee (Receiver)</p><p className="font-bold">{item.rName} <span className="opacity-60 font-normal">({item.rPhone})</span></p></div>
           <div><p className="opacity-50">Cargo Details</p><p className="font-bold">{item.count} {item.type}</p></div>
           <div><p className="opacity-50">Financial Parameter</p><p className="font-bold text-emerald-500">₹{item.price} ({item.payment})</p></div>
+          
+          {/* 🔥 PUDHUSA ADD PANNA DELIVERY PAYMENT DISPLAY BOX 🔥 */}
+          {item.status === 'Delivered' && (
+             <div className="col-span-2 mt-2 p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+               <p className="text-[10px] uppercase font-bold text-emerald-600 mb-1">✅ Delivery & Payment Info</p>
+               <div className="font-bold">
+                  {item.payment === 'To Pay' ? (
+                     <p>Collected via: <span className="text-emerald-500 px-2 py-0.5 bg-emerald-500/10 rounded-md">{item.deliveryMode || 'Cash'}</span></p>
+                  ) : (
+                     <p>Booking Mode: <span className="text-indigo-500 px-2 py-0.5 bg-indigo-500/10 rounded-md">{item.payment}</span></p>
+                  )}
+                  <p className="text-[10px] opacity-60 mt-1">Delivered By: {item.deliveredBy || 'System'}</p>
+               </div>
+             </div>
+          )}
         </div>
         
         {(isPending && (user.branch === item.to || user.role === 'superadmin')) && (
@@ -465,7 +454,7 @@ function Dashboard({parcels, isDark, user}) {
         </div>
       )}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-        {[{l: "Total Bookings", v: branchParcels.length, c: "text-blue-500"}, {l: "In Transit", v: branchParcels.filter(p=>p.status==="In Transit").length, c: "text-amber-500"}, {l: "Delivered", v: branchParcels.filter(p=>p.status==="Delivered").length, c: "text-emerald-500"}, {l: "Branch Revenue", v: `₹${rev}`, c: "text-indigo-500"}].map((s,i) => (
+        {[{l: "Total Bookings", v: branchParcels.length, c: "text-blue-500"}, {l: "In Transit", v: branchParcels.filter(p=>p.status==="In Transit").length, c: "text-amber-500"}, {l: "Delivered", v: branchParcels.filter(p=>p.status==="Delivered").length, c: "text-emerald-500"}, {l: "Branch Revenue", v: `₹${rev}`, c: "textindigo-500"}].map((s,i) => (
           <div key={i} className={`${cardBg} p-4 md:p-6 rounded-2xl shadow-sm border flex flex-col justify-center`}><span className="text-xs font-bold opacity-60 uppercase mb-1 md:mb-2">{s.l}</span><span className={`text-2xl md:text-4xl font-black ${s.c}`}>{s.v}</span></div>
         ))}
       </div>
@@ -526,6 +515,7 @@ function Pending({parcels, isDark, user, setGlobalView}) {
   );
 }
 
+// 🔥 MULTI-NUMBER BOOKING CREDIT SYNC 🔥
 function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, user, creditAuthList}) {
   const initF = {sName:"", sPhone:"", sGst:"", rName:"", rPhone:"", rGst:"", from: user.branch === 'All' ? "" : user.branch, to:"", rate:"", count:"1", actualWeight:"", type:"Box", payment:"Paid", creditCustomer:"", notes:""};
   const [f, setF] = useState(initF); const [done, setDone] = useState(null); const [eway, setEway] = useState(""); const [contacts, setContacts] = useState([]);
@@ -566,7 +556,7 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
       const targetPhone = creditBillTo === "Sender" ? f.sPhone : f.rPhone;
       const isAuth = creditAuthList.find(c => c.phone === targetPhone); 
       if(!isAuth) return showMsg(`Unauthorized ${creditBillTo} Phone Number for Credit!`, "error"); 
-      f.creditCustomer = isAuth.company; 
+      f.creditCustomer = isAuth.company; // Auto-assigns main company name
     }
     setIsSubmitting(true); const dObj = new Date(); const isoDate = dObj.toISOString(); const locDateStr = dObj.toLocaleDateString('en-IN'); const lrNumber = generateLR(f.from, f.to, parcels);
     const p = {...f, notes: f.payment === 'Credit' ? `[A/c: ${f.creditCustomer}] ${f.notes}` : f.notes, creditSettled: false, id: lrNumber, date: locDateStr, isoDate: isoDate, status: "Booked", price: ep, bookedBy: user.username, bookedBranch: user.branch, settledBranches: [], history: [{status: "Booked", loc: f.from, time: dObj.toLocaleString()}]};
@@ -674,7 +664,6 @@ function Delivery({parcels, setParcels, db, showMsg, isDark, user, creditAuthLis
   );
 }
 
-// 🔥 UPGRADED ACCOUNTS (DATE & BRANCH FILTERS) 🔥
 function Accounts({parcels, setParcels, db, showMsg, isDark, user}) {
   const dObj = new Date(); const todayStr = dObj.toISOString().split('T')[0]; dObj.setDate(1); const firstDayStr = dObj.toISOString().split('T')[0];
   
@@ -791,10 +780,12 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
 
   const exportData = () => { if (sortedTableData.length === 0) return showMsg("No data to export", "error"); const headers = ["LR No", "Date", "Sender", "Receiver", "Origin", "Destination", "Payment Mode", "Amount", "Status", "Booked By"]; const rows = sortedTableData.map(p => [p.id, p.date, p.sName, p.rName, p.from, p.to, p.payment, p.price, p.status, p.bookedBy].join(',')); const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join('\n'); const encodedUri = encodeURI(csvContent); const link = document.createElement("a"); link.setAttribute("href", encodedUri); link.setAttribute("download", `MPS_Report.csv`); document.body.appendChild(link); link.click(); link.remove(); showMsg("Report Downloaded!"); };
   
+  // 🔥 MULTI-NUMBER INVOICE MAGIC 🔥
   const triggerInvoice = () => { 
     if(!invCustomer) return showMsg("Select a Customer Account!", "error"); 
-    const cObj = creditAuthList.find(c => c.company === invCustomer); 
     
+    // Intha company perula entha phone number irunthalum atha kanduka thevayilla.
+    // Namma company peraiye theliva match panni ellathaiyum orey bill-la podurom.
     const invoiceParcels = parcels.filter(p => {
         if (p.status === 'Deleted') return false;
         const isCreditLedger = p.payment === "Credit" || p.deliveryMode === "Credit" || (p.notes && p.notes.includes("Mode: Credit"));
@@ -805,7 +796,12 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
     });
 
     if(invoiceParcels.length === 0) return showMsg("No credit bills found for this period.", "error"); 
-    generateInvoicePDF(invCustomer, cObj.phone, fromDate, toDate, invoiceParcels); 
+    
+    // Find at least one phone number to show on the invoice header
+    const sampleAuth = creditAuthList.find(c => c.company.toLowerCase() === invCustomer.toLowerCase());
+    const displayPhone = sampleAuth ? sampleAuth.phone : "Multiple Acc Numbers";
+
+    generateInvoicePDF(invCustomer, displayPhone, fromDate, toDate, invoiceParcels); 
     showMsg(`Invoice Generated for ${invCustomer}`); 
   };
 
@@ -828,17 +824,27 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
     setParcels(updatedParcelsList); showMsg(`Successfully settled ${invoiceParcels.length} parcels for ${invCustomer}!`);
   };
 
+  // Unique companies list for the dropdown
+  const uniqueCompanies = [...new Set(creditAuthList.map(c => c.company))];
+
   return (
     <div className="space-y-4 md:space-y-6">
       <div className="flex flex-wrap gap-2 md:gap-4"><button onClick={()=>setTab('parcels')} className={`px-4 md:px-6 py-2 rounded-full text-[10px] md:text-sm font-bold ${tab==='parcels'?'bg-indigo-600 text-white':cardBg}`}>📋 Audits & Analytics</button><button onClick={()=>setTab('staff')} className={`px-4 md:px-6 py-2 rounded-full text-[10px] md:text-sm font-bold ${tab==='staff'?'bg-indigo-600 text-white':cardBg}`}>👥 System RBAC</button><button onClick={()=>setTab('credit')} className={`px-4 md:px-6 py-2 rounded-full text-[10px] md:text-sm font-bold ${tab==='credit'?'bg-amber-600 text-white':cardBg}`}>💳 Credit Control</button></div>
       {tab === 'staff' && ( <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6"><div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}><h3 className="font-black text-sm md:text-base">Assign Privilege Context</h3><input value={newUser} onChange={e=>setNewUser(e.target.value)} placeholder="Username Identifier" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} /><input value={newPass} onChange={e=>setNewPass(e.target.value)} type="password" placeholder="Account Password" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} />{isSuper && ( <select value={newRole} onChange={e=>setNewRole(e.target.value)} className={`w-full p-2 md:p-3 rounded-xl border font-bold outline-none text-sm ${inputBg}`}><option value="staff">Privilege Level: STAFF</option><option value="admin">Privilege Level: ADMIN</option><option value="superadmin">Privilege Level: SUPERADMIN</option></select> )}<select disabled={newRole === 'superadmin'} value={newBranch} onChange={e=>setNewBranch(e.target.value)} className={`w-full p-2 md:p-3 rounded-xl border font-bold outline-none text-sm ${inputBg} ${newRole==='superadmin'?'opacity-50 cursor-not-allowed':''}`}>{(isSuper && (newRole === 'admin' || newRole === 'superadmin')) && <option value="All">Global Access (All Branches)</option>}{CITIES.map(c => <option key={c} value={c}>Branch: {c}</option>)}</select><button onClick={handleAddUser} className="w-full bg-indigo-600 text-white font-bold py-2 md:py-3 rounded-xl text-sm md:text-base">Commit Assignment</button></div><div className={`${cardBg} p-4 md:p-6 rounded-2xl border lg:col-span-2 space-y-3`}><h3 className="font-black text-sm md:text-base">Identity Mapping Matrix</h3><div className="space-y-2 max-h-64 overflow-y-auto pr-2">{users.filter(u => isSuper ? true : u.role === 'staff').map(u => { const canManage = isSuper ? (u.username !== user.username) : true; return ( <div key={u.id} className="flex flex-col sm:flex-row justify-between sm:items-center p-3 border rounded-xl bg-black/5 gap-2"><div><p className="font-bold text-sm">{u.username} <span className="text-[10px] ml-1 opacity-50">({u.branch})</span></p><p className={`text-[10px] uppercase font-black ${u.role === 'superadmin' ? 'text-amber-500' : 'text-indigo-500'}`}>{u.role}</p></div>{canManage && ( <div className="flex items-center gap-2"><button onClick={async ()=>{ await db.deleteUser(u.id); setUsers(users.filter(x=>x.id!==u.id)); showMsg("Access revoked", "error"); }} className="text-red-500 text-[10px] font-bold border border-red-500/20 px-2 py-1 rounded bg-red-500/10">Revoke 🗑️</button></div> )}</div> ) })}</div></div></div> )}
       {tab === 'credit' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}><h3 className="font-black text-sm md:text-base text-amber-500">Add Authorized Credit Account</h3><p className="text-[10px] md:text-xs opacity-60">Only registered phone numbers can use 'F9: Credit' billing.</p><input value={newCPhone} onChange={e=>setNewCPhone(e.target.value)} placeholder="Customer 10-digit Mobile" maxLength="10" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} /><input value={newCName} onChange={e=>setNewCName(e.target.value)} placeholder="Company / Individual Name" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} /><button onClick={addCreditAuth} className="w-full bg-amber-600 text-white font-bold py-2 md:py-3 rounded-xl text-sm md:text-base">Authorize Account</button></div>
-          <div className={`${cardBg} p-4 md:p-6 rounded-2xl border h-96 overflow-y-auto`}><h3 className="font-black text-sm md:text-base mb-4">Approved Credit Ledger</h3>{creditAuthList.length === 0 ? <p className="text-sm opacity-50">No credit accounts authorized.</p> : <div className="space-y-2">{creditAuthList.map((c, i) => ( <div key={i} className="flex justify-between items-center p-3 border border-slate-500/20 rounded-xl bg-black/5"><div><p className="font-bold text-sm">{c.company}</p><p className="text-[10px] opacity-60">Ph: {c.phone}</p></div><button onClick={()=>removeCredit(c.phone)} className="text-red-500 text-[10px] font-bold bg-red-500/10 px-2 py-1 rounded border border-red-500/20">Revoke</button></div> ))}</div> }</div>
+          <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}><h3 className="font-black text-sm md:text-base text-amber-500">Add Authorized Credit Account</h3><p className="text-[10px] md:text-xs opacity-60">You can add multiple phone numbers under the same Company Name.</p><input value={newCPhone} onChange={e=>setNewCPhone(e.target.value)} placeholder="Customer 10-digit Mobile" maxLength="10" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} /><input value={newCName} onChange={e=>setNewCName(e.target.value)} placeholder="Company / Individual Name" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} /><button onClick={addCreditAuth} className="w-full bg-amber-600 text-white font-bold py-2 md:py-3 rounded-xl text-sm md:text-base">Authorize Account</button></div>
+          <div className={`${cardBg} p-4 md:p-6 rounded-2xl border h-96 overflow-y-auto`}><h3 className="font-black text-sm md:text-base mb-4">Approved Credit Ledger</h3>{creditAuthList.length === 0 ? <p className="text-sm opacity-50">No credit accounts authorized.</p> : <div className="space-y-2">{creditAuthList.map((c, i) => ( <div key={i} className="flex justify-between items-center p-3 border border-slate-500/20 rounded-xl bg-black/5"><div><p className="font-bold text-sm text-amber-500">{c.company}</p><p className="text-[10px] opacity-80 font-mono">📱 {c.phone}</p></div><button onClick={()=>removeCredit(c.phone)} className="text-red-500 text-[10px] font-bold bg-red-500/10 px-2 py-1 rounded border border-red-500/20">Revoke</button></div> ))}</div> }</div>
           <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4 lg:col-span-2 border-indigo-500/30`}>
              <h3 className="font-black text-sm md:text-base text-indigo-500">📑 Generate Monthly Credit Invoice</h3>
-             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4"><select value={invCustomer} onChange={e=>setInvCustomer(e.target.value)} className={`sm:col-span-2 p-3 rounded-xl border font-bold text-sm ${inputBg}`}><option value="">Select Account...</option>{creditAuthList.map((c,i) => <option key={i} value={c.company}>{c.company}</option>)}</select><input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} className={`p-3 rounded-xl border text-sm font-bold ${inputBg}`} /><input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} className={`p-3 rounded-xl border text-sm font-bold ${inputBg}`} /></div>
+             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <select value={invCustomer} onChange={e=>setInvCustomer(e.target.value)} className={`sm:col-span-2 p-3 rounded-xl border font-bold text-sm ${inputBg}`}>
+                  <option value="">Select Account...</option>
+                  {uniqueCompanies.map((c,i) => <option key={i} value={c}>{c}</option>)}
+                </select>
+                <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} className={`p-3 rounded-xl border text-sm font-bold ${inputBg}`} />
+                <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} className={`p-3 rounded-xl border text-sm font-bold ${inputBg}`} />
+             </div>
              <div className="flex gap-2 flex-col md:flex-row"><button onClick={triggerInvoice} className="flex-1 bg-indigo-600 text-white font-bold py-3 rounded-xl shadow-md">🖨️ Print Consolidated Invoice</button><button onClick={settleCreditBill} className="flex-1 bg-emerald-600 text-white font-bold py-3 rounded-xl shadow-md">✅ Mark Bill as PAID</button></div>
           </div>
         </div>
