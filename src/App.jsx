@@ -104,7 +104,7 @@ function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList) {
   const doc = new jsPDF();
   
   doc.setFont("helvetica", "bold"); doc.setFontSize(18); 
-  doc.text("MPS Logistics, Unit of MPS Parcel Service", 105, 15, { align: "center" });
+  doc.text("MPS Parcel Service", 105, 15, { align: "center" });
   doc.setFontSize(9); doc.setFont("helvetica", "normal");
   doc.text("Address : Dharmapuri Main Road, Mecheri, Salem-Dt. 636 451. GST : 33CICPS6965E1Z1", 105, 20, { align: "center" });
   doc.text("Phone Number : 90033 77185 / 80726 72255", 105, 24, { align: "center" });
@@ -167,8 +167,8 @@ function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList) {
   // 🔥 ADDED BANK ACCOUNT DETAILS HERE 🔥
   doc.text("Bank Details for Payment:", 14, finalY + 32);
   doc.setFont("helvetica", "normal");
-  doc.text("Bank Name : State Bank of India", 14, finalY + 38);
-  doc.text("A/C Name  : MPS Logistics", 14, finalY + 43);
+  doc.text("Bank Name : TAMILNADU MERCANTILE BANK (TMB)", 14, finalY + 38);
+  doc.text("A/C Name  : MECHERI PARCEL SERVICES", 14, finalY + 43);
   doc.text("A/C No    : 12345678901", 14, finalY + 48);
   doc.text("IFSC Code : SBIN0001234", 14, finalY + 53);
   
@@ -208,6 +208,40 @@ function SuggestInput({ id, label, value, onChange, onSelect, dataList, isPhone,
       )}
     </div>
   );
+}
+
+// 🔥 PUDHU SEARCHABLE CREDIT DROPDOWN (TYPE TO SEARCH) 🔥
+function CreditSearchDropdown({ value, onChange, uniqueCompanies, isDark }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState(value);
+  useEffect(() => { setSearch(value); }, [value]);
+
+  const matches = uniqueCompanies.filter(c => c.toLowerCase().includes(search.toLowerCase()));
+  const inputBg = isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800';
+  const dropdownBg = isDark ? 'bg-slate-800 border-slate-600' : 'bg-white border-slate-200';
+
+  return (
+    <div className="relative w-full">
+       <input
+         value={search}
+         onChange={e => { setSearch(e.target.value); setOpen(true); }}
+         onFocus={() => setOpen(true)}
+         onBlur={() => setTimeout(() => setOpen(false), 200)}
+         placeholder="🔍 Type Company Name to Search..."
+         className={`w-full p-3 rounded-xl border outline-none font-bold text-sm ${inputBg}`}
+       />
+       {open && matches.length > 0 && (
+         <div className={`absolute bottom-full mb-1 left-0 right-0 max-h-48 overflow-y-auto z-[100] border shadow-2xl rounded-xl ${dropdownBg}`}>
+            {matches.map((c, i) => (
+              <div key={i} className={`p-3 cursor-pointer border-b border-slate-500/10 text-sm font-bold transition-colors ${isDark ? 'hover:bg-indigo-600 hover:text-white' : 'hover:bg-indigo-100 hover:text-indigo-900'}`}
+                   onMouseDown={() => { onChange(c); setSearch(c); setOpen(false); }}>
+                {c}
+              </div>
+            ))}
+         </div>
+       )}
+    </div>
+  )
 }
 
 const local={ async get(k){try{const r=window.localStorage.getItem(k);return r?JSON.parse(r):null;}catch{return null;}}, async set(k,v){try{window.localStorage.setItem(k,JSON.stringify(v));}catch{}}, async remove(k){try{window.localStorage.removeItem(k);}catch{}} };
@@ -334,9 +368,10 @@ export default function App() {
   );
 }
 
-// 🔥 UPGRADED PARCEL MODAL (DELIVERY PAYMENT DETAILS ADDED) 🔥
+// 🔥 UPGRADED PARCEL MODAL (DELIVERY WITH SEARCHABLE CREDIT) 🔥
 function ParcelModal({item, creditAuthList, onClose, db, parcels, setParcels, user, showMsg, isDark}) {
   const [payMethod, setPayMethod] = useState("");
+  const [delCreditCustomer, setDelCreditCustomer] = useState(""); // Puthu State
   const cardBg = isDark ? "bg-slate-800 border-slate-700 text-white" : "bg-white border-slate-200 text-slate-900";
   
   const deliverParcel = async () => {
@@ -345,27 +380,18 @@ function ParcelModal({item, creditAuthList, onClose, db, parcels, setParcels, us
     let finalCreditCustomer = item.creditCustomer || "";
     
     if (item.payment === "To Pay" && payMethod === "Credit") {
-        const matchedAuth = creditAuthList.find(c => c.phone === item.sPhone || c.phone === item.rPhone);
-        if (matchedAuth) {
-            finalCreditCustomer = matchedAuth.company; 
-            showMsg(`Bill assigned to ${finalCreditCustomer}'s Account!`, "info");
-        } else {
-            return showMsg("No registered credit account found for this customer!", "error");
-        }
+        if (!delCreditCustomer) return showMsg("Search and Select a Credit Account!", "error");
+        finalCreditCustomer = delCreditCustomer; 
+        showMsg(`Bill assigned to ${finalCreditCustomer}'s Account!`, "info");
     }
 
     const dMode = item.payment === "To Pay" ? `[Mode: ${payMethod}]` : "";
     const updatedHistory = [...item.history, {status: "Delivered", loc: item.to, time: new Date().toLocaleString()}];
     
     const modifiedItem = {
-        ...item, 
-        status: "Delivered", 
-        history: updatedHistory, 
-        deliveryMode: payMethod, 
-        deliveredBy: user.username, 
-        deliveredBranch: user.branch, 
-        creditCustomer: finalCreditCustomer, 
-        creditSettled: item.creditSettled || false,
+        ...item, status: "Delivered", history: updatedHistory, deliveryMode: payMethod, 
+        deliveredBy: user.username, deliveredBranch: user.branch, 
+        creditCustomer: finalCreditCustomer, creditSettled: item.creditSettled || false,
         notes: `${item.notes || ""} Delivered ${dMode}`
     };
     
@@ -376,7 +402,7 @@ function ParcelModal({item, creditAuthList, onClose, db, parcels, setParcels, us
   };
 
   const isPending = item.status === "Booked" || item.status === "In Transit";
-  const isCreditAuthorized = creditAuthList.some(c => c.phone === item.sPhone || c.phone === item.rPhone);
+  const uniqueCompanies = [...new Set(creditAuthList.map(c => c.company))];
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[100]">
@@ -393,7 +419,6 @@ function ParcelModal({item, creditAuthList, onClose, db, parcels, setParcels, us
           <div><p className="opacity-50">Cargo Details</p><p className="font-bold">{item.count} {item.type}</p></div>
           <div><p className="opacity-50">Financial Parameter</p><p className="font-bold text-emerald-500">₹{item.price} ({item.payment})</p></div>
           
-          {/* 🔥 PUDHUSA ADD PANNA DELIVERY PAYMENT DISPLAY BOX 🔥 */}
           {item.status === 'Delivered' && (
              <div className="col-span-2 mt-2 p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
                <p className="text-[10px] uppercase font-bold text-emerald-600 mb-1">✅ Delivery & Payment Info</p>
@@ -413,13 +438,23 @@ function ParcelModal({item, creditAuthList, onClose, db, parcels, setParcels, us
           <div className="mt-4 p-4 border border-indigo-500/30 bg-indigo-500/5 rounded-2xl space-y-3">
              <h4 className="text-xs font-bold text-indigo-500 uppercase">⚡ Quick Delivery Check</h4>
              {item.payment === "To Pay" && (
-                <div>
+                <div className="space-y-3">
                   <select value={payMethod} onChange={e=>setPayMethod(e.target.value)} className="w-full p-2 rounded-xl border outline-none text-sm bg-transparent font-bold">
                     <option value="" className="text-slate-900">Select Payment Collected...</option>
                     <option value="Cash" className="text-slate-900">💵 Physical Cash</option>
                     <option value="GPay" className="text-slate-900">📱 UPI / GPay</option>
-                    {isCreditAuthorized && <option value="Credit" className="text-slate-900">💳 Credit A/C</option>}
+                    <option value="Credit" className="text-slate-900">💳 Credit A/C</option>
                   </select>
+                  
+                  {/* Searchable Dropdown For Delivery */}
+                  {payMethod === 'Credit' && (
+                     <CreditSearchDropdown 
+                        value={delCreditCustomer} 
+                        onChange={setDelCreditCustomer} 
+                        uniqueCompanies={uniqueCompanies} 
+                        isDark={isDark} 
+                     />
+                  )}
                 </div>
              )}
              <button onClick={deliverParcel} className="w-full bg-emerald-600 text-white font-bold py-2 rounded-xl hover:bg-emerald-700 shadow-md">Confirm Delivery</button>
@@ -515,12 +550,11 @@ function Pending({parcels, isDark, user, setGlobalView}) {
   );
 }
 
-// 🔥 MULTI-NUMBER BOOKING CREDIT SYNC 🔥
+// 🔥 UPGRADED BOOKING COMPONENT (WITH SEARCHABLE CREDIT DROPDOWN) 🔥
 function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, user, creditAuthList}) {
   const initF = {sName:"", sPhone:"", sGst:"", rName:"", rPhone:"", rGst:"", from: user.branch === 'All' ? "" : user.branch, to:"", rate:"", count:"1", actualWeight:"", type:"Box", payment:"Paid", creditCustomer:"", notes:""};
   const [f, setF] = useState(initF); const [done, setDone] = useState(null); const [eway, setEway] = useState(""); const [contacts, setContacts] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [creditBillTo, setCreditBillTo] = useState("Sender");
   const [showScanner, setShowScanner] = useState(false);
 
   useEffect(() => { if(shortcutMode) setF(prev => ({...prev, payment: shortcutMode})); }, [shortcutMode]);
@@ -537,9 +571,7 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
             setF(p => ({...p, sName: "Scanned Client", sPhone: "9999999999", rName: "Target Client", rPhone: "8888888888", count: "10", type: "Box", payment: "To Pay" })); 
             showMsg("E-Way Bill Content Auto-Filled!", "info"); 
         }, 800);
-    } else {
-        showMsg("Invalid QR Code! No E-Way Bill Number found.", "error");
-    }
+    } else { showMsg("Invalid QR Code! No E-Way Bill Number found.", "error"); }
   };
 
   const smartFocus = (d, isSender) => { setTimeout(() => { if (isSender) { if (!d.name) document.getElementById('sName')?.focus(); else if (!d.gst) document.getElementById('sGst')?.focus(); else if (user.branch !== 'All') document.getElementById('rPhone')?.focus(); else document.getElementById('sFrom')?.focus(); } else { if (!d.name) document.getElementById('rName')?.focus(); else if (!d.gst) document.getElementById('rGst')?.focus(); else document.getElementById('rTo')?.focus(); } }, 50); };
@@ -549,14 +581,12 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
 
   const ep = calcPrice(f.from, f.to, f.rate, f.count, f.type, f.payment);
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800";
+  const uniqueCompanies = [...new Set(creditAuthList.map(c => c.company))];
 
   const submit = async () => {
     if(isSubmitting) return; if(!f.sName || !f.sPhone || !f.from || !f.rName || !f.rPhone || !f.to || !f.count || !f.rate || !f.type) return showMsg("Please fill all mandatory fields marked with (*)", "error");
     if(f.payment === "Credit") { 
-      const targetPhone = creditBillTo === "Sender" ? f.sPhone : f.rPhone;
-      const isAuth = creditAuthList.find(c => c.phone === targetPhone); 
-      if(!isAuth) return showMsg(`Unauthorized ${creditBillTo} Phone Number for Credit!`, "error"); 
-      f.creditCustomer = isAuth.company; // Auto-assigns main company name
+      if(!f.creditCustomer) return showMsg("Search and Select a Credit Account!", "error");
     }
     setIsSubmitting(true); const dObj = new Date(); const isoDate = dObj.toISOString(); const locDateStr = dObj.toLocaleDateString('en-IN'); const lrNumber = generateLR(f.from, f.to, parcels);
     const p = {...f, notes: f.payment === 'Credit' ? `[A/c: ${f.creditCustomer}] ${f.notes}` : f.notes, creditSettled: false, id: lrNumber, date: locDateStr, isoDate: isoDate, status: "Booked", price: ep, bookedBy: user.username, bookedBranch: user.branch, settledBranches: [], history: [{status: "Booked", loc: f.from, time: dObj.toLocaleString()}]};
@@ -578,21 +608,25 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
       
       {showScanner && <EwayScannerModal onScan={handleQRScan} onClose={() => setShowScanner(false)} />}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 relative z-50">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 relative z-30">
         <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}><h3 className="font-bold text-indigo-500">Sender Profile</h3><SuggestInput id="sPhone" onKeyDown={e=>handleBoxTravel(e,{enter:'sName', down:'sName', right:'rPhone', up:'eway'})} label="Mobile Number *" value={f.sPhone} onChange={v=>handlePhoneChange(true, v)} onSelect={d=>handleContactSelect(true, d)} dataList={contacts} isPhone={true} theme={theme} /><SuggestInput id="sName" onKeyDown={e=>handleBoxTravel(e,{enter:'sGst', down:'sGst', right:'rName', up:'sPhone'})} label="Full Name *" value={f.sName} onChange={v=>setF({...f, sName:v})} onSelect={d=>handleContactSelect(true, d)} dataList={contacts} isPhone={false} theme={theme} /><input id="sGst" onKeyDown={e=>handleBoxTravel(e,{enter: user.branch === 'All' ? 'sFrom' : 'rPhone', down: user.branch === 'All' ? 'sFrom' : 'rPhone', right:'rGst', up:'sName'})} value={f.sGst} onChange={e=>setF({...f, sGst:e.target.value})} placeholder="GST Number" className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 ${inputBg}`} /><select id="sFrom" disabled={user.branch !== 'All'} onKeyDown={e=>handleBoxTravel(e,{enter:'rPhone', down:'pQty', right:'rTo', up:'sGst'})} value={f.from} onChange={e=>setF({...f, from:e.target.value})} className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 ${inputBg} ${user.branch !== 'All' ? 'opacity-50 cursor-not-allowed' : ''}`}><option value="">Select Origin *</option>{CITIES.map(c=><option key={c}>{c}</option>)}</select></div>
         <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}><h3 className="font-bold text-emerald-500">Receiver Profile</h3><SuggestInput id="rPhone" onKeyDown={e=>handleBoxTravel(e,{enter:'rName', down:'rName', left:'sPhone', up:'eway'})} label="Mobile Number *" value={f.rPhone} onChange={v=>handlePhoneChange(false, v)} onSelect={d=>handleContactSelect(false, d)} dataList={contacts} isPhone={true} theme={theme} /><SuggestInput id="rName" onKeyDown={e=>handleBoxTravel(e,{enter:'rGst', down:'rGst', left:'sName', up:'rPhone'})} label="Full Name *" value={f.rName} onChange={v=>setF({...f, rName:v})} onSelect={d=>handleContactSelect(false, d)} dataList={contacts} isPhone={false} theme={theme} /><input id="rGst" onKeyDown={e=>handleBoxTravel(e,{enter:'rTo', down:'rTo', left:'sGst', up:'rName'})} value={f.rGst} onChange={e=>setF({...f, rGst:e.target.value})} placeholder="GST Number" className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 ${inputBg}`} /><select id="rTo" onKeyDown={e=>handleBoxTravel(e,{enter:'pQty', down:'pQty', left:'sFrom', up:'rGst'})} value={f.to} onChange={e=>setF({...f, to:e.target.value})} className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 ${inputBg}`}><option value="">Select Destination *</option>{CITIES.map(c=><option key={c}>{c}</option>)}</select></div>
       </div>
-      <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4 relative z-10`}>
+      <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4 relative z-20`}>
         <h3 className="font-bold">Cargo Details</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4"><input id="pQty" onKeyDown={e=>handleBoxTravel(e,{enter:'pType', down:'pPay', right:'pType', up:user.branch==='All'?'sFrom':'sGst'})} type="number" value={f.count} onChange={e=>setF({...f, count:e.target.value})} placeholder="Quantity *" className={`p-3 rounded-xl border outline-none [appearance:textfield] ${inputBg}`} /><select id="pType" onKeyDown={e=>handleBoxTravel(e,{enter:'pWgt', down:'pPay', left:'pQty', right:'pWgt', up:'rTo'})} value={f.type} onChange={e=>setF({...f, type:e.target.value})} className={`p-3 rounded-xl border outline-none ${inputBg}`}>{TYPES.map(t=><option key={t}>{t}</option>)}</select><input id="pWgt" onKeyDown={e=>handleBoxTravel(e,{enter:'pRate', down:'btnSubmit', left:'pType', right:'pRate', up:'rTo'})} type="number" value={f.actualWeight} onChange={e=>setF({...f, actualWeight:e.target.value})} placeholder="Weight (Kg)" className={`p-3 rounded-xl border outline-none [appearance:textfield] ${inputBg}`} /><input id="pRate" onKeyDown={e=>handleBoxTravel(e,{enter:'pPay', down:'btnSubmit', left:'pWgt', up:'rTo'})} type="number" value={f.rate} onChange={e=>setF({...f, rate:e.target.value})} placeholder="Rate Per Unit *" className={`p-3 rounded-xl border outline-none font-bold [appearance:textfield] ${inputBg}`} /></div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mt-2">
           <div className="flex flex-col gap-3">
             <select id="pPay" onKeyDown={e=>handleBoxTravel(e,{enter:'btnSubmit', up:'pQty', down:'btnSubmit'})} value={f.payment} onChange={e=>setF({...f, payment:e.target.value})} className="p-3 border rounded-xl font-bold bg-indigo-600 text-white outline-none w-full">{PAY_MODES.map(p=><option key={p} value={p}>{p.toUpperCase()}</option>)}</select>
+            
+            {/* Searchable Dropdown For Booking */}
             {f.payment === 'Credit' && (
-              <div className="flex gap-2">
-                <select value={creditBillTo} onChange={e=>setCreditBillTo(e.target.value)} className={`p-3 rounded-xl border outline-none w-1/3 ${inputBg}`}><option value="Sender">Sender A/C</option><option value="Receiver">Receiver A/C</option></select>
-                <div className={`p-3 rounded-xl border opacity-50 w-2/3 flex items-center text-sm ${inputBg}`}>Bill applied to Auth A/C</div>
-              </div>
+               <CreditSearchDropdown 
+                  value={f.creditCustomer} 
+                  onChange={val => setF({...f, creditCustomer: val})} 
+                  uniqueCompanies={uniqueCompanies} 
+                  isDark={isDark} 
+               />
             )}
           </div>
           <div className="bg-slate-950 p-4 rounded-xl flex justify-between items-center text-white h-full"><span className="text-sm opacity-50">Total Income Allocation</span><span className="text-xl md:text-2xl font-black text-emerald-400">₹{ep}</span></div>
