@@ -368,10 +368,10 @@ export default function App() {
   );
 }
 
-// 🔥 UPGRADED PARCEL MODAL (DELIVERY WITH SEARCHABLE CREDIT) 🔥
+// 🔥 UPGRADED PARCEL MODAL (CREDIT OPTION ALWAYS VISIBLE FIX) 🔥
 function ParcelModal({item, creditAuthList, onClose, db, parcels, setParcels, user, showMsg, isDark}) {
   const [payMethod, setPayMethod] = useState("");
-  const [delCreditCustomer, setDelCreditCustomer] = useState(""); // Puthu State
+  const [delCreditCustomer, setDelCreditCustomer] = useState(""); 
   const cardBg = isDark ? "bg-slate-800 border-slate-700 text-white" : "bg-white border-slate-200 text-slate-900";
   
   const deliverParcel = async () => {
@@ -443,10 +443,11 @@ function ParcelModal({item, creditAuthList, onClose, db, parcels, setParcels, us
                     <option value="" className="text-slate-900">Select Payment Collected...</option>
                     <option value="Cash" className="text-slate-900">💵 Physical Cash</option>
                     <option value="GPay" className="text-slate-900">📱 UPI / GPay</option>
+                    
+                    {/* 🔥 Intha line-la iruntha isCreditAuthorized condition-a thookiyachu 🔥 */}
                     <option value="Credit" className="text-slate-900">💳 Credit A/C</option>
                   </select>
                   
-                  {/* Searchable Dropdown For Delivery */}
                   {payMethod === 'Credit' && (
                      <CreditSearchDropdown 
                         value={delCreditCustomer} 
