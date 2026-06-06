@@ -99,12 +99,12 @@ function generateEOD_PDF(dateStr, branch, parcelsList, pettyList) {
   window.open(doc.output('bloburl'), '_blank');
 }
 
-// 🔥 CREDIT INVOICE GENERATOR (GRID TABLE) 🔥
+// 🔥 CREDIT INVOICE GENERATOR (DATE SORTED + CUSTOMER GST/ADDRESS) 🔥
 function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList) {
   const doc = new jsPDF();
   
   doc.setFont("helvetica", "bold"); doc.setFontSize(18); 
-  doc.text("MPS Parcel Service", 105, 15, { align: "center" });
+  doc.text("MPS Logistics, Unit of MPS Parcel Service", 105, 15, { align: "center" });
   doc.setFontSize(9); doc.setFont("helvetica", "normal");
   doc.text("Address : Dharmapuri Main Road, Mecheri, Salem-Dt. 636 451. GST : 33CICPS6965E1Z1", 105, 20, { align: "center" });
   doc.text("Phone Number : 90033 77185 / 80726 72255", 105, 24, { align: "center" });
@@ -116,22 +116,50 @@ function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList) {
   const printDate = new Date().toLocaleDateString('en-IN');
 
   doc.setFontSize(10); doc.setFont("helvetica", "bold");
-  doc.text(`Party Name : ${customer}`, 14, 45);
+  
+  // 🔥 CUSTOMER DETAILS AUTO-INJECTION HACK 🔥
+  let partyName = customer;
+  let gstText = "";
+  let addressText = "";
+  
+  if (customer.toUpperCase().includes("SAI SILKS")) {
+      partyName = "SAI SILKS KALAMANDIR LIMITED";
+      gstText = "GSTIN : 33AMCS1175P1ZU";
+      addressText = "1st FLOOR H.NO .6/166A&B S.Y NO:35/1B1 U MARAMANGALAM(VILL) PANJUKALIPATTI OMALUR TALUK SALEM-636455";
+  }
+
+  doc.text(`Party Name : ${partyName}`, 14, 45);
   doc.setFont("helvetica", "normal");
   doc.text(`Phone No : ${customerPhone}`, 14, 50);
-  doc.text(`Billing Period : ${fromD} to ${toD}`, 14, 55);
+  
+  // Print GST and Address if available
+  if(gstText) {
+      doc.setFont("helvetica", "bold");
+      doc.text(gstText, 14, 55);
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      // Text wrap aaga maxWidth 100 vachirukken
+      doc.text(addressText, 14, 60, { maxWidth: 100 });
+      doc.setFontSize(10);
+  }
+  
+  // Y-axis gap adjustment based on Address length
+  let yOffset = gstText ? 65 : 55;
+  doc.text(`Billing Period : ${fromD} to ${toD}`, 14, yOffset);
   
   doc.setFont("helvetica", "bold");
   doc.text(`Invoice no.: ${invoiceNo}`, 150, 45);
   doc.setFont("helvetica", "normal");
   doc.text(`Invoice Date: ${printDate}`, 150, 50);
   
-  // 🔥 WB Number is now changed to LR Number 👇
   const tableColumn = ["S.No", "LR Number", "Booking Date", "Consignor", "Consignee", "Packages", "Amount"];
   const tableRows = [];
   let totalAmount = 0; let totalPackages = 0;
   
-  parcelsList.forEach((p, index) => {
+  // 🔥 DATE-WISE SORTING LOGIC 🔥
+  const sortedParcels = [...parcelsList].sort((a, b) => new Date(a.isoDate) - new Date(b.isoDate));
+
+  sortedParcels.forEach((p, index) => {
       const parcelData = [
           index + 1, p.id, p.date, p.sName, p.rName, `${p.count} ${p.type}`, p.price
       ];
@@ -143,7 +171,7 @@ function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList) {
   tableRows.push(["Total", "", "", "", "", totalPackages.toString(), totalAmount.toString()]);
   
   autoTable(doc, {
-      startY: 60, head: [tableColumn], body: tableRows, theme: 'grid',
+      startY: yOffset + 5, head: [tableColumn], body: tableRows, theme: 'grid',
       headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 9, halign: 'center' },
       bodyStyles: { fontSize: 8, textColor: [0, 0, 0] },
       columnStyles: { 0: { halign: 'center' }, 1: { fontStyle: 'bold' }, 5: { halign: 'center' }, 6: { halign: 'right', fontStyle: 'bold' } },
@@ -154,7 +182,7 @@ function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList) {
       }
   });
   
-  const finalY = doc.lastAutoTable.finalY || 60;
+  const finalY = doc.lastAutoTable.finalY || (yOffset + 5);
   
   doc.setFontSize(9); doc.setFont("helvetica", "bold");
   doc.text(`Net Payable Amount : RUPEES ${numberToWords(totalAmount)}`, 14, finalY + 8);
@@ -164,16 +192,16 @@ function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList) {
   doc.setFont("helvetica", "bold");
   doc.text("Remark : Respected and Dear Valued Customer, Kindly ensure to make the payment earliest.", 14, finalY + 22);
   
-  // 🔥 ADDED BANK ACCOUNT DETAILS HERE 🔥
   doc.text("Bank Details for Payment:", 14, finalY + 32);
   doc.setFont("helvetica", "normal");
-  doc.text("Bank Name : TAMILNADU MERCANTILE BANK (TMB)", 14, finalY + 38);
-  doc.text("A/C Name  : MECHERI PARCEL SERVICES", 14, finalY + 43);
-  doc.text("A/C No    : 287150050800853", 14, finalY + 48);
-  doc.text("IFSC Code : TMBL0000287", 14, finalY + 53);
+  doc.text("Bank Name : State Bank of India", 14, finalY + 38);
+  doc.text("A/C Name  : MPS Logistics", 14, finalY + 43);
+  doc.text("A/C No    : 12345678901", 14, finalY + 48);
+  doc.text("IFSC Code : SBIN0001234", 14, finalY + 53);
   
   window.open(doc.output('bloburl'), '_blank');
 }
+
 
 function openWhatsApp(phone, isSender, p) {
   const text = `📦 *MPS Logistics*\n\nHello *${isSender ? p.sName : p.rName}*,\nYour parcel is booked successfully!\n\n*LR No:* ${p.id}\n*Route:* ${p.from} ➔ ${p.to}\n*Items:* ${p.count} ${p.type}\n*Mode:* ${p.payment}\n*Amount:* ₹${p.price}\n\nThank you for choosing MPS!`;
