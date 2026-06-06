@@ -194,7 +194,7 @@ function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList) {
   doc.text("Bank Details for Payment:", 14, finalY + 32);
   doc.setFont("helvetica", "normal");
   doc.text("Bank Name : Tamilnad Mercantile Bank (TMB) ", 14, finalY + 38);
-  doc.text("A/C Name  : MECHERIPARCELSERVICE", 14, finalY + 43);
+  doc.text("A/C Name  : MECHERI PARCEL SERVICE", 14, finalY + 43);
   doc.text("A/C No    : 287150050800853", 14, finalY + 48);
   doc.text("IFSC Code : TMBL0000287", 14, finalY + 53);
   
