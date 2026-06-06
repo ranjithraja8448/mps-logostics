@@ -104,7 +104,7 @@ function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList) {
   const doc = new jsPDF();
   
   doc.setFont("helvetica", "bold"); doc.setFontSize(18); 
-  doc.text("MPS Logistics, Unit of MPS Parcel Service", 105, 15, { align: "center" });
+  doc.text("MPS Parcel Service", 105, 15, { align: "center" });
   doc.setFontSize(9); doc.setFont("helvetica", "normal");
   doc.text("Address : Dharmapuri Main Road, Mecheri, Salem-Dt. 636 451. GST : 33CICPS6965E1Z1", 105, 20, { align: "center" });
   doc.text("Phone Number : 90033 77185 / 80726 72255", 105, 24, { align: "center" });
@@ -125,7 +125,6 @@ function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList) {
   if (customer.toUpperCase().includes("SAI SILKS")) {
       partyName = "SAI SILKS KALAMANDIR LIMITED";
       gstText = "GSTIN : 33AMCS1175P1ZU";
-      addressText = "1st FLOOR H.NO .6/166A&B S.Y NO:35/1B1 U MARAMANGALAM(VILL) PANJUKALIPATTI OMALUR TALUK SALEM-636455";
   }
 
   doc.text(`Party Name : ${partyName}`, 14, 45);
@@ -194,10 +193,10 @@ function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList) {
   
   doc.text("Bank Details for Payment:", 14, finalY + 32);
   doc.setFont("helvetica", "normal");
-  doc.text("Bank Name : State Bank of India", 14, finalY + 38);
+  doc.text("Bank Name : Tamilnad Mercantile Bank (TMB) ", 14, finalY + 38);
   doc.text("A/C Name  : MPS Logistics", 14, finalY + 43);
-  doc.text("A/C No    : 12345678901", 14, finalY + 48);
-  doc.text("IFSC Code : SBIN0001234", 14, finalY + 53);
+  doc.text("A/C No    : 287150050800853", 14, finalY + 48);
+  doc.text("IFSC Code : TMBL0000287", 14, finalY + 53);
   
   window.open(doc.output('bloburl'), '_blank');
 }
