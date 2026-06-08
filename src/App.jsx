@@ -501,7 +501,7 @@ function ParcelModal({item, creditAuthList, onClose, db, parcels, setParcels, us
   );
 }
 
-// 🔥 UPGRADED DASHBOARD (100% ACCURATE TODAY'S DELIVERY FIX) 🔥
+// 🔥 UPGRADED DASHBOARD (WITH TOTAL VALUE & CASH TO COLLECT LOGIC) 🔥
 function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalView}) {
   const [selectedBranch, setSelectedBranch] = useState(user.branch === 'All' ? 'All' : user.branch);
   const [expandedStaff, setExpandedStaff] = useState(null); 
@@ -517,50 +517,56 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
      setPage('track');
   };
 
-  // 🔥 BUG FIX: Universal Date Checker for Today's Deliveries 🔥
   const todayDateString = new Date().toDateString();
   const todaysDelParcels = branchParcels.filter(p => {
      if(p.status !== 'Delivered' || !p.history) return false;
-     
      return p.history.some(h => {
         if(h.status !== 'Delivered') return false;
-        
         const hTimeStr = h.time || "";
         let isToday = false;
-        
-        // Method 1: Bulletproof Date Parsing
         try {
             const parsedDate = new Date(hTimeStr);
-            if (!isNaN(parsedDate)) {
-                isToday = (parsedDate.toDateString() === todayDateString);
-            }
+            if (!isNaN(parsedDate)) { isToday = (parsedDate.toDateString() === todayDateString); }
         } catch(e) {}
-        
-        // Method 2: String Fallback Match (If parsing fails in some phones)
         if (!isToday) {
             const t1 = new Date().toLocaleDateString();
             const t2 = new Date().toLocaleDateString('en-IN');
             const t3 = new Date().toLocaleDateString('en-US');
             isToday = hTimeStr.includes(t1) || hTimeStr.includes(t2) || hTimeStr.includes(t3);
         }
-        
         return isToday;
      });
   });
 
-  // Master Data Grouping
+  // 🔥 MASTER DATA GROUPING (TOTAL VALUE + COLLECTION MATH) 🔥
   const staffStats = {};
+  let tPaid = 0, tToPay = 0, tCredit = 0, tCollected = 0, tTotalValue = 0;
+
   todaysDelParcels.forEach(p => {
      const staffName = p.deliveredBy || "System";
      if (!staffStats[staffName]) {
-         staffStats[staffName] = { count: 0, collected: 0, parcels: [] };
+         staffStats[staffName] = { count: 0, totalValue: 0, collected: 0, paid: 0, toPay: 0, credit: 0, parcels: [] };
      }
      
+     const amt = Number(p.price) || 0;
      staffStats[staffName].count += 1;
+     staffStats[staffName].totalValue += amt; // 🔥 Motha Sarakkoda Mathippu 🔥
+     tTotalValue += amt;
      staffStats[staffName].parcels.push(p);
      
-     if (p.payment === 'To Pay' && (p.deliveryMode === 'Cash' || p.deliveryMode === 'GPay')) {
-         staffStats[staffName].collected += (Number(p.price) || 0);
+     if (p.payment === 'Paid') {
+         staffStats[staffName].paid += amt;
+         tPaid += amt;
+     } else if (p.payment === 'Credit' || (p.payment === 'To Pay' && p.deliveryMode === 'Credit')) {
+         staffStats[staffName].credit += amt;
+         tCredit += amt;
+     } else if (p.payment === 'To Pay') {
+         staffStats[staffName].toPay += amt;
+         tToPay += amt;
+         if (p.deliveryMode === 'Cash' || p.deliveryMode === 'GPay' || !p.deliveryMode) {
+             staffStats[staffName].collected += amt;
+             tCollected += amt;
+         }
      }
   });
 
@@ -607,8 +613,12 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
 
          <div className={`${cardBg} p-4 md:p-6 rounded-2xl border shadow-sm flex flex-col h-auto md:h-[400px]`}>
             <div className="flex justify-between items-center mb-4 border-b border-slate-500/20 pb-2">
-               <h3 className="font-black text-sm text-emerald-500 uppercase">🏆 Today's Deliveries</h3>
-               <span className="bg-emerald-500 text-white text-[10px] px-2 py-1 rounded-full font-bold">{todaysDelParcels.length} Total</span>
+               <div>
+                  <h3 className="font-black text-sm text-emerald-500 uppercase">🏆 Today's Deliveries</h3>
+               </div>
+               <div className="text-right">
+                  <span className="bg-emerald-500 text-white text-[10px] px-2 py-1 rounded-full font-bold">{todaysDelParcels.length} Total Parcels</span>
+               </div>
             </div>
             
             <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
@@ -626,7 +636,8 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
                                  <span className="text-lg">{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '👤'}</span>
                                  <span className="font-bold text-sm">{staff}</span>
                               </div>
-                              <span className="text-[10px] font-bold text-indigo-500 ml-7 mt-0.5">₹{stats.collected} Collected</span>
+                              {/* 🔥 INGA TOTAL VALUE KAATTUM 🔥 */}
+                              <span className="text-[10px] font-bold text-indigo-500 ml-7 mt-0.5">₹{stats.totalValue} Total Value</span>
                            </div>
                            <div className="flex items-center gap-2">
                               <span className="text-emerald-500 font-black text-lg">{stats.count}</span>
@@ -635,7 +646,19 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
                         </div>
 
                         {expandedStaff === staff && (
-                           <div className={`p-2 space-y-1 border-t ${isDark ? 'border-slate-700 bg-slate-950/50' : 'border-slate-200 bg-white'}`}>
+                           <div className={`p-2 space-y-2 border-t ${isDark ? 'border-slate-700 bg-slate-950/50' : 'border-slate-200 bg-white'}`}>
+                              
+                              <div className="flex justify-between text-[9px] uppercase font-bold opacity-70 px-1 pt-1">
+                                 <span>Paid: ₹{stats.paid}</span>
+                                 <span>ToPay: ₹{stats.toPay}</span>
+                                 <span>Credit: ₹{stats.credit}</span>
+                              </div>
+                              
+                              {/* 🔥 INGA STAFF KITTA IRUNTHU VAANGA VENDIYA EXACT CASH DETAILS 🔥 */}
+                              <div className="text-[10px] font-black text-emerald-500 px-1 pb-1 border-b border-slate-500/20 mb-1">
+                                 👉 Cash to Collect: ₹{stats.collected}
+                              </div>
+
                               {stats.parcels.map(p => (
                                  <div 
                                     key={p.id} 
@@ -660,6 +683,22 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
                   ))
                )}
             </div>
+
+            {Object.keys(staffStats).length > 0 && (
+               <div className={`mt-3 p-3 rounded-xl border-t-2 border-dashed flex justify-between items-center font-black text-xs shrink-0 ${isDark ? 'border-slate-700 text-white bg-slate-950' : 'border-slate-200 text-slate-900 bg-slate-100'}`}>
+                  <div className="flex flex-col">
+                     <span className="uppercase tracking-wider opacity-60 text-[9px]">Grand Total Delivery</span>
+                     {/* 🔥 MOTHAMA INNAIKU DELIVER AANA TOTAL VALUE 🔥 */}
+                     <span className="text-indigo-500 font-black text-sm mt-0.5">₹{tTotalValue} Value</span>
+                  </div>
+                  <div className="text-right flex flex-col">
+                     {/* 🔥 MOTHAMA KAIYILA VANTHA CASH 🔥 */}
+                     <span className="text-emerald-500 text-sm">₹{tCollected} Cash In-Hand</span>
+                     <span className="text-[9px] opacity-70 font-bold mt-0.5">P: ₹{tPaid} | TP: ₹{tToPay} | C: ₹{tCredit}</span>
+                  </div>
+               </div>
+            )}
+
          </div>
       </div>
     </div>
