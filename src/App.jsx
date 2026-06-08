@@ -552,31 +552,56 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter}) {
   );
 }
 
+// 🔥 UPGRADED PENDING COMPONENT (WITH DYNAMIC SORTING) 🔥
 function Pending({parcels, isDark, user, setGlobalView}) {
-  const [fLR, setFLR] = useState(""); const [fFrom, setFFrom] = useState("All"); const [fTo, setFTo] = useState("All"); const [fDate, setFDate] = useState("");
+  const [fLR, setFLR] = useState(""); const [fFrom, setFFrom] = useState("All"); const [fTo, setFTo] = useState("All"); 
+  const [fFromDate, setFFromDate] = useState(""); const [fToDate, setFToDate] = useState("");
+  const [sortOrder, setSortOrder] = useState("lr_asc"); // 🔥 Puthu Sort State 🔥
+
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-100"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800"; const tblBg = isDark ? "bg-slate-800/40" : "bg-slate-50";
   const getDays = (iso) => { if(!iso) return 0; const diff = new Date() - new Date(iso); return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24))); };
   
-  const pendingParcels = parcels.filter(p => {
+  let pendingParcels = parcels.filter(p => {
     if (p.status !== 'Booked' && p.status !== 'In Transit') return false;
     if (user.role !== 'superadmin' && p.from !== user.branch && p.to !== user.branch) return false;
     const sTerm = fLR.toLowerCase();
     if (fLR && !p.id.toLowerCase().includes(sTerm) && !p.sPhone.includes(sTerm) && !(p.sName && p.sName.toLowerCase().includes(sTerm)) && !(p.rName && p.rName.toLowerCase().includes(sTerm))) return false;
     if (fFrom !== "All" && p.from !== fFrom) return false;
     if (fTo !== "All" && p.to !== fTo) return false;
-    if (fDate && (!p.isoDate || !p.isoDate.startsWith(fDate))) return false;
+    
+    const pDate = p.isoDate ? p.isoDate.split('T')[0] : "";
+    if (fFromDate && pDate < fFromDate) return false;
+    if (fToDate && pDate > fToDate) return false;
     return true;
+  });
+
+  // 🔥 DYNAMIC SORTING LOGIC 🔥
+  pendingParcels.sort((a, b) => {
+    if (sortOrder === "lr_asc") return a.id.localeCompare(b.id);
+    if (sortOrder === "lr_desc") return b.id.localeCompare(a.id);
+    if (sortOrder === "date_desc") return new Date(b.isoDate) - new Date(a.isoDate);
+    if (sortOrder === "date_asc") return new Date(a.isoDate) - new Date(b.isoDate);
+    return 0;
   });
 
   return (
     <div className="space-y-4">
       <div className={`${cardBg} p-4 rounded-2xl border space-y-3`}>
         <h3 className="font-bold text-sm text-amber-500">Filter Pending Stock</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2">
           <input value={fLR} onChange={e=>setFLR(e.target.value)} placeholder="LR / Phone / Name" className={`p-2 rounded-xl border text-sm ${inputBg}`} />
           <select value={fFrom} onChange={e=>setFFrom(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`}><option value="All">Any Origin</option>{CITIES.map(c => <option key={c}>{c}</option>)}</select>
           <select value={fTo} onChange={e=>setFTo(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`}><option value="All">Any Destination</option>{CITIES.map(c => <option key={c}>{c}</option>)}</select>
-          <input type="date" value={fDate} onChange={e=>setFDate(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`} />
+          <input type="date" title="From Date" value={fFromDate} onChange={e=>setFFromDate(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`} />
+          <input type="date" title="To Date" value={fToDate} onChange={e=>setFToDate(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`} />
+          
+          {/* 🔥 NEW SORT DROPDOWN 🔥 */}
+          <select value={sortOrder} onChange={e=>setSortOrder(e.target.value)} className={`p-2 rounded-xl border text-sm font-black text-amber-600 ${inputBg}`}>
+            <option value="lr_asc">Sort: LR (A ➔ Z)</option>
+            <option value="lr_desc">Sort: LR (Z ➔ A)</option>
+            <option value="date_desc">Sort: Newest First</option>
+            <option value="date_asc">Sort: Oldest First</option>
+          </select>
         </div>
       </div>
       <div className={`${cardBg} rounded-2xl shadow-sm border overflow-hidden`}>
@@ -688,30 +713,42 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
   );
 }
 
-// 🔥 3. UPGRADED TRACK COMPONENT (FULL DETAILS & TOTALS SUMMARY) 🔥
+// 🔥 UPGRADED TRACK COMPONENT (WITH DYNAMIC SORTING) 🔥
 function Track({parcels, isDark, user, setGlobalView, initialStatus}) {
   const [fLR, setFLR] = useState(""); const [fFrom, setFFrom] = useState("All"); const [fTo, setFTo] = useState("All"); 
   const [fStatus, setFStatus] = useState(initialStatus || "All"); 
-  const [fDate, setFDate] = useState("");
+  const [fFromDate, setFFromDate] = useState(""); const [fToDate, setFToDate] = useState("");
+  const [sortOrder, setSortOrder] = useState("date_desc"); // 🔥 Default: Puthusu mela varum 🔥
+
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-100"; 
   const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800"; 
   const tblBg = isDark ? "bg-slate-800/40" : "bg-slate-50";
 
-  // Dashboard-la irunthu click pannumpothu Filter update aaga
   useEffect(() => { if (initialStatus) setFStatus(initialStatus); }, [initialStatus]);
 
-  const results = parcels.filter(p => {
+  let results = parcels.filter(p => {
     const sTerm = fLR.toLowerCase();
     if (fLR && !p.id.toLowerCase().includes(sTerm) && !p.sPhone.includes(sTerm) && !p.rPhone.includes(sTerm) && !(p.sName && p.sName.toLowerCase().includes(sTerm)) && !(p.rName && p.rName.toLowerCase().includes(sTerm))) return false;
     if (fFrom !== "All" && p.from !== fFrom) return false;
     if (fTo !== "All" && p.to !== fTo) return false;
     if (fStatus !== "All" && p.status !== fStatus) return false;
-    if (fDate && (!p.isoDate || !p.isoDate.startsWith(fDate))) return false;
     if (user.role === 'staff' && p.from !== user.branch && p.to !== user.branch) return false;
+    
+    const pDate = p.isoDate ? p.isoDate.split('T')[0] : "";
+    if (fFromDate && pDate < fFromDate) return false;
+    if (fToDate && pDate > fToDate) return false;
     return true;
   });
 
-  // Calculate Totals 🔥
+  // 🔥 DYNAMIC SORTING LOGIC 🔥
+  results.sort((a, b) => {
+    if (sortOrder === "lr_asc") return a.id.localeCompare(b.id);
+    if (sortOrder === "lr_desc") return b.id.localeCompare(a.id);
+    if (sortOrder === "date_desc") return new Date(b.isoDate) - new Date(a.isoDate);
+    if (sortOrder === "date_asc") return new Date(a.isoDate) - new Date(b.isoDate);
+    return 0;
+  });
+
   const totalQty = results.reduce((sum, p) => sum + (Number(p.count) || 0), 0);
   const totalAmt = results.reduce((sum, p) => sum + (Number(p.price) || 0), 0);
   const totalPaid = results.filter(p => p.payment === 'Paid').reduce((sum, p) => sum + (Number(p.price) || 0), 0);
@@ -722,12 +759,21 @@ function Track({parcels, isDark, user, setGlobalView, initialStatus}) {
     <div className="space-y-4">
       <div className={`${cardBg} p-4 rounded-2xl border space-y-3`}>
         <h3 className="font-bold text-sm text-indigo-500">Advanced Search Filter</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2">
           <input value={fLR} onChange={e=>setFLR(e.target.value)} placeholder="LR / Phone / Name" className={`p-2 rounded-xl border text-sm ${inputBg}`} />
           <select value={fFrom} onChange={e=>setFFrom(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`}><option value="All">Any Origin</option>{CITIES.map(c => <option key={c}>{c}</option>)}</select>
           <select value={fTo} onChange={e=>setFTo(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`}><option value="All">Any Destination</option>{CITIES.map(c => <option key={c}>{c}</option>)}</select>
           <select value={fStatus} onChange={e=>setFStatus(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`}><option value="All">Any Status</option>{STATUSES.map(s => <option key={s}>{s}</option>)}</select>
-          <input type="date" value={fDate} onChange={e=>setFDate(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`} />
+          <input type="date" title="From Date" value={fFromDate} onChange={e=>setFFromDate(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`} />
+          <input type="date" title="To Date" value={fToDate} onChange={e=>setFToDate(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`} />
+          
+          {/* 🔥 NEW SORT DROPDOWN 🔥 */}
+          <select value={sortOrder} onChange={e=>setSortOrder(e.target.value)} className={`p-2 rounded-xl border text-sm font-black text-indigo-500 ${inputBg}`}>
+            <option value="date_desc">Sort: Newest First</option>
+            <option value="date_asc">Sort: Oldest First</option>
+            <option value="lr_asc">Sort: LR (A ➔ Z)</option>
+            <option value="lr_desc">Sort: LR (Z ➔ A)</option>
+          </select>
         </div>
       </div>
       <div className={`${cardBg} rounded-2xl border overflow-x-auto`}>
@@ -757,8 +803,6 @@ function Track({parcels, isDark, user, setGlobalView, initialStatus}) {
               </tr>
             ))}
           </tbody>
-          
-          {/* 🔥 TOTALS FOOTER 🔥 */}
           {results.length > 0 && (
             <tfoot className={`${isDark?'bg-slate-900 border-slate-700':'bg-slate-100 border-slate-200'} border-t-2 font-black`}>
                <tr>
