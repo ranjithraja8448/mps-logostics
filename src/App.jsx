@@ -288,9 +288,13 @@ function EwayScannerModal({ onScan, onClose }) {
   );
 }
 
+// 🔥 1. UPGRADED APP COMPONENT (DASHBOARD TO TRACK LINKING) 🔥
 export default function App() {
   const [page, setPage] = useState("dashboard"); const [parcels, setParcels] = useState([]); const [users, setUsers] = useState([]); const [user, setUser] = useState(null); const [toast, setToast] = useState(null); const [shortcutMode, setShortcutMode] = useState(""); const [theme, setTheme] = useState("light"); const [sidebarExpanded, setSidebarExpanded] = useState(false); const [creditAuthList, setCreditAuthList] = useState([]); 
   const [globalViewItem, setGlobalViewItem] = useState(null);
+  
+  // Puthu Track Filter State
+  const [trackFilter, setTrackFilter] = useState("All");
 
   const [db] = useState(new DB(ENV_URL, ENV_KEY));
   const showMsg = (msg, type='success') => { setToast({msg, type}); setTimeout(() => setToast(null), 3000); };
@@ -351,10 +355,10 @@ export default function App() {
         </header>
         <div className="flex-1 overflow-y-auto p-4 md:p-8 relative">
           <div className="max-w-6xl mx-auto animate-fade-in">
-            {page === 'dashboard' && <Dashboard parcels={parcels} isDark={isDark} user={user} setGlobalView={setGlobalViewItem}/>}
+            {page === 'dashboard' && <Dashboard parcels={parcels} isDark={isDark} user={user} setGlobalView={setGlobalViewItem} setPage={setPage} setTrackFilter={setTrackFilter}/>}
             {page === 'pending' && <Pending parcels={parcels} isDark={isDark} user={user} setGlobalView={setGlobalViewItem}/>}
             {page === 'book' && <Book shortcutMode={shortcutMode} parcels={parcels} setParcels={setParcels} db={db} showMsg={showMsg} isDark={isDark} theme={theme} user={user} creditAuthList={creditAuthList} />}
-            {page === 'track' && <Track parcels={parcels} isDark={isDark} user={user} setGlobalView={setGlobalViewItem}/>}
+            {page === 'track' && <Track parcels={parcels} isDark={isDark} user={user} setGlobalView={setGlobalViewItem} initialStatus={trackFilter}/>}
             {page === 'delivery' && <Delivery parcels={parcels} setParcels={setParcels} db={db} showMsg={showMsg} isDark={isDark} user={user} creditAuthList={creditAuthList} setGlobalView={setGlobalViewItem}/>}
             {page === 'accounts' && (user.role === 'admin' || user.role === 'superadmin') && <Accounts parcels={parcels} setParcels={setParcels} db={db} showMsg={showMsg} isDark={isDark} user={user} />}
             {page === 'admin' && (user.role === 'admin' || user.role === 'superadmin') && <Admin parcels={parcels} users={users} setUsers={setUsers} setParcels={setParcels} db={db} showMsg={showMsg} isDark={isDark} user={user} creditAuthList={creditAuthList} setCreditAuthList={setCreditAuthList} setGlobalView={setGlobalViewItem}/>}
@@ -362,7 +366,6 @@ export default function App() {
         </div>
       </main>
       {toast && ( <div className={`fixed bottom-4 right-4 md:bottom-8 md:right-8 px-4 md:px-6 py-2 md:py-3 rounded-xl shadow-2xl font-bold text-white z-50 animate-bounce-in text-sm md:text-base ${toast.type==='error'?'bg-red-500':'bg-emerald-500'}`}>{toast.msg}</div> )}
-      
       {globalViewItem && <ParcelModal item={globalViewItem} creditAuthList={creditAuthList} onClose={()=>setGlobalViewItem(null)} db={db} parcels={parcels} setParcels={setParcels} user={user} showMsg={showMsg} isDark={isDark} />}
     </div>
   );
@@ -471,13 +474,19 @@ function ParcelModal({item, creditAuthList, onClose, db, parcels, setParcels, us
   );
 }
 
-function Dashboard({parcels, isDark, user}) {
+// 🔥 2. UPGRADED DASHBOARD (CLICKABLE CARDS) 🔥
+function Dashboard({parcels, isDark, user, setPage, setTrackFilter}) {
   const [selectedBranch, setSelectedBranch] = useState(user.branch === 'All' ? 'All' : user.branch);
   const activeParcels = parcels.filter(p => p.status !== 'Deleted');
   const branchParcels = activeParcels.filter(p => selectedBranch === 'All' ? true : (p.bookedBranch === selectedBranch || p.from === selectedBranch || p.to === selectedBranch));
   const rev = branchParcels.reduce((a,b)=>a+(Number(b.price)||0),0);
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-100";
   const chartData = STATUSES.filter(s=>s!=='Deleted').map(s => ({ name: s, count: branchParcels.filter(p=>p.status===s).length, fill: S_CLR[s] }));
+
+  const goToTrack = (status) => {
+     setTrackFilter(status);
+     setPage('track');
+  };
 
   return (
     <div className="space-y-6">
@@ -490,9 +499,23 @@ function Dashboard({parcels, isDark, user}) {
         </div>
       )}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-        {[{l: "Total Bookings", v: branchParcels.length, c: "text-blue-500"}, {l: "In Transit", v: branchParcels.filter(p=>p.status==="In Transit").length, c: "text-amber-500"}, {l: "Delivered", v: branchParcels.filter(p=>p.status==="Delivered").length, c: "text-emerald-500"}, {l: "Branch Revenue", v: `₹${rev}`, c: "textindigo-500"}].map((s,i) => (
-          <div key={i} className={`${cardBg} p-4 md:p-6 rounded-2xl shadow-sm border flex flex-col justify-center`}><span className="text-xs font-bold opacity-60 uppercase mb-1 md:mb-2">{s.l}</span><span className={`text-2xl md:text-4xl font-black ${s.c}`}>{s.v}</span></div>
-        ))}
+          {/* Clickable Cards */}
+          <div onClick={() => goToTrack('All')} className={`${cardBg} p-4 md:p-6 rounded-2xl shadow-sm border flex flex-col justify-center cursor-pointer hover:ring-2 hover:scale-105 ring-blue-500 transition-all duration-300`}>
+             <span className="text-xs font-bold opacity-60 uppercase mb-1 md:mb-2">Total Bookings</span>
+             <span className={`text-2xl md:text-4xl font-black text-blue-500`}>{branchParcels.length}</span>
+          </div>
+          <div onClick={() => goToTrack('In Transit')} className={`${cardBg} p-4 md:p-6 rounded-2xl shadow-sm border flex flex-col justify-center cursor-pointer hover:ring-2 hover:scale-105 ring-amber-500 transition-all duration-300`}>
+             <span className="text-xs font-bold opacity-60 uppercase mb-1 md:mb-2">In Transit</span>
+             <span className={`text-2xl md:text-4xl font-black text-amber-500`}>{branchParcels.filter(p=>p.status==="In Transit").length}</span>
+          </div>
+          <div onClick={() => goToTrack('Delivered')} className={`${cardBg} p-4 md:p-6 rounded-2xl shadow-sm border flex flex-col justify-center cursor-pointer hover:ring-2 hover:scale-105 ring-emerald-500 transition-all duration-300`}>
+             <span className="text-xs font-bold opacity-60 uppercase mb-1 md:mb-2">Delivered</span>
+             <span className={`text-2xl md:text-4xl font-black text-emerald-500`}>{branchParcels.filter(p=>p.status==="Delivered").length}</span>
+          </div>
+          <div className={`${cardBg} p-4 md:p-6 rounded-2xl shadow-sm border flex flex-col justify-center`}>
+             <span className="text-xs font-bold opacity-60 uppercase mb-1 md:mb-2">Branch Revenue</span>
+             <span className={`text-2xl md:text-4xl font-black text-indigo-500`}>₹{rev}</span>
+          </div>
       </div>
       <div className={`${cardBg} p-4 md:p-6 rounded-2xl border h-72 shadow-sm`}>
         <h3 className="font-black text-sm text-slate-400 uppercase mb-4">Branch Status Analysis</h3>
@@ -638,9 +661,17 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
   );
 }
 
-function Track({parcels, isDark, user, setGlobalView}) {
-  const [fLR, setFLR] = useState(""); const [fFrom, setFFrom] = useState("All"); const [fTo, setFTo] = useState("All"); const [fStatus, setFStatus] = useState("All"); const [fDate, setFDate] = useState("");
-  const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-100"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800"; const tblBg = isDark ? "bg-slate-800/40" : "bg-slate-50";
+// 🔥 3. UPGRADED TRACK COMPONENT (FULL DETAILS & TOTALS SUMMARY) 🔥
+function Track({parcels, isDark, user, setGlobalView, initialStatus}) {
+  const [fLR, setFLR] = useState(""); const [fFrom, setFFrom] = useState("All"); const [fTo, setFTo] = useState("All"); 
+  const [fStatus, setFStatus] = useState(initialStatus || "All"); 
+  const [fDate, setFDate] = useState("");
+  const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-100"; 
+  const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800"; 
+  const tblBg = isDark ? "bg-slate-800/40" : "bg-slate-50";
+
+  // Dashboard-la irunthu click pannumpothu Filter update aaga
+  useEffect(() => { if (initialStatus) setFStatus(initialStatus); }, [initialStatus]);
 
   const results = parcels.filter(p => {
     const sTerm = fLR.toLowerCase();
@@ -651,7 +682,14 @@ function Track({parcels, isDark, user, setGlobalView}) {
     if (fDate && (!p.isoDate || !p.isoDate.startsWith(fDate))) return false;
     if (user.role === 'staff' && p.from !== user.branch && p.to !== user.branch) return false;
     return true;
-  }).slice(0, 50);
+  });
+
+  // Calculate Totals 🔥
+  const totalQty = results.reduce((sum, p) => sum + (Number(p.count) || 0), 0);
+  const totalAmt = results.reduce((sum, p) => sum + (Number(p.price) || 0), 0);
+  const totalPaid = results.filter(p => p.payment === 'Paid').reduce((sum, p) => sum + (Number(p.price) || 0), 0);
+  const totalToPay = results.filter(p => p.payment === 'To Pay').reduce((sum, p) => sum + (Number(p.price) || 0), 0);
+  const totalCredit = results.filter(p => p.payment === 'Credit').reduce((sum, p) => sum + (Number(p.price) || 0), 0);
 
   return (
     <div className="space-y-4">
@@ -666,18 +704,52 @@ function Track({parcels, isDark, user, setGlobalView}) {
         </div>
       </div>
       <div className={`${cardBg} rounded-2xl border overflow-x-auto`}>
-        <table className="min-w-[800px] w-full text-left whitespace-nowrap text-sm">
-          <thead className={`${tblBg} text-[10px] font-bold uppercase opacity-80`}><tr><th className="p-4">LR Code</th><th className="p-4">Route Info</th><th className="p-4">Customer Details</th><th className="p-4">Tracking Node</th></tr></thead>
+        <table className="min-w-[900px] w-full text-left whitespace-nowrap text-sm">
+          <thead className={`${tblBg} text-[10px] font-bold uppercase opacity-80`}>
+             <tr>
+                <th className="p-4">LR Code & Date</th>
+                <th className="p-4">Route Info</th>
+                <th className="p-4">Customer Details</th>
+                <th className="p-4">Cargo (Qty)</th>
+                <th className="p-4">Amount & Payment</th>
+                <th className="p-4">Status</th>
+             </tr>
+          </thead>
           <tbody>
-            {results.length === 0 ? <tr><td colSpan="4" className="p-8 text-center opacity-50 font-bold">No parcels match your search.</td></tr> : results.map(p => (
+            {results.length === 0 ? <tr><td colSpan="6" className="p-8 text-center opacity-50 font-bold">No parcels match your search.</td></tr> : results.map(p => (
               <tr key={p.id} className="border-t border-slate-500/10 hover:bg-black/5 cursor-pointer" onClick={() => setGlobalView(p)}>
-                <td className="p-4 font-black text-indigo-500 hover:underline">{p.id} <span className="block text-[10px] opacity-50 font-normal">{p.date}</span></td>
+                <td className="p-4 font-black text-indigo-500 hover:underline">{p.id} <br/><span className="text-[10px] opacity-50 font-normal">{p.date}</span></td>
                 <td className="p-4 font-bold">{p.from} ➔ {p.to}</td>
-                <td className="p-4"><p>{p.sName} ➔ {p.rName}</p><p className="text-[10px] opacity-50">{p.sPhone} | {p.rPhone}</p></td>
+                <td className="p-4 text-xs"><p>{p.sName} ➔ {p.rName}</p><p className="opacity-50">{p.sPhone} | {p.rPhone}</p></td>
+                <td className="p-4 font-black text-amber-500">{p.count} <span className="text-xs font-normal opacity-70">{p.type}</span></td>
+                <td className="p-4 font-bold">
+                   ₹{p.price} <br/>
+                   <span className={`text-[10px] px-2 py-0.5 rounded-md ${p.payment==='Paid'?'bg-emerald-500/10 text-emerald-500':p.payment==='To Pay'?'bg-red-500/10 text-red-500':'bg-indigo-500/10 text-indigo-500'}`}>{p.payment}</span>
+                </td>
                 <td className="p-4"><span className="px-2 py-1 rounded-full text-[10px] font-bold uppercase" style={{backgroundColor: S_CLR[p.status]+'22', color: S_CLR[p.status]}}>{p.status}</span></td>
               </tr>
             ))}
           </tbody>
+          
+          {/* 🔥 TOTALS FOOTER 🔥 */}
+          {results.length > 0 && (
+            <tfoot className={`${isDark?'bg-slate-900 border-slate-700':'bg-slate-100 border-slate-200'} border-t-2 font-black`}>
+               <tr>
+                  <td colSpan="3" className="p-4 text-right opacity-50 uppercase text-xs">Total Summary :</td>
+                  <td className="p-4 text-amber-500 text-lg">{totalQty} <span className="text-xs">Items</span></td>
+                  <td colSpan="2" className="p-4">
+                     <div className="flex flex-col gap-1 text-xs">
+                        <span className="text-lg">₹{totalAmt}</span>
+                        <div className="flex gap-2">
+                           {totalPaid > 0 && <span className="text-emerald-500">Paid: ₹{totalPaid}</span>}
+                           {totalToPay > 0 && <span className="text-red-500">ToPay: ₹{totalToPay}</span>}
+                           {totalCredit > 0 && <span className="text-indigo-500">Credit: ₹{totalCredit}</span>}
+                        </div>
+                     </div>
+                  </td>
+               </tr>
+            </tfoot>
+          )}
         </table>
       </div>
     </div>
