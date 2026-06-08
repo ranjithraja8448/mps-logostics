@@ -501,9 +501,11 @@ function ParcelModal({item, creditAuthList, onClose, db, parcels, setParcels, us
   );
 }
 
-// 🔥 2. UPGRADED DASHBOARD (CLICKABLE CARDS) 🔥
-function Dashboard({parcels, isDark, user, setPage, setTrackFilter}) {
+// 🔥 UPGRADED DASHBOARD (100% ACCURATE TODAY'S DELIVERY FIX) 🔥
+function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalView}) {
   const [selectedBranch, setSelectedBranch] = useState(user.branch === 'All' ? 'All' : user.branch);
+  const [expandedStaff, setExpandedStaff] = useState(null); 
+  
   const activeParcels = parcels.filter(p => p.status !== 'Deleted');
   const branchParcels = activeParcels.filter(p => selectedBranch === 'All' ? true : (p.bookedBranch === selectedBranch || p.from === selectedBranch || p.to === selectedBranch));
   const rev = branchParcels.reduce((a,b)=>a+(Number(b.price)||0),0);
@@ -514,6 +516,53 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter}) {
      setTrackFilter(status);
      setPage('track');
   };
+
+  // 🔥 BUG FIX: Universal Date Checker for Today's Deliveries 🔥
+  const todayDateString = new Date().toDateString();
+  const todaysDelParcels = branchParcels.filter(p => {
+     if(p.status !== 'Delivered' || !p.history) return false;
+     
+     return p.history.some(h => {
+        if(h.status !== 'Delivered') return false;
+        
+        const hTimeStr = h.time || "";
+        let isToday = false;
+        
+        // Method 1: Bulletproof Date Parsing
+        try {
+            const parsedDate = new Date(hTimeStr);
+            if (!isNaN(parsedDate)) {
+                isToday = (parsedDate.toDateString() === todayDateString);
+            }
+        } catch(e) {}
+        
+        // Method 2: String Fallback Match (If parsing fails in some phones)
+        if (!isToday) {
+            const t1 = new Date().toLocaleDateString();
+            const t2 = new Date().toLocaleDateString('en-IN');
+            const t3 = new Date().toLocaleDateString('en-US');
+            isToday = hTimeStr.includes(t1) || hTimeStr.includes(t2) || hTimeStr.includes(t3);
+        }
+        
+        return isToday;
+     });
+  });
+
+  // Master Data Grouping
+  const staffStats = {};
+  todaysDelParcels.forEach(p => {
+     const staffName = p.deliveredBy || "System";
+     if (!staffStats[staffName]) {
+         staffStats[staffName] = { count: 0, collected: 0, parcels: [] };
+     }
+     
+     staffStats[staffName].count += 1;
+     staffStats[staffName].parcels.push(p);
+     
+     if (p.payment === 'To Pay' && (p.deliveryMode === 'Cash' || p.deliveryMode === 'GPay')) {
+         staffStats[staffName].collected += (Number(p.price) || 0);
+     }
+  });
 
   return (
     <div className="space-y-6">
@@ -526,7 +575,6 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter}) {
         </div>
       )}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-          {/* Clickable Cards */}
           <div onClick={() => goToTrack('All')} className={`${cardBg} p-4 md:p-6 rounded-2xl shadow-sm border flex flex-col justify-center cursor-pointer hover:ring-2 hover:scale-105 ring-blue-500 transition-all duration-300`}>
              <span className="text-xs font-bold opacity-60 uppercase mb-1 md:mb-2">Total Bookings</span>
              <span className={`text-2xl md:text-4xl font-black text-blue-500`}>{branchParcels.length}</span>
@@ -536,7 +584,7 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter}) {
              <span className={`text-2xl md:text-4xl font-black text-amber-500`}>{branchParcels.filter(p=>p.status==="In Transit").length}</span>
           </div>
           <div onClick={() => goToTrack('Delivered')} className={`${cardBg} p-4 md:p-6 rounded-2xl shadow-sm border flex flex-col justify-center cursor-pointer hover:ring-2 hover:scale-105 ring-emerald-500 transition-all duration-300`}>
-             <span className="text-xs font-bold opacity-60 uppercase mb-1 md:mb-2">Delivered</span>
+             <span className="text-xs font-bold opacity-60 uppercase mb-1 md:mb-2">Total Delivered</span>
              <span className={`text-2xl md:text-4xl font-black text-emerald-500`}>{branchParcels.filter(p=>p.status==="Delivered").length}</span>
           </div>
           <div className={`${cardBg} p-4 md:p-6 rounded-2xl shadow-sm border flex flex-col justify-center`}>
@@ -544,9 +592,75 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter}) {
              <span className={`text-2xl md:text-4xl font-black text-indigo-500`}>₹{rev}</span>
           </div>
       </div>
-      <div className={`${cardBg} p-4 md:p-6 rounded-2xl border h-72 shadow-sm`}>
-        <h3 className="font-black text-sm text-slate-400 uppercase mb-4">Branch Status Analysis</h3>
-        <ResponsiveContainer width="100%" height="100%"><BarChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 20 }}><XAxis dataKey="name" tick={{fontSize: 10}} axisLine={false} tickLine={false} /><Tooltip cursor={{fill: 'rgba(0,0,0,0.05)'}} contentStyle={{background: '#1e293b', border:'none', color:'#fff', borderRadius:'8px', fontSize:'12px'}} /><Bar dataKey="count" radius={[4, 4, 0, 0]}>{chartData.map((e, i) => (<Cell key={i} fill={e.fill} />))}</Bar></BarChart></ResponsiveContainer>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+         <div className={`${cardBg} p-4 md:p-6 rounded-2xl border shadow-sm md:col-span-2 h-auto md:h-[400px]`}>
+           <h3 className="font-black text-sm text-slate-400 uppercase mb-4">Branch Status Analysis</h3>
+           <ResponsiveContainer width="100%" height={280}>
+             <BarChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 20 }}>
+               <XAxis dataKey="name" tick={{fontSize: 10}} axisLine={false} tickLine={false} />
+               <Tooltip cursor={{fill: 'rgba(0,0,0,0.05)'}} contentStyle={{background: '#1e293b', border:'none', color:'#fff', borderRadius:'8px', fontSize:'12px'}} />
+               <Bar dataKey="count" radius={[4, 4, 0, 0]}>{chartData.map((e, i) => (<Cell key={i} fill={e.fill} />))}</Bar>
+             </BarChart>
+           </ResponsiveContainer>
+         </div>
+
+         <div className={`${cardBg} p-4 md:p-6 rounded-2xl border shadow-sm flex flex-col h-auto md:h-[400px]`}>
+            <div className="flex justify-between items-center mb-4 border-b border-slate-500/20 pb-2">
+               <h3 className="font-black text-sm text-emerald-500 uppercase">🏆 Today's Deliveries</h3>
+               <span className="bg-emerald-500 text-white text-[10px] px-2 py-1 rounded-full font-bold">{todaysDelParcels.length} Total</span>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
+               {Object.keys(staffStats).length === 0 ? (
+                  <p className="text-xs opacity-50 text-center mt-10 font-bold">No deliveries yet today.</p>
+               ) : (
+                  Object.entries(staffStats).sort((a,b)=>b[1].count-a[1].count).map(([staff, stats], i) => (
+                     <div key={i} className={`flex flex-col rounded-xl border overflow-hidden ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                        <div 
+                           onClick={() => setExpandedStaff(expandedStaff === staff ? null : staff)} 
+                           className="flex justify-between items-center p-3 cursor-pointer hover:bg-black/5 transition-colors"
+                        >
+                           <div className="flex flex-col">
+                              <div className="flex items-center gap-2">
+                                 <span className="text-lg">{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '👤'}</span>
+                                 <span className="font-bold text-sm">{staff}</span>
+                              </div>
+                              <span className="text-[10px] font-bold text-indigo-500 ml-7 mt-0.5">₹{stats.collected} Collected</span>
+                           </div>
+                           <div className="flex items-center gap-2">
+                              <span className="text-emerald-500 font-black text-lg">{stats.count}</span>
+                              <span className="text-[10px] opacity-50">{expandedStaff === staff ? '▲' : '▼'}</span>
+                           </div>
+                        </div>
+
+                        {expandedStaff === staff && (
+                           <div className={`p-2 space-y-1 border-t ${isDark ? 'border-slate-700 bg-slate-950/50' : 'border-slate-200 bg-white'}`}>
+                              {stats.parcels.map(p => (
+                                 <div 
+                                    key={p.id} 
+                                    onClick={() => setGlobalView(p)}
+                                    className="flex justify-between items-center p-2 rounded-lg cursor-pointer hover:bg-indigo-500/10 transition-colors"
+                                 >
+                                    <div className="flex flex-col">
+                                       <span className="text-[11px] font-black text-indigo-500 hover:underline">📦 {p.id}</span>
+                                       <span className="text-[10px] opacity-70 font-bold truncate w-32 md:w-40" title={p.rName}>{p.rName}</span>
+                                    </div>
+                                    <div className="flex flex-col text-right">
+                                       <span className="text-[11px] font-bold">₹{p.price}</span>
+                                       <span className="text-[9px] opacity-60 font-bold">
+                                          {p.payment === 'To Pay' ? p.deliveryMode : p.payment}
+                                       </span>
+                                    </div>
+                                 </div>
+                              ))}
+                           </div>
+                        )}
+                     </div>
+                  ))
+               )}
+            </div>
+         </div>
       </div>
     </div>
   );
