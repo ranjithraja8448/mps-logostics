@@ -705,11 +705,11 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
   );
 }
 
-// 🔥 UPGRADED PENDING COMPONENT (WITH DYNAMIC SORTING) 🔥
+// 🔥 UPGRADED PENDING COMPONENT (WITH CUSTOMER NAME DISPLAY) 🔥
 function Pending({parcels, isDark, user, setGlobalView}) {
   const [fLR, setFLR] = useState(""); const [fFrom, setFFrom] = useState("All"); const [fTo, setFTo] = useState("All"); 
   const [fFromDate, setFFromDate] = useState(""); const [fToDate, setFToDate] = useState("");
-  const [sortOrder, setSortOrder] = useState("lr_asc"); // 🔥 Puthu Sort State 🔥
+  const [sortOrder, setSortOrder] = useState("lr_asc");
 
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-100"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800"; const tblBg = isDark ? "bg-slate-800/40" : "bg-slate-50";
   const getDays = (iso) => { if(!iso) return 0; const diff = new Date() - new Date(iso); return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24))); };
@@ -728,7 +728,6 @@ function Pending({parcels, isDark, user, setGlobalView}) {
     return true;
   });
 
-  // 🔥 DYNAMIC SORTING LOGIC 🔥
   pendingParcels.sort((a, b) => {
     if (sortOrder === "lr_asc") return a.id.localeCompare(b.id);
     if (sortOrder === "lr_desc") return b.id.localeCompare(a.id);
@@ -747,8 +746,6 @@ function Pending({parcels, isDark, user, setGlobalView}) {
           <select value={fTo} onChange={e=>setFTo(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`}><option value="All">Any Destination</option>{CITIES.map(c => <option key={c}>{c}</option>)}</select>
           <input type="date" title="From Date" value={fFromDate} onChange={e=>setFFromDate(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`} />
           <input type="date" title="To Date" value={fToDate} onChange={e=>setFToDate(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`} />
-          
-          {/* 🔥 NEW SORT DROPDOWN 🔥 */}
           <select value={sortOrder} onChange={e=>setSortOrder(e.target.value)} className={`p-2 rounded-xl border text-sm font-black text-amber-600 ${inputBg}`}>
             <option value="lr_asc">Sort: LR (A ➔ Z)</option>
             <option value="lr_desc">Sort: LR (Z ➔ A)</option>
@@ -761,13 +758,33 @@ function Pending({parcels, isDark, user, setGlobalView}) {
         <div className="bg-amber-500/10 text-amber-600 p-4 font-bold md:text-lg flex justify-between items-center border-b border-amber-500/20"><span>⏳ Global Pending Parcels</span><span className="bg-amber-500 text-white px-3 py-1 rounded-full text-xs md:text-sm">{pendingParcels.length} Items</span></div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm whitespace-nowrap">
-            <thead className={`${tblBg} opacity-70 text-[10px] uppercase font-bold`}><tr><th className="p-4">LR No</th><th className="p-4">Route</th><th className="p-4">Qty</th><th className="p-4">Status</th><th className="p-4">Age</th></tr></thead>
+            <thead className={`${tblBg} opacity-70 text-[10px] uppercase font-bold`}>
+              <tr>
+                <th className="p-4">LR No</th>
+                <th className="p-4">Route</th>
+                <th className="p-4">Customer Details</th> {/* 🔥 Puthu Column 🔥 */}
+                <th className="p-4">Qty</th>
+                <th className="p-4">Status</th>
+                <th className="p-4">Age</th>
+              </tr>
+            </thead>
             <tbody>
-              {pendingParcels.length === 0 ? <tr><td colSpan="5" className="p-8 text-center opacity-50 font-bold">No pending parcels! All cleared.</td></tr> : pendingParcels.map(p => {
+              {pendingParcels.length === 0 ? <tr><td colSpan="6" className="p-8 text-center opacity-50 font-bold">No pending parcels! All cleared.</td></tr> : pendingParcels.map(p => {
                 const days = getDays(p.isoDate);
                 return (
                   <tr key={p.id} className="border-t border-slate-500/10 hover:bg-black/5 cursor-pointer" onClick={() => setGlobalView(p)}>
-                    <td className="p-4 font-black text-indigo-500 hover:underline">{p.id}</td><td className="p-4 font-bold">{p.from} ➔ {p.to}</td><td className="p-4 font-black text-amber-500">{p.count} {p.type}</td><td className="p-4"><span className="px-2 py-1 rounded-full text-[10px] font-bold" style={{backgroundColor: S_CLR[p.status]+'22', color: S_CLR[p.status]}}>{p.status}</span></td><td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold ${days > 2 ? 'bg-red-500/10 text-red-500' : 'bg-emerald-500/10 text-emerald-500'}`}>{days === 0 ? 'Today' : `${days} Days`}</span></td>
+                    <td className="p-4 font-black text-indigo-500 hover:underline">{p.id}</td>
+                    <td className="p-4 font-bold">{p.from} ➔ {p.to}</td>
+                    
+                    {/* 🔥 NEW UI: CUSTOMER SENDER & RECEIVER NAME DISPLAY 🔥 */}
+                    <td className="p-4 text-xs">
+                       <p className="font-bold text-slate-300">{p.sName || "Unknown"} ➔ {p.rName || "Unknown"}</p>
+                       <p className="opacity-50 text-[11px]">{p.sPhone} | {p.rPhone}</p>
+                    </td>
+
+                    <td className="p-4 font-black text-amber-500">{p.count} {p.type}</td>
+                    <td className="p-4"><span className="px-2 py-1 rounded-full text-[10px] font-bold" style={{backgroundColor: S_CLR[p.status]+'22', color: S_CLR[p.status]}}>{p.status}</span></td>
+                    <td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold ${days > 2 ? 'bg-red-500/10 text-red-500' : 'bg-emerald-500/10 text-emerald-500'}`}>{days === 0 ? 'Today' : `${days} Days`}</span></td>
                   </tr>
                 )
               })}
@@ -778,6 +795,7 @@ function Pending({parcels, isDark, user, setGlobalView}) {
     </div>
   );
 }
+
 
 // 🔥 UPGRADED BOOKING COMPONENT (WITH SEARCHABLE CREDIT DROPDOWN) 🔥
 function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, user, creditAuthList}) {
