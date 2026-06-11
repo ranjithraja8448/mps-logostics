@@ -5,7 +5,7 @@ import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from "rechar
 import { Html5QrcodeScanner } from "html5-qrcode";
 
 /* ══════════════════════════════════════════
-   CONSTANTS & CONFIG
+  CONSTANTS & CONFIG
 ══════════════════════════════════════════ */
 const ENV_URL = import.meta.env.VITE_SUPABASE_URL || "";
 const ENV_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
@@ -38,7 +38,6 @@ function calcPrice(from, to, ratePerUnit, count = 1, type = "Box", paymentMode =
   return Math.round((rate * (parseInt(count) || 1)) + tc);
 }
 
-// 🔥 NUMBER TO WORDS HELPER 🔥
 function numberToWords(num) {
   const a = ['','One ','Two ','Three ','Four ', 'Five ','Six ','Seven ','Eight ','Nine ','Ten ','Eleven ','Twelve ','Thirteen ','Fourteen ','Fifteen ','Sixteen ','Seventeen ','Eighteen ','Nineteen '];
   const b = ['', '', 'Twenty','Thirty','Forty','Fifty', 'Sixty','Seventy','Eighty','Ninety'];
@@ -53,7 +52,6 @@ function numberToWords(num) {
   return str.toUpperCase();
 }
 
-// 🔥 INDIVIDUAL LR PRINT GENERATOR 🔥
 function generatePDF(p) {
   const doc = new jsPDF(); doc.setLineWidth(0.5); doc.rect(10, 10, 190, 110);
   doc.line(10, 35, 200, 35); doc.line(10, 42, 200, 42); doc.line(10, 70, 145, 70); doc.line(10, 82, 145, 82); doc.line(95, 92, 145, 92); doc.line(145, 95, 200, 95); doc.line(10, 100, 200, 100); 
@@ -76,7 +74,6 @@ function generatePDF(p) {
   window.open(doc.output('bloburl'), '_blank');
 }
 
-// 🔥 EOD SETTLEMENT PRINT GENERATOR 🔥
 function generateEOD_PDF(dateStr, branch, parcelsList, pettyList) {
   const doc = new jsPDF();
   doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.text("END OF DAY (EOD) SETTLEMENT", 105, 15, { align: "center" });
@@ -99,74 +96,43 @@ function generateEOD_PDF(dateStr, branch, parcelsList, pettyList) {
   window.open(doc.output('bloburl'), '_blank');
 }
 
-// 🔥 CREDIT INVOICE GENERATOR (DATE SORTED + CUSTOMER GST/ADDRESS) 🔥
 function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList) {
   const doc = new jsPDF();
-  
   doc.setFont("helvetica", "bold"); doc.setFontSize(18); 
   doc.text("MPS Parcel Service", 105, 15, { align: "center" });
   doc.setFontSize(9); doc.setFont("helvetica", "normal");
   doc.text("Address : Dharmapuri Main Road, Mecheri, Salem-Dt. 636 451. GST : 33CICPS6965E1Z1", 105, 20, { align: "center" });
   doc.text("Phone Number : 90033 77185 / 80726 72255", 105, 24, { align: "center" });
-  
   doc.setFontSize(14); doc.setFont("helvetica", "bold");
   doc.text("INVOICE", 105, 34, { align: "center" });
-  
   const invoiceNo = Math.floor(1000 + Math.random() * 9000);
   const printDate = new Date().toLocaleDateString('en-IN');
-
   doc.setFontSize(10); doc.setFont("helvetica", "bold");
   
-  // 🔥 CUSTOMER DETAILS AUTO-INJECTION HACK 🔥
   let partyName = customer;
   let gstText = "";
   let addressText = "";
-  
-  if (customer.toUpperCase().includes("SAI SILKS")) {
-      partyName = "SAI SILKS KALAMANDIR LIMITED";
-      gstText = "GSTIN : 33AMCS1175P1ZU";
-  }
+  if (customer.toUpperCase().includes("SAI SILKS")) { partyName = "SAI SILKS KALAMANDIR LIMITED"; gstText = "GSTIN : 33AMCS1175P1ZU"; }
 
   doc.text(`Party Name : ${partyName}`, 14, 45);
   doc.setFont("helvetica", "normal");
   doc.text(`Phone No : ${customerPhone}`, 14, 50);
   
-  // Print GST and Address if available
   if(gstText) {
-      doc.setFont("helvetica", "bold");
-      doc.text(gstText, 14, 55);
-      doc.setFontSize(8);
-      doc.setFont("helvetica", "normal");
-      // Text wrap aaga maxWidth 100 vachirukken
-      doc.text(addressText, 14, 60, { maxWidth: 100 });
-      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold"); doc.text(gstText, 14, 55); doc.setFontSize(8);
+      doc.setFont("helvetica", "normal"); doc.text(addressText, 14, 60, { maxWidth: 100 }); doc.setFontSize(10);
   }
   
-  // Y-axis gap adjustment based on Address length
   let yOffset = gstText ? 65 : 55;
   doc.text(`Billing Period : ${fromD} to ${toD}`, 14, yOffset);
-  
-  doc.setFont("helvetica", "bold");
-  doc.text(`Invoice no.: ${invoiceNo}`, 150, 45);
-  doc.setFont("helvetica", "normal");
-  doc.text(`Invoice Date: ${printDate}`, 150, 50);
+  doc.setFont("helvetica", "bold"); doc.text(`Invoice no.: ${invoiceNo}`, 150, 45);
+  doc.setFont("helvetica", "normal"); doc.text(`Invoice Date: ${printDate}`, 150, 50);
   
   const tableColumn = ["S.No", "LR Number", "Booking Date", "Consignor", "Consignee", "Packages", "Amount"];
-  const tableRows = [];
-  let totalAmount = 0; let totalPackages = 0;
+  const tableRows = []; let totalAmount = 0; let totalPackages = 0;
   
-  // 🔥 DATE-WISE SORTING LOGIC 🔥
   const sortedParcels = [...parcelsList].sort((a, b) => new Date(a.isoDate) - new Date(b.isoDate));
-
-  sortedParcels.forEach((p, index) => {
-      const parcelData = [
-          index + 1, p.id, p.date, p.sName, p.rName, `${p.count} ${p.type}`, p.price
-      ];
-      tableRows.push(parcelData);
-      totalAmount += Number(p.price) || 0;
-      totalPackages += Number(p.count) || 0;
-  });
-  
+  sortedParcels.forEach((p, index) => { const parcelData = [index + 1, p.id, p.date, p.sName, p.rName, `${p.count} ${p.type}`, p.price]; tableRows.push(parcelData); totalAmount += Number(p.price) || 0; totalPackages += Number(p.count) || 0; });
   tableRows.push(["Total", "", "", "", "", totalPackages.toString(), totalAmount.toString()]);
   
   autoTable(doc, {
@@ -174,33 +140,58 @@ function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList) {
       headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 9, halign: 'center' },
       bodyStyles: { fontSize: 8, textColor: [0, 0, 0] },
       columnStyles: { 0: { halign: 'center' }, 1: { fontStyle: 'bold' }, 5: { halign: 'center' }, 6: { halign: 'right', fontStyle: 'bold' } },
-      willDrawCell: function (data) {
-          if (data.row.index === tableRows.length - 1) {
-              data.cell.styles.fontStyle = 'bold'; data.cell.styles.fillColor = [245, 245, 245];
-          }
-      }
+      willDrawCell: function (data) { if (data.row.index === tableRows.length - 1) { data.cell.styles.fontStyle = 'bold'; data.cell.styles.fillColor = [245, 245, 245]; } }
   });
   
   const finalY = doc.lastAutoTable.finalY || (yOffset + 5);
-  
-  doc.setFontSize(9); doc.setFont("helvetica", "bold");
-  doc.text(`Net Payable Amount : RUPEES ${numberToWords(totalAmount)}`, 14, finalY + 8);
-  
-  doc.setFontSize(8); doc.setFont("helvetica", "normal");
-  doc.text(`Print DateTime : ${new Date().toLocaleString('en-IN')}`, 14, finalY + 16);
-  doc.setFont("helvetica", "bold");
-  doc.text("Remark : Respected and Dear Valued Customer, Kindly ensure to make the payment earliest.", 14, finalY + 22);
-  
-  doc.text("Bank Details for Payment:", 14, finalY + 32);
-  doc.setFont("helvetica", "normal");
-  doc.text("Bank Name : Tamilnad Mercantile Bank (TMB) ", 14, finalY + 38);
-  doc.text("A/C Name  : MECHERI PARCEL SERVICE", 14, finalY + 43);
-  doc.text("A/C No    : 287150050800853", 14, finalY + 48);
-  doc.text("IFSC Code : TMBL0000287", 14, finalY + 53);
-  
+  doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.text(`Net Payable Amount : RUPEES ${numberToWords(totalAmount)}`, 14, finalY + 8);
+  doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.text(`Print DateTime : ${new Date().toLocaleString('en-IN')}`, 14, finalY + 16);
+  doc.setFont("helvetica", "bold"); doc.text("Remark : Respected and Dear Valued Customer, Kindly ensure to make the payment earliest.", 14, finalY + 22);
+  doc.text("Bank Details for Payment:", 14, finalY + 32); doc.setFont("helvetica", "normal"); doc.text("Bank Name : Tamilnad Mercantile Bank (TMB) ", 14, finalY + 38);
+  doc.text("A/C Name  : MECHERI PARCEL SERVICE", 14, finalY + 43); doc.text("A/C No    : 287150050800853", 14, finalY + 48); doc.text("IFSC Code : TMBL0000287", 14, finalY + 53);
   window.open(doc.output('bloburl'), '_blank');
 }
 
+// 🔥 UNIVERSAL LIST PDF PRINTER (For Dash, Track & Pending) 🔥
+function generateListPDF(title, branch, parcelsList) {
+  const doc = new jsPDF();
+  doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.text(`MPS - ${title}`, 105, 15, { align: "center" });
+  doc.setFontSize(10); doc.setFont("helvetica", "normal");
+  doc.text(`Branch: ${branch} | Print Date: ${new Date().toLocaleString('en-IN')}`, 105, 22, { align: "center" });
+  
+  const tableColumn = ["S.No", "LR Number", "Route", "Customer (Sender -> Receiver)", "Cargo", "Amount", "Status"];
+  const tableRows = [];
+  let totalQty = 0, totalAmt = 0;
+
+  parcelsList.forEach((p, index) => {
+      tableRows.push([ index + 1, p.id, `${p.from} -> ${p.to}`, `${p.sName} -> ${p.rName}`, `${p.count} ${p.type}`, `Rs.${p.price} (${p.payment})`, p.status ]);
+      totalQty += Number(p.count) || 0;
+      totalAmt += Number(p.price) || 0;
+  });
+
+  tableRows.push(["TOTAL", "", "", "", `${totalQty} Items`, `Rs.${totalAmt}`, ""]);
+
+  autoTable(doc, {
+      startY: 28, head: [tableColumn], body: tableRows, theme: 'grid',
+      headStyles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8, halign: 'center' },
+      bodyStyles: { fontSize: 7, textColor: [0, 0, 0] },
+      columnStyles: { 0: { halign: 'center' }, 5: { halign: 'right', fontStyle: 'bold' } },
+      willDrawCell: function (data) { if (data.row.index === tableRows.length - 1) { data.cell.styles.fontStyle = 'bold'; data.cell.styles.fillColor = [240, 240, 240]; } }
+  });
+  window.open(doc.output('bloburl'), '_blank');
+}
+
+// 🔥 UNIVERSAL EXCEL (CSV) EXPORTER 🔥
+function exportToCSV(title, parcelsList) {
+  if (parcelsList.length === 0) return alert("No data to export!");
+  const headers = ["LR No", "Date", "Sender", "Receiver", "Origin", "Destination", "Payment Mode", "Amount", "Status", "Booked By"];
+  const rows = parcelsList.map(p => [p.id, p.date, p.sName, p.rName, p.from, p.to, p.payment, p.price, p.status, p.bookedBy].join(','));
+  const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join('\n');
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri); link.setAttribute("download", `MPS_${title}.csv`);
+  document.body.appendChild(link); link.click(); link.remove();
+}
 
 function openWhatsApp(phone, isSender, p) {
   const text = `📦 *MPS Logistics*\n\nHello *${isSender ? p.sName : p.rName}*,\nYour parcel is booked successfully!\n\n*LR No:* ${p.id}\n*Route:* ${p.from} ➔ ${p.to}\n*Items:* ${p.count} ${p.type}\n*Mode:* ${p.payment}\n*Amount:* ₹${p.price}\n\nThank you for choosing MPS!`;
@@ -237,7 +228,6 @@ function SuggestInput({ id, label, value, onChange, onSelect, dataList, isPhone,
   );
 }
 
-// 🔥 PUDHU SEARCHABLE CREDIT DROPDOWN (TYPE TO SEARCH) 🔥
 function CreditSearchDropdown({ value, onChange, uniqueCompanies, isDark }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState(value);
@@ -289,7 +279,6 @@ class DB{
   async deleteCreditAuth(phone){ if(this.isLive) { try { await fetch(`${this.base}/credit_auth?phone=eq.${phone}`,{method:"DELETE",headers:this.h}); } catch(e){} } await local.set("mps_credit_auth", (await local.get("mps_credit_auth")||[]).filter(c => c.phone !== phone)); }
 }
 
-// 🔥 DIRECT BACK-CAMERA E-WAY SCANNER 🔥
 function EwayScannerModal({ onScan, onClose }) {
   useEffect(() => {
     const config = { fps: 10, qrbox: { width: 250, height: 250 }, videoConstraints: { facingMode: "environment" } };
@@ -315,12 +304,10 @@ function EwayScannerModal({ onScan, onClose }) {
   );
 }
 
-// 🔥 1. UPGRADED APP COMPONENT (DASHBOARD TO TRACK LINKING) 🔥
 export default function App() {
   const [page, setPage] = useState("dashboard"); const [parcels, setParcels] = useState([]); const [users, setUsers] = useState([]); const [user, setUser] = useState(null); const [toast, setToast] = useState(null); const [shortcutMode, setShortcutMode] = useState(""); const [theme, setTheme] = useState("light"); const [sidebarExpanded, setSidebarExpanded] = useState(false); const [creditAuthList, setCreditAuthList] = useState([]); 
   const [globalViewItem, setGlobalViewItem] = useState(null);
   
-  // Puthu Track Filter State
   const [trackFilter, setTrackFilter] = useState("All");
 
   const [db] = useState(new DB(ENV_URL, ENV_KEY));
@@ -398,7 +385,6 @@ export default function App() {
   );
 }
 
-// 🔥 UPGRADED PARCEL MODAL (CREDIT OPTION ALWAYS VISIBLE FIX) 🔥
 function ParcelModal({item, creditAuthList, onClose, db, parcels, setParcels, user, showMsg, isDark}) {
   const [payMethod, setPayMethod] = useState("");
   const [delCreditCustomer, setDelCreditCustomer] = useState(""); 
@@ -435,8 +421,8 @@ function ParcelModal({item, creditAuthList, onClose, db, parcels, setParcels, us
   const uniqueCompanies = [...new Set(creditAuthList.map(c => c.company))];
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[100]">
-      <div className={`${cardBg} p-6 rounded-3xl max-w-md w-full space-y-4 border shadow-2xl animate-bounce-in`}>
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[100] overflow-y-auto">
+      <div className={`${cardBg} p-6 rounded-3xl max-w-md w-full space-y-4 border shadow-2xl animate-bounce-in my-auto`}>
         <div className="flex justify-between items-center border-b border-slate-500/20 pb-2">
           <h3 className="font-black text-lg text-indigo-500">Manifest: {item.id}</h3>
           <span className="px-2 py-1 text-[10px] font-bold rounded-full uppercase" style={{backgroundColor: S_CLR[item.status]+'22', color: S_CLR[item.status]}}>{item.status}</span>
@@ -463,6 +449,20 @@ function ParcelModal({item, creditAuthList, onClose, db, parcels, setParcels, us
              </div>
           )}
         </div>
+
+        <div className={`mt-4 p-4 rounded-2xl border ${isDark ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+           <h4 className="text-[10px] font-bold uppercase opacity-60 mb-3 tracking-widest text-indigo-500">📍 Live Tracking Timeline</h4>
+           <div className="relative border-l-2 border-indigo-500/30 ml-2 space-y-4">
+             {item.history && item.history.map((h, i) => (
+                <div key={i} className="relative pl-4 animate-fade-in">
+                  <div className={`absolute -left-[5px] top-1.5 w-2 h-2 rounded-full ${i === item.history.length-1 ? 'bg-emerald-500 ring-4 ring-emerald-500/20' : 'bg-indigo-500'}`}></div>
+                  <p className="text-xs font-bold">{h.status} <span className="opacity-50 font-normal ml-1">@ {h.loc}</span></p>
+                  <p className="text-[9px] opacity-50 mt-0.5">{h.time}</p>
+                  {h.reason && <p className="text-[10px] text-red-500 mt-1 font-bold bg-red-500/10 px-2 py-1 rounded inline-block">Reason: {h.reason}</p>}
+                </div>
+             ))}
+           </div>
+        </div>
         
         {(isPending && (user.branch === item.to || user.role === 'superadmin')) && (
           <div className="mt-4 p-4 border border-indigo-500/30 bg-indigo-500/5 rounded-2xl space-y-3">
@@ -473,8 +473,6 @@ function ParcelModal({item, creditAuthList, onClose, db, parcels, setParcels, us
                     <option value="" className="text-slate-900">Select Payment Collected...</option>
                     <option value="Cash" className="text-slate-900">💵 Physical Cash</option>
                     <option value="GPay" className="text-slate-900">📱 UPI / GPay</option>
-                    
-                    {/* 🔥 Intha line-la iruntha isCreditAuthorized condition-a thookiyachu 🔥 */}
                     <option value="Credit" className="text-slate-900">💳 Credit A/C</option>
                   </select>
                   
@@ -492,16 +490,15 @@ function ParcelModal({item, creditAuthList, onClose, db, parcels, setParcels, us
           </div>
         )}
 
-        <div className="flex gap-2 mt-4 pt-2 border-t border-slate-500/20">
-          <button onClick={()=>generatePDF(item)} className="flex-1 bg-blue-500/10 text-blue-500 font-bold py-2 rounded-xl text-sm border border-blue-500/20 hover:bg-blue-500 hover:text-white transition-colors">🖨️ Print</button>
-          <button onClick={onClose} className="flex-1 bg-slate-600 text-white font-bold py-2 rounded-xl text-sm shadow-md">Close</button>
+        <div className="flex gap-2 mt-4 pt-4 border-t border-slate-500/20">
+          <button onClick={()=>generatePDF(item)} className="flex-1 bg-blue-500/10 text-blue-500 font-bold py-3 rounded-xl text-sm border border-blue-500/20 hover:bg-blue-500 hover:text-white transition-colors">🖨️ Print Receipt</button>
+          <button onClick={onClose} className="flex-1 bg-slate-600 text-white font-bold py-3 rounded-xl text-sm shadow-md hover:bg-slate-700">Dismiss</button>
         </div>
       </div>
     </div>
   );
 }
 
-// 🔥 UPGRADED DASHBOARD (WITH TOTAL VALUE & CASH TO COLLECT LOGIC) 🔥
 function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalView}) {
   const [selectedBranch, setSelectedBranch] = useState(user.branch === 'All' ? 'All' : user.branch);
   const [expandedStaff, setExpandedStaff] = useState(null); 
@@ -511,6 +508,9 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
   const rev = branchParcels.reduce((a,b)=>a+(Number(b.price)||0),0);
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-100";
   const chartData = STATUSES.filter(s=>s!=='Deleted').map(s => ({ name: s, count: branchParcels.filter(p=>p.status===s).length, fill: S_CLR[s] }));
+
+  // 🔥 5th BOX DATA: Calculating Pending Parcels for selected branch 🔥
+  const pendingCount = branchParcels.filter(p => p.status === 'Booked' || p.status === 'In Transit').length;
 
   const goToTrack = (status) => {
      setTrackFilter(status);
@@ -538,7 +538,6 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
      });
   });
 
-  // 🔥 MASTER DATA GROUPING (TOTAL VALUE + COLLECTION MATH) 🔥
   const staffStats = {};
   let tPaid = 0, tToPay = 0, tCredit = 0, tCollected = 0, tTotalValue = 0;
 
@@ -550,7 +549,7 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
      
      const amt = Number(p.price) || 0;
      staffStats[staffName].count += 1;
-     staffStats[staffName].totalValue += amt; // 🔥 Motha Sarakkoda Mathippu 🔥
+     staffStats[staffName].totalValue += amt;
      tTotalValue += amt;
      staffStats[staffName].parcels.push(p);
      
@@ -580,22 +579,29 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
           </select>
         </div>
       )}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-          <div onClick={() => goToTrack('All')} className={`${cardBg} p-4 md:p-6 rounded-2xl shadow-sm border flex flex-col justify-center cursor-pointer hover:ring-2 hover:scale-105 ring-blue-500 transition-all duration-300`}>
-             <span className="text-xs font-bold opacity-60 uppercase mb-1 md:mb-2">Total Bookings</span>
-             <span className={`text-2xl md:text-4xl font-black text-blue-500`}>{branchParcels.length}</span>
+      
+      {/* 🔥 5 BOX GRID UPDATED HERE 🔥 */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
+          <div onClick={() => goToTrack('All')} className={`${cardBg} p-4 rounded-2xl shadow-sm border flex flex-col justify-center cursor-pointer hover:ring-2 hover:scale-105 ring-blue-500 transition-all duration-300`}>
+             <span className="text-[10px] font-bold opacity-60 uppercase mb-1">Total Bookings</span>
+             <span className={`text-xl md:text-3xl font-black text-blue-500`}>{branchParcels.length}</span>
           </div>
-          <div onClick={() => goToTrack('In Transit')} className={`${cardBg} p-4 md:p-6 rounded-2xl shadow-sm border flex flex-col justify-center cursor-pointer hover:ring-2 hover:scale-105 ring-amber-500 transition-all duration-300`}>
-             <span className="text-xs font-bold opacity-60 uppercase mb-1 md:mb-2">In Transit</span>
-             <span className={`text-2xl md:text-4xl font-black text-amber-500`}>{branchParcels.filter(p=>p.status==="In Transit").length}</span>
+          <div onClick={() => goToTrack('In Transit')} className={`${cardBg} p-4 rounded-2xl shadow-sm border flex flex-col justify-center cursor-pointer hover:ring-2 hover:scale-105 ring-amber-500 transition-all duration-300`}>
+             <span className="text-[10px] font-bold opacity-60 uppercase mb-1">In Transit</span>
+             <span className={`text-xl md:text-3xl font-black text-amber-500`}>{branchParcels.filter(p=>p.status==="In Transit").length}</span>
           </div>
-          <div onClick={() => goToTrack('Delivered')} className={`${cardBg} p-4 md:p-6 rounded-2xl shadow-sm border flex flex-col justify-center cursor-pointer hover:ring-2 hover:scale-105 ring-emerald-500 transition-all duration-300`}>
-             <span className="text-xs font-bold opacity-60 uppercase mb-1 md:mb-2">Total Delivered</span>
-             <span className={`text-2xl md:text-4xl font-black text-emerald-500`}>{branchParcels.filter(p=>p.status==="Delivered").length}</span>
+          {/* 🔥 NEW PENDING BOX 🔥 */}
+          <div onClick={() => setPage('pending')} className={`${cardBg} p-4 rounded-2xl shadow-sm border flex flex-col justify-center cursor-pointer hover:ring-2 hover:scale-105 ring-rose-500 transition-all duration-300`}>
+             <span className="text-[10px] font-bold opacity-60 uppercase mb-1">Pending Stock</span>
+             <span className={`text-xl md:text-3xl font-black text-rose-500`}>{pendingCount}</span>
           </div>
-          <div className={`${cardBg} p-4 md:p-6 rounded-2xl shadow-sm border flex flex-col justify-center`}>
-             <span className="text-xs font-bold opacity-60 uppercase mb-1 md:mb-2">Branch Revenue</span>
-             <span className={`text-2xl md:text-4xl font-black text-indigo-500`}>₹{rev}</span>
+          <div onClick={() => goToTrack('Delivered')} className={`${cardBg} p-4 rounded-2xl shadow-sm border flex flex-col justify-center cursor-pointer hover:ring-2 hover:scale-105 ring-emerald-500 transition-all duration-300`}>
+             <span className="text-[10px] font-bold opacity-60 uppercase mb-1">Total Delivered</span>
+             <span className={`text-xl md:text-3xl font-black text-emerald-500`}>{branchParcels.filter(p=>p.status==="Delivered").length}</span>
+          </div>
+          <div className={`${cardBg} p-4 rounded-2xl shadow-sm border flex flex-col justify-center`}>
+             <span className="text-[10px] font-bold opacity-60 uppercase mb-1">Branch Revenue</span>
+             <span className={`text-xl md:text-3xl font-black text-indigo-500`}>₹{rev}</span>
           </div>
       </div>
 
@@ -616,8 +622,10 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
                <div>
                   <h3 className="font-black text-sm text-emerald-500 uppercase">🏆 Today's Deliveries</h3>
                </div>
-               <div className="text-right">
-                  <span className="bg-emerald-500 text-white text-[10px] px-2 py-1 rounded-full font-bold">{todaysDelParcels.length} Total Parcels</span>
+               <div className="flex gap-2">
+                  {/* 🔥 MASTER PRINT BUTTON IN DASHBOARD 🔥 */}
+                  <button onClick={() => generateListPDF("Today's Deliveries", selectedBranch, todaysDelParcels)} className="bg-blue-500 text-white text-[10px] px-2 py-1 rounded-md font-bold shadow hover:bg-blue-600 transition-colors">🖨️ PRINT</button>
+                  <span className="bg-emerald-500 text-white text-[10px] px-2 py-1 rounded-md font-bold shadow">{todaysDelParcels.length} Items</span>
                </div>
             </div>
             
@@ -636,7 +644,6 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
                                  <span className="text-lg">{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '👤'}</span>
                                  <span className="font-bold text-sm">{staff}</span>
                               </div>
-                              {/* 🔥 INGA TOTAL VALUE KAATTUM 🔥 */}
                               <span className="text-[10px] font-bold text-indigo-500 ml-7 mt-0.5">₹{stats.totalValue} Total Value</span>
                            </div>
                            <div className="flex items-center gap-2">
@@ -654,7 +661,6 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
                                  <span>Credit: ₹{stats.credit}</span>
                               </div>
                               
-                              {/* 🔥 INGA STAFF KITTA IRUNTHU VAANGA VENDIYA EXACT CASH DETAILS 🔥 */}
                               <div className="text-[10px] font-black text-emerald-500 px-1 pb-1 border-b border-slate-500/20 mb-1">
                                  👉 Cash to Collect: ₹{stats.collected}
                               </div>
@@ -669,11 +675,13 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
                                        <span className="text-[11px] font-black text-indigo-500 hover:underline">📦 {p.id}</span>
                                        <span className="text-[10px] opacity-70 font-bold truncate w-32 md:w-40" title={p.rName}>{p.rName}</span>
                                     </div>
-                                    <div className="flex flex-col text-right">
-                                       <span className="text-[11px] font-bold">₹{p.price}</span>
-                                       <span className="text-[9px] opacity-60 font-bold">
-                                          {p.payment === 'To Pay' ? p.deliveryMode : p.payment}
-                                       </span>
+                                    <div className="flex items-center gap-3">
+                                       <div className="flex flex-col text-right">
+                                          <span className="text-[11px] font-bold">₹{p.price}</span>
+                                          <span className="text-[9px] opacity-60 font-bold">
+                                             {p.payment === 'To Pay' ? p.deliveryMode : p.payment}
+                                          </span>
+                                       </div>
                                     </div>
                                  </div>
                               ))}
@@ -688,11 +696,9 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
                <div className={`mt-3 p-3 rounded-xl border-t-2 border-dashed flex justify-between items-center font-black text-xs shrink-0 ${isDark ? 'border-slate-700 text-white bg-slate-950' : 'border-slate-200 text-slate-900 bg-slate-100'}`}>
                   <div className="flex flex-col">
                      <span className="uppercase tracking-wider opacity-60 text-[9px]">Grand Total Delivery</span>
-                     {/* 🔥 MOTHAMA INNAIKU DELIVER AANA TOTAL VALUE 🔥 */}
                      <span className="text-indigo-500 font-black text-sm mt-0.5">₹{tTotalValue} Value</span>
                   </div>
                   <div className="text-right flex flex-col">
-                     {/* 🔥 MOTHAMA KAIYILA VANTHA CASH 🔥 */}
                      <span className="text-emerald-500 text-sm">₹{tCollected} Cash In-Hand</span>
                      <span className="text-[9px] opacity-70 font-bold mt-0.5">P: ₹{tPaid} | TP: ₹{tToPay} | C: ₹{tCredit}</span>
                   </div>
@@ -705,7 +711,6 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
   );
 }
 
-// 🔥 UPGRADED PENDING COMPONENT (WITH CUSTOMER NAME DISPLAY) 🔥
 function Pending({parcels, isDark, user, setGlobalView}) {
   const [fLR, setFLR] = useState(""); const [fFrom, setFFrom] = useState("All"); const [fTo, setFTo] = useState("All"); 
   const [fFromDate, setFFromDate] = useState(""); const [fToDate, setFToDate] = useState("");
@@ -755,18 +760,26 @@ function Pending({parcels, isDark, user, setGlobalView}) {
         </div>
       </div>
       <div className={`${cardBg} rounded-2xl shadow-sm border overflow-hidden`}>
-        <div className="bg-amber-500/10 text-amber-600 p-4 font-bold md:text-lg flex justify-between items-center border-b border-amber-500/20"><span>⏳ Global Pending Parcels</span><span className="bg-amber-500 text-white px-3 py-1 rounded-full text-xs md:text-sm">{pendingParcels.length} Items</span></div>
+        <div className="bg-amber-500/10 text-amber-600 p-4 font-bold md:text-lg flex justify-between items-center border-b border-amber-500/20">
+            <span>⏳ Global Pending Parcels</span>
+            <div className="flex gap-2">
+               {/* 🔥 PENDING PRINT & EXPORT BUTTONS 🔥 */}
+               <button onClick={() => exportToCSV("Pending_List", pendingParcels)} className="bg-amber-600 hover:bg-amber-700 text-white text-xs px-3 py-1.5 rounded-lg shadow-md transition-colors">📥 Excel</button>
+               <button onClick={() => generateListPDF("Pending Manifest", user.branch, pendingParcels)} className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded-lg shadow-md transition-colors">🖨️ Print List</button>
+               <span className="bg-amber-500 text-white px-3 py-1.5 rounded-lg text-xs md:text-sm">{pendingParcels.length} Items</span>
+            </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className={`${tblBg} opacity-70 text-[10px] uppercase font-bold`}>
-              <tr>
-                <th className="p-4">LR No</th>
-                <th className="p-4">Route</th>
-                <th className="p-4">Customer Details</th> {/* 🔥 Puthu Column 🔥 */}
-                <th className="p-4">Qty</th>
-                <th className="p-4">Status</th>
-                <th className="p-4">Age</th>
-              </tr>
+               <tr>
+                  <th className="p-4">LR No</th>
+                  <th className="p-4">Route</th>
+                  <th className="p-4">Customer Details</th>
+                  <th className="p-4">Qty</th>
+                  <th className="p-4">Status</th>
+                  <th className="p-4">Age</th>
+               </tr>
             </thead>
             <tbody>
               {pendingParcels.length === 0 ? <tr><td colSpan="6" className="p-8 text-center opacity-50 font-bold">No pending parcels! All cleared.</td></tr> : pendingParcels.map(p => {
@@ -775,13 +788,10 @@ function Pending({parcels, isDark, user, setGlobalView}) {
                   <tr key={p.id} className="border-t border-slate-500/10 hover:bg-black/5 cursor-pointer" onClick={() => setGlobalView(p)}>
                     <td className="p-4 font-black text-indigo-500 hover:underline">{p.id}</td>
                     <td className="p-4 font-bold">{p.from} ➔ {p.to}</td>
-                    
-                    {/* 🔥 NEW UI: CUSTOMER SENDER & RECEIVER NAME DISPLAY 🔥 */}
                     <td className="p-4 text-xs">
-                       <p className="font-bold text-slate-300">{p.sName || "Unknown"} ➔ {p.rName || "Unknown"}</p>
+                       <p className="font-bold text-slate-400">{p.sName || "Unknown"} ➔ {p.rName || "Unknown"}</p>
                        <p className="opacity-50 text-[11px]">{p.sPhone} | {p.rPhone}</p>
                     </td>
-
                     <td className="p-4 font-black text-amber-500">{p.count} {p.type}</td>
                     <td className="p-4"><span className="px-2 py-1 rounded-full text-[10px] font-bold" style={{backgroundColor: S_CLR[p.status]+'22', color: S_CLR[p.status]}}>{p.status}</span></td>
                     <td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold ${days > 2 ? 'bg-red-500/10 text-red-500' : 'bg-emerald-500/10 text-emerald-500'}`}>{days === 0 ? 'Today' : `${days} Days`}</span></td>
@@ -796,8 +806,6 @@ function Pending({parcels, isDark, user, setGlobalView}) {
   );
 }
 
-
-// 🔥 UPGRADED BOOKING COMPONENT (WITH SEARCHABLE CREDIT DROPDOWN) 🔥
 function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, user, creditAuthList}) {
   const initF = {sName:"", sPhone:"", sGst:"", rName:"", rPhone:"", rGst:"", from: user.branch === 'All' ? "" : user.branch, to:"", rate:"", count:"1", actualWeight:"", type:"Box", payment:"Paid", creditCustomer:"", notes:""};
   const [f, setF] = useState(initF); const [done, setDone] = useState(null); const [eway, setEway] = useState(""); const [contacts, setContacts] = useState([]);
@@ -866,7 +874,6 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
           <div className="flex flex-col gap-3">
             <select id="pPay" onKeyDown={e=>handleBoxTravel(e,{enter:'btnSubmit', up:'pQty', down:'btnSubmit'})} value={f.payment} onChange={e=>setF({...f, payment:e.target.value})} className="p-3 border rounded-xl font-bold bg-indigo-600 text-white outline-none w-full">{PAY_MODES.map(p=><option key={p} value={p}>{p.toUpperCase()}</option>)}</select>
             
-            {/* Searchable Dropdown For Booking */}
             {f.payment === 'Credit' && (
                <CreditSearchDropdown 
                   value={f.creditCustomer} 
@@ -884,12 +891,11 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
   );
 }
 
-// 🔥 UPGRADED TRACK COMPONENT (WITH DYNAMIC SORTING) 🔥
 function Track({parcels, isDark, user, setGlobalView, initialStatus}) {
   const [fLR, setFLR] = useState(""); const [fFrom, setFFrom] = useState("All"); const [fTo, setFTo] = useState("All"); 
   const [fStatus, setFStatus] = useState(initialStatus || "All"); 
   const [fFromDate, setFFromDate] = useState(""); const [fToDate, setFToDate] = useState("");
-  const [sortOrder, setSortOrder] = useState("date_desc"); // 🔥 Default: Puthusu mela varum 🔥
+  const [sortOrder, setSortOrder] = useState("date_desc"); 
 
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-100"; 
   const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800"; 
@@ -899,10 +905,14 @@ function Track({parcels, isDark, user, setGlobalView, initialStatus}) {
 
   let results = parcels.filter(p => {
     const sTerm = fLR.toLowerCase();
+    
+    if (fStatus === "All" && p.status === 'Deleted') return false; 
+    if (fStatus !== "All" && p.status !== fStatus) return false;
+
     if (fLR && !p.id.toLowerCase().includes(sTerm) && !p.sPhone.includes(sTerm) && !p.rPhone.includes(sTerm) && !(p.sName && p.sName.toLowerCase().includes(sTerm)) && !(p.rName && p.rName.toLowerCase().includes(sTerm))) return false;
     if (fFrom !== "All" && p.from !== fFrom) return false;
     if (fTo !== "All" && p.to !== fTo) return false;
-    if (fStatus !== "All" && p.status !== fStatus) return false;
+    
     if (user.role === 'staff' && p.from !== user.branch && p.to !== user.branch) return false;
     
     const pDate = p.isoDate ? p.isoDate.split('T')[0] : "";
@@ -911,7 +921,6 @@ function Track({parcels, isDark, user, setGlobalView, initialStatus}) {
     return true;
   });
 
-  // 🔥 DYNAMIC SORTING LOGIC 🔥
   results.sort((a, b) => {
     if (sortOrder === "lr_asc") return a.id.localeCompare(b.id);
     if (sortOrder === "lr_desc") return b.id.localeCompare(a.id);
@@ -929,7 +938,14 @@ function Track({parcels, isDark, user, setGlobalView, initialStatus}) {
   return (
     <div className="space-y-4">
       <div className={`${cardBg} p-4 rounded-2xl border space-y-3`}>
-        <h3 className="font-bold text-sm text-indigo-500">Advanced Search Filter</h3>
+        <div className="flex justify-between items-center">
+           <h3 className="font-bold text-sm text-indigo-500">Advanced Search Filter</h3>
+           <div className="flex gap-2">
+              {/* 🔥 TRACK PRINT & EXPORT BUTTONS 🔥 */}
+              <button onClick={() => exportToCSV("Track_List", results)} className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded-lg shadow-md transition-colors">📥 Excel</button>
+              <button onClick={() => generateListPDF("Tracked Parcels List", user.branch, results)} className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded-lg shadow-md transition-colors">🖨️ Print List</button>
+           </div>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2">
           <input value={fLR} onChange={e=>setFLR(e.target.value)} placeholder="LR / Phone / Name" className={`p-2 rounded-xl border text-sm ${inputBg}`} />
           <select value={fFrom} onChange={e=>setFFrom(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`}><option value="All">Any Origin</option>{CITIES.map(c => <option key={c}>{c}</option>)}</select>
@@ -938,7 +954,6 @@ function Track({parcels, isDark, user, setGlobalView, initialStatus}) {
           <input type="date" title="From Date" value={fFromDate} onChange={e=>setFFromDate(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`} />
           <input type="date" title="To Date" value={fToDate} onChange={e=>setFToDate(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`} />
           
-          {/* 🔥 NEW SORT DROPDOWN 🔥 */}
           <select value={sortOrder} onChange={e=>setSortOrder(e.target.value)} className={`p-2 rounded-xl border text-sm font-black text-indigo-500 ${inputBg}`}>
             <option value="date_desc">Sort: Newest First</option>
             <option value="date_asc">Sort: Oldest First</option>
@@ -1085,7 +1100,51 @@ function Accounts({parcels, setParcels, db, showMsg, isDark, user}) {
   );
 }
 
-// 🔥 ULTIMATE BUG-FREE INVOICE LOGIC IN ADMIN 🔥
+function DeletedParcelsLog({ parcels, isDark }) {
+   const deletedList = parcels.filter(p => p.status === 'Deleted');
+   const cardBg = isDark ? "bg-slate-800 border-slate-700 text-white" : "bg-white border-slate-200 text-slate-900";
+   const tblBg = isDark ? "bg-slate-900" : "bg-slate-50";
+
+   return (
+      <div className={`${cardBg} p-4 md:p-6 rounded-2xl border shadow-sm mt-6`}>
+         <div className="flex items-center gap-2 mb-4 border-b border-slate-500/20 pb-2">
+            <span className="text-xl">🗑️</span>
+            <h3 className="font-black text-red-500 uppercase">Deleted Parcels Audit Log</h3>
+            <span className="ml-auto bg-red-500 text-white text-[10px] px-2 py-1 rounded-full font-bold">{deletedList.length} Items</span>
+         </div>
+         
+         <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left whitespace-nowrap text-sm">
+               <thead className={`${tblBg} opacity-70 text-[10px] uppercase font-bold`}>
+                  <tr>
+                     <th className="p-3">LR No</th>
+                     <th className="p-3">Route & Customer</th>
+                     <th className="p-3">Deleted By (Staff)</th>
+                     <th className="p-3">Deleted Time</th>
+                  </tr>
+               </thead>
+               <tbody>
+                  {deletedList.length === 0 ? <tr><td colSpan="4" className="p-6 text-center opacity-50 font-bold">No deleted parcels found. Safe!</td></tr> : deletedList.map(p => (
+                     <tr key={p.id} className="border-t border-slate-500/10 hover:bg-red-500/5">
+                        <td className="p-3 font-black text-red-400 line-through">📦 {p.id}</td>
+                        <td className="p-3">
+                           <p className="font-bold">{p.from} ➔ {p.to}</p>
+                           <p className="text-[10px] opacity-70">{p.sName} ➔ {p.rName}</p>
+                        </td>
+                        <td className="p-3 font-black text-indigo-500">
+                           👤 {p.deletedBy || p.history?.slice(-1)[0]?.user || "System/Unknown"} <br/>
+                           <span className="text-[9px] opacity-60">Reason: {p.deleteReason || "N/A"}</span>
+                        </td>
+                        <td className="p-3 text-xs font-bold opacity-70">{p.history?.slice(-1)[0]?.time || p.date}</td>
+                     </tr>
+                  ))}
+               </tbody>
+            </table>
+         </div>
+      </div>
+   );
+}
+
 function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user, creditAuthList, setCreditAuthList, setGlobalView}) {
   const [tab, setTab] = useState('parcels'); const [editF, setEditF] = useState(null); 
   const [newUser, setNewUser] = useState(""); const [newPass, setNewPass] = useState(""); const [newRole, setNewRole] = useState("staff"); const [newBranch, setNewBranch] = useState(CITIES[0]);
@@ -1129,12 +1188,9 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
 
   const exportData = () => { if (sortedTableData.length === 0) return showMsg("No data to export", "error"); const headers = ["LR No", "Date", "Sender", "Receiver", "Origin", "Destination", "Payment Mode", "Amount", "Status", "Booked By"]; const rows = sortedTableData.map(p => [p.id, p.date, p.sName, p.rName, p.from, p.to, p.payment, p.price, p.status, p.bookedBy].join(',')); const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join('\n'); const encodedUri = encodeURI(csvContent); const link = document.createElement("a"); link.setAttribute("href", encodedUri); link.setAttribute("download", `MPS_Report.csv`); document.body.appendChild(link); link.click(); link.remove(); showMsg("Report Downloaded!"); };
   
-  // 🔥 MULTI-NUMBER INVOICE MAGIC 🔥
   const triggerInvoice = () => { 
     if(!invCustomer) return showMsg("Select a Customer Account!", "error"); 
     
-    // Intha company perula entha phone number irunthalum atha kanduka thevayilla.
-    // Namma company peraiye theliva match panni ellathaiyum orey bill-la podurom.
     const invoiceParcels = parcels.filter(p => {
         if (p.status === 'Deleted') return false;
         const isCreditLedger = p.payment === "Credit" || p.deliveryMode === "Credit" || (p.notes && p.notes.includes("Mode: Credit"));
@@ -1146,7 +1202,6 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
 
     if(invoiceParcels.length === 0) return showMsg("No credit bills found for this period.", "error"); 
     
-    // Find at least one phone number to show on the invoice header
     const sampleAuth = creditAuthList.find(c => c.company.toLowerCase() === invCustomer.toLowerCase());
     const displayPhone = sampleAuth ? sampleAuth.phone : "Multiple Acc Numbers";
 
@@ -1173,7 +1228,6 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
     setParcels(updatedParcelsList); showMsg(`Successfully settled ${invoiceParcels.length} parcels for ${invCustomer}!`);
   };
 
-  // Unique companies list for the dropdown
   const uniqueCompanies = [...new Set(creditAuthList.map(c => c.company))];
 
   return (
@@ -1202,7 +1256,10 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4"><input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="🔍 Keyword" className={`p-2 md:p-3 rounded-xl border text-sm ${cardBg}`} /><select disabled={!isSuper} value={branchFilter} onChange={e=>setBranchFilter(e.target.value)} className={`p-2 md:p-3 rounded-xl border font-bold text-sm ${cardBg} ${!isSuper && 'opacity-50 cursor-not-allowed'}`}>{isSuper && <option value="All">All Branches</option>}{CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select><input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} className={`p-2 md:p-3 rounded-xl border font-bold text-sm ${cardBg}`} title="From Date" /><input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} className={`p-2 md:p-3 rounded-xl border font-bold text-sm ${cardBg}`} title="To Date" /><select value={paymentFilter} onChange={e=>setPaymentFilter(e.target.value)} className={`p-2 md:p-3 rounded-xl border font-bold text-sm ${cardBg}`}><option value="All">All Modes</option><option value="Paid">Paid</option><option value="To Pay">To Pay</option><option value="Credit">Credit</option></select></div>
           <button onClick={exportData} className="w-full py-2 bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500 hover:text-white transition-colors text-[10px] md:text-xs font-bold rounded-lg border border-indigo-500/20">📥 Export CSV Record</button>
-          <div className={`${cardBg} rounded-2xl border overflow-x-auto shadow-sm`}>
+          
+          {isSuper && <DeletedParcelsLog parcels={parcels} isDark={isDark} />}
+
+          <div className={`${cardBg} rounded-2xl border overflow-x-auto shadow-sm mt-6`}>
             <table className="min-w-[800px] w-full text-left whitespace-nowrap">
               <thead className={`${tblBg} text-[10px] md:text-xs font-bold uppercase opacity-80`}><tr><th className="p-3 md:p-4">LR Code</th><th className="p-3 md:p-4">Route Info</th><th className="p-3 md:p-4">Billing Parameters</th><th className="p-3 md:p-4">Tracking Node</th><th className="p-3 md:p-4">Operations Control</th></tr></thead>
               <tbody>
@@ -1213,11 +1270,11 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
                     <td className="p-3 md:p-4 font-black text-indigo-500 text-sm cursor-pointer hover:underline" onClick={() => setGlobalView(p)}>{p.id} <span className="block text-[10px] opacity-50 font-normal">{p.date}</span></td>
                     <td className="p-3 md:p-4 text-xs md:text-sm font-bold">{p.from} ➔ {p.to}</td>
                     <td className="p-3 md:p-4 text-xs md:text-sm">₹{p.price} <b className="text-[10px] md:text-xs opacity-60">({p.payment})</b></td>
-                    <td className="p-3 md:p-4"><span className="px-2 md:px-3 py-1 rounded-full text-[10px] md:text-xs font-bold uppercase" style={{backgroundColor: S_CLR[p.status]+'22', color: S_CLR[p.status]}}>{p.status}</span>{p.status === 'Deleted' && isSuper && ( <div className="text-[10px] text-red-500 font-bold mt-1"><p>By: {p.deletedBy}</p><p>Reason: {p.deleteReason}</p></div> )}</td>
+                    <td className="p-3 md:p-4"><span className="px-2 md:px-3 py-1 rounded-full text-[10px] md:text-xs font-bold uppercase" style={{backgroundColor: S_CLR[p.status]+'22', color: S_CLR[p.status]}}>{p.status}</span></td>
                     <td className="p-3 md:p-4 space-x-1 md:space-x-2">
                       {(canEditDrop || isSuper) && p.status !== 'Deleted' && ( <><button onClick={()=>setEditF(p)} className="text-amber-500 text-[10px] md:text-xs font-bold border border-amber-500/20 px-2 py-1 rounded bg-amber-500/5">✏️ Edit</button><button onClick={()=>deleteRecord(p.id)} className="text-red-500 text-[10px] md:text-xs font-bold border border-red-500/20 px-2 py-1 rounded bg-red-500/5">🗑️ Drop</button></> )}
                       {!canEditDrop && !isSuper && p.status !== 'Deleted' && <span className="text-[10px] opacity-50 italic">🔒 Locked</span>}
-                      <button onClick={()=>generatePDF(p)} className="text-blue-500 text-[10px] md:text-xs font-bold border border-blue-500/20 px-2 py-1 rounded bg-blue-500/5">🖨️ Print</button>
+                      {p.status !== 'Deleted' && <button onClick={()=>generatePDF(p)} className="text-blue-500 text-[10px] md:text-xs font-bold border border-blue-500/20 px-2 py-1 rounded bg-blue-500/5">🖨️ Print</button>}
                     </td>
                   </tr>
                 )})}
@@ -1226,7 +1283,7 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
           </div>
         </>
       )}
-      {editF && ( <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50"><div className={`${cardBg} p-6 rounded-2xl max-w-lg w-full space-y-4 animate-bounce-in`}><h3 className="font-black text-lg">Modify Manifest Parameters: {editF.id}</h3><div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><input value={editF.sName} onChange={e=>setEditF({...editF, sName:e.target.value})} placeholder="Sender Identity" className={`p-2 border rounded text-sm ${inputBg}`} /><input value={editF.rName} onChange={e=>setEditF({...editF, rName:e.target.value})} placeholder="Receiver Identity" className={`p-2 border rounded text-sm ${inputBg}`} /><select value={editF.status} onChange={e=>setEditF({...editF, status:e.target.value})} className={`p-2 border rounded text-sm ${inputBg}`}>{STATUSES.filter(s=>s!=='Deleted').map(s=><option key={s}>{s}</option>)}</select><input type="number" value={editF.price} onChange={e=>setEditF({...editF, price:Number(e.target.value)})} placeholder="Price Override" className={`p-2 border rounded font-bold text-sm ${inputBg}`} /></div><div className="flex gap-2 mt-4"><button onClick={saveOverrides} className="bg-indigo-600 text-white font-bold py-2 px-4 rounded-xl flex-1 text-sm">Save Changes</button><button onClick={()=>setEditF(null)} className="bg-slate-500 text-white py-2 px-4 rounded-xl text-sm">Dismiss</button></div></div></div> )}
+      {editF && ( <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[200]"><div className={`${cardBg} p-6 rounded-2xl max-w-lg w-full space-y-4 animate-bounce-in`}><h3 className="font-black text-lg">Modify Manifest Parameters: {editF.id}</h3><div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><input value={editF.sName} onChange={e=>setEditF({...editF, sName:e.target.value})} placeholder="Sender Identity" className={`p-2 border rounded text-sm ${inputBg}`} /><input value={editF.rName} onChange={e=>setEditF({...editF, rName:e.target.value})} placeholder="Receiver Identity" className={`p-2 border rounded text-sm ${inputBg}`} /><select value={editF.status} onChange={e=>setEditF({...editF, status:e.target.value})} className={`p-2 border rounded text-sm ${inputBg}`}>{STATUSES.filter(s=>s!=='Deleted').map(s=><option key={s}>{s}</option>)}</select><input type="number" value={editF.price} onChange={e=>setEditF({...editF, price:Number(e.target.value)})} placeholder="Price Override" className={`p-2 border rounded font-bold text-sm ${inputBg}`} /></div><div className="flex gap-2 mt-4"><button onClick={saveOverrides} className="bg-indigo-600 text-white font-bold py-2 px-4 rounded-xl flex-1 text-sm">Save Changes</button><button onClick={()=>setEditF(null)} className="bg-slate-500 text-white py-2 px-4 rounded-xl text-sm">Dismiss</button></div></div></div> )}
     </div>
   );
 }
