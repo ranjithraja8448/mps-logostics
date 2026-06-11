@@ -499,9 +499,13 @@ function ParcelModal({item, creditAuthList, onClose, db, parcels, setParcels, us
   );
 }
 
+// 🔥 UPGRADED DASHBOARD (WITH DATE-WISE DELIVERY FILTER) 🔥
 function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalView}) {
   const [selectedBranch, setSelectedBranch] = useState(user.branch === 'All' ? 'All' : user.branch);
   const [expandedStaff, setExpandedStaff] = useState(null); 
+  
+  // 🔥 PUDHUSU: Delivery Thethi filter pandra state (Default: Innaiku) 🔥
+  const [deliveryDate, setDeliveryDate] = useState(new Date().toISOString().split('T')[0]);
   
   const activeParcels = parcels.filter(p => p.status !== 'Deleted');
   const branchParcels = activeParcels.filter(p => selectedBranch === 'All' ? true : (p.bookedBranch === selectedBranch || p.from === selectedBranch || p.to === selectedBranch));
@@ -517,31 +521,39 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
      setPage('track');
   };
 
-  const todayDateString = new Date().toDateString();
-  const todaysDelParcels = branchParcels.filter(p => {
+  // 🔥 MASTER DATE MATCHING LOGIC (Browser formats mix aanaalum exact-a pudikkum) 🔥
+  const [selY, selM, selD] = deliveryDate.split('-');
+  const targetDate = new Date(selY, selM - 1, selD);
+  const targetDateString = targetDate.toDateString();
+  const t1 = targetDate.toLocaleDateString();
+  const t2 = targetDate.toLocaleDateString('en-IN');
+  const t3 = targetDate.toLocaleDateString('en-US');
+  const t4 = `${String(selD).padStart(2, '0')}/${String(selM).padStart(2, '0')}/${selY}`;
+  const t5 = `${Number(selD)}/${Number(selM)}/${selY}`;
+  const t6 = `${String(selM).padStart(2, '0')}/${String(selD).padStart(2, '0')}/${selY}`;
+
+  const filteredDelParcels = branchParcels.filter(p => {
      if(p.status !== 'Delivered' || !p.history) return false;
      return p.history.some(h => {
         if(h.status !== 'Delivered') return false;
         const hTimeStr = h.time || "";
-        let isToday = false;
+        let isMatch = false;
         try {
             const parsedDate = new Date(hTimeStr);
-            if (!isNaN(parsedDate)) { isToday = (parsedDate.toDateString() === todayDateString); }
+            if (!isNaN(parsedDate)) { isMatch = (parsedDate.toDateString() === targetDateString); }
         } catch(e) {}
-        if (!isToday) {
-            const t1 = new Date().toLocaleDateString();
-            const t2 = new Date().toLocaleDateString('en-IN');
-            const t3 = new Date().toLocaleDateString('en-US');
-            isToday = hTimeStr.includes(t1) || hTimeStr.includes(t2) || hTimeStr.includes(t3);
+        if (!isMatch) {
+            isMatch = hTimeStr.includes(t1) || hTimeStr.includes(t2) || hTimeStr.includes(t3) || 
+                      hTimeStr.includes(t4) || hTimeStr.includes(t5) || hTimeStr.includes(t6);
         }
-        return isToday;
+        return isMatch;
      });
   });
 
   const staffStats = {};
   let tPaid = 0, tToPay = 0, tCredit = 0, tCollected = 0, tTotalValue = 0;
 
-  todaysDelParcels.forEach(p => {
+  filteredDelParcels.forEach(p => {
      const staffName = p.deliveredBy || "System";
      if (!staffStats[staffName]) {
          staffStats[staffName] = { count: 0, totalValue: 0, collected: 0, paid: 0, toPay: 0, credit: 0, parcels: [] };
@@ -580,7 +592,6 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
         </div>
       )}
       
-      {/* 🔥 5 BOX GRID UPDATED HERE 🔥 */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
           <div onClick={() => goToTrack('All')} className={`${cardBg} p-4 rounded-2xl shadow-sm border flex flex-col justify-center cursor-pointer hover:ring-2 hover:scale-105 ring-blue-500 transition-all duration-300`}>
              <span className="text-[10px] font-bold opacity-60 uppercase mb-1">Total Bookings</span>
@@ -590,7 +601,6 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
              <span className="text-[10px] font-bold opacity-60 uppercase mb-1">In Transit</span>
              <span className={`text-xl md:text-3xl font-black text-amber-500`}>{branchParcels.filter(p=>p.status==="In Transit").length}</span>
           </div>
-          {/* 🔥 NEW PENDING BOX 🔥 */}
           <div onClick={() => setPage('pending')} className={`${cardBg} p-4 rounded-2xl shadow-sm border flex flex-col justify-center cursor-pointer hover:ring-2 hover:scale-105 ring-rose-500 transition-all duration-300`}>
              <span className="text-[10px] font-bold opacity-60 uppercase mb-1">Pending Stock</span>
              <span className={`text-xl md:text-3xl font-black text-rose-500`}>{pendingCount}</span>
@@ -619,19 +629,26 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
 
          <div className={`${cardBg} p-4 md:p-6 rounded-2xl border shadow-sm flex flex-col h-auto md:h-[400px]`}>
             <div className="flex justify-between items-center mb-4 border-b border-slate-500/20 pb-2">
-               <div>
-                  <h3 className="font-black text-sm text-emerald-500 uppercase">🏆 Today's Deliveries</h3>
+               {/* 🔥 DATE PICKER INJECT PANNUNA IDAM 🔥 */}
+               <div className="flex items-center gap-2">
+                  <h3 className="font-black text-sm text-emerald-500 uppercase hidden sm:block">🏆 Deliveries</h3>
+                  <input 
+                     type="date" 
+                     value={deliveryDate} 
+                     onChange={e => setDeliveryDate(e.target.value)} 
+                     className={`px-2 py-0.5 text-[10px] md:text-xs font-bold rounded outline-none border cursor-pointer ${isDark ? 'bg-slate-900 border-emerald-500/30 text-emerald-400' : 'bg-emerald-50 border-emerald-300 text-emerald-700'}`}
+                  />
                </div>
                <div className="flex gap-2">
-                  {/* 🔥 MASTER PRINT BUTTON IN DASHBOARD 🔥 */}
-                  <button onClick={() => generateListPDF("Today's Deliveries", selectedBranch, todaysDelParcels)} className="bg-blue-500 text-white text-[10px] px-2 py-1 rounded-md font-bold shadow hover:bg-blue-600 transition-colors">🖨️ PRINT</button>
-                  <span className="bg-emerald-500 text-white text-[10px] px-2 py-1 rounded-md font-bold shadow">{todaysDelParcels.length} Items</span>
+                  {/* 🔥 DYNAMIC PRINT BUTTON 🔥 */}
+                  <button onClick={() => generateListPDF(`Deliveries - ${deliveryDate}`, selectedBranch, filteredDelParcels)} className="bg-blue-500 text-white text-[10px] px-2 py-1 rounded-md font-bold shadow hover:bg-blue-600 transition-colors">🖨️ PRINT</button>
+                  <span className="bg-emerald-500 text-white text-[10px] px-2 py-1 rounded-md font-bold shadow">{filteredDelParcels.length} Items</span>
                </div>
             </div>
             
             <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
                {Object.keys(staffStats).length === 0 ? (
-                  <p className="text-xs opacity-50 text-center mt-10 font-bold">No deliveries yet today.</p>
+                  <p className="text-xs opacity-50 text-center mt-10 font-bold">No deliveries on {deliveryDate}.</p>
                ) : (
                   Object.entries(staffStats).sort((a,b)=>b[1].count-a[1].count).map(([staff, stats], i) => (
                      <div key={i} className={`flex flex-col rounded-xl border overflow-hidden ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
@@ -682,6 +699,7 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
                                              {p.payment === 'To Pay' ? p.deliveryMode : p.payment}
                                           </span>
                                        </div>
+                                       <button onClick={(e) => { e.stopPropagation(); generatePDF(p); }} className="p-1.5 bg-blue-500/10 text-blue-500 hover:bg-blue-500 hover:text-white rounded-md transition-colors" title="Print Receipt">🖨️</button>
                                     </div>
                                  </div>
                               ))}
@@ -695,7 +713,7 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
             {Object.keys(staffStats).length > 0 && (
                <div className={`mt-3 p-3 rounded-xl border-t-2 border-dashed flex justify-between items-center font-black text-xs shrink-0 ${isDark ? 'border-slate-700 text-white bg-slate-950' : 'border-slate-200 text-slate-900 bg-slate-100'}`}>
                   <div className="flex flex-col">
-                     <span className="uppercase tracking-wider opacity-60 text-[9px]">Grand Total Delivery</span>
+                     <span className="uppercase tracking-wider opacity-60 text-[9px]">Total on {deliveryDate}</span>
                      <span className="text-indigo-500 font-black text-sm mt-0.5">₹{tTotalValue} Value</span>
                   </div>
                   <div className="text-right flex flex-col">
