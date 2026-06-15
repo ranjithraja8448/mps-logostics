@@ -193,10 +193,13 @@ function exportToCSV(title, parcelsList) {
   document.body.appendChild(link); link.click(); link.remove();
 }
 
+// 🔥 UPDATED WHATSAPP MESSAGE FORMAT (No Website Link) 🔥
 function openWhatsApp(phone, isSender, p) {
-  const text = `📦 *MPS Logistics*\n\nHello *${isSender ? p.sName : p.rName}*,\nYour parcel is booked successfully!\n\n*LR No:* ${p.id}\n*Route:* ${p.from} ➔ ${p.to}\n*Items:* ${p.count} ${p.type}\n*Mode:* ${p.payment}\n*Amount:* ₹${p.price}\n\nThank you for choosing MPS!`;
+  const text = `📦 *MPS PARCEL SERVICE*\n\nவணக்கம் / Hello *${isSender ? p.sName : p.rName}*,\nYour parcel is booked successfully! 🎉\n\n🧾 *LR No:* ${p.id}\n📤 *From:* ${p.sName}\n📥 *To:* ${p.rName}\n📍 *Route:* ${p.from} ➔ ${p.to}\n📦 *Items:* ${p.count} ${p.type}\n💰 *Mode:* ${p.payment} (₹${p.price})\n\n📞 *Support:* 90033 77185\n\nThank you for choosing MPS! ✨`;
+  
   window.open(`https://api.whatsapp.com/send?phone=91${phone}&text=${encodeURIComponent(text)}`, '_blank');
 }
+
 
 const handleBoxTravel = (e, targets) => {
   let nextId = null; const isSelect = e.target.tagName === 'SELECT'; let isStart = true, isEnd = true;
