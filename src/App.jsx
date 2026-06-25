@@ -882,15 +882,10 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800";
   const uniqueCompanies = [...new Set(creditAuthList.map(c => c.company))];
 
-  const submit = async () => {
+    const submit = async () => {
     if(isSubmitting) return; 
     
-    if(!lrNo || lrNo.trim() === "") return showMsg("LR Number is mandatory!", "error");
-    const finalLR = lrNo.trim().toUpperCase();
-    if(parcels.some(p => p.id.toUpperCase() === finalLR)) {
-       return showMsg(`LR Number ${finalLR} already exists in the system!`, "error");
-    }
-
+    if(isManualLR && (!lrNo || lrNo.trim() === "")) return showMsg("LR Number is mandatory in Manual Mode!", "error");
     if(!f.sName || !f.sPhone || !f.from || !f.rName || !f.rPhone || !f.to || !f.count || !f.rate || !f.type) return showMsg("Please fill all mandatory fields marked with (*)", "error");
     if(f.payment === "Credit") { 
       if(!f.creditCustomer) return showMsg("Search and Select a Credit Account!", "error");
@@ -899,19 +894,54 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
     setIsSubmitting(true); 
     const dObj = new Date(); const isoDate = dObj.toISOString(); const locDateStr = dObj.toLocaleDateString('en-IN'); 
     
-    const p = {...f, notes: f.payment === 'Credit' ? `[A/c: ${f.creditCustomer}] ${f.notes}` : f.notes, creditSettled: false, id: finalLR, date: locDateStr, isoDate: isoDate, status: "Booked", price: ep, bookedBy: user.username, bookedBranch: user.branch, settledBranches: [], history: [{status: "Booked", loc: f.from, time: dObj.toLocaleString()}]};
-    
     try {
+        // 🔥 ANTI-RACE CONDITION: Booking save aagurathukku oru second munnadi FRESH data fetch panrom 🔥
+        const freshParcels = await db.getParcels();
+        let finalLR = "";
+
+        if (isManualLR) {
+           finalLR = lrNo.trim().toUpperCase();
+           
+           // 1. Full LR Exact Match Check (Ex: 02/01/0021 already irukka nu paakum)
+           if(freshParcels.some(p => p.id.toUpperCase() === finalLR)) {
+              setIsSubmitting(false);
+              return showMsg(`LR Number ${finalLR} already exists!`, "error");
+           }
+           
+           // 2. Sequence Overlap Check (Ex: 02/03/0021 irukkum pothu, 02/01/0021 pottal thaduthurum)
+           const parts = finalLR.split('/');
+           if(parts.length === 3) {
+               const fCode = parts[0], seq = parts[2];
+               const overlap = freshParcels.some(p => {
+                   const pParts = p.id.split('/');
+                   return pParts.length === 3 && pParts[0] === fCode && pParts[2] === seq;
+               });
+               if (overlap) {
+                   setIsSubmitting(false);
+                   return showMsg(`Sequence Number ${seq} is already used by another route in your branch!`, "error");
+               }
+           }
+        } else {
+           // AUTO MODE: Fresh Data-va vachu puthusa accurate-a number generate pannum!
+           finalLR = generateLR(f.from, f.to, freshParcels);
+        }
+
+        const p = {...f, notes: f.payment === 'Credit' ? `[A/c: ${f.creditCustomer}] ${f.notes}` : f.notes, creditSettled: false, id: finalLR, date: locDateStr, isoDate: isoDate, status: "Booked", price: ep, bookedBy: user.username, bookedBranch: user.branch, settledBranches: [], history: [{status: "Booked", loc: f.from, time: dObj.toLocaleString()}]};
+        
         await db.insertParcel(p); 
+        
         const saved = await local.get("mps_contacts") || {}; saved[f.sPhone] = { name: f.sName, gst: f.sGst }; saved[f.rPhone] = { name: f.rName, gst: f.rGst }; await local.set("mps_contacts", saved);
-        setParcels([p, ...parcels]); 
+        
+        // Ulle erakkuna puthu list-a appadiye screen-la refresh pandrom
+        setParcels([p, ...freshParcels]); 
         setDone(p); 
-        showMsg("LR Generated cleanly."); 
+        showMsg("LR Generated cleanly without duplicates!"); 
     } catch(err) {
-        showMsg("Network or Duplicate LR Database Error!", "error");
+        showMsg("Network or Database Error! Please try again.", "error");
     }
     setIsSubmitting(false);
   };
+
 
   // 🔥 PUDHUSU: Reset pandrappo Auto mode-kku maathirum 🔥
   if(done) return ( <div className={`${cardBg} p-6 md:p-10 rounded-3xl max-w-xl mx-auto text-center border-t-4 border-emerald-500`}><h2 className="text-xl md:text-2xl font-black mb-4">Parcel Registered Successfully</h2><div className="bg-indigo-600/10 text-indigo-500 text-xl md:text-2xl font-mono font-bold p-3 rounded-xl mb-6">{done.id}</div><button onClick={()=>{setDone(null); setF(initF); setEway(""); setLrNo(""); setIsManualLR(false);}} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl mb-3">New Registration</button><button onClick={()=>generatePDF(done)} className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl mb-3">Download Receipt</button><button onClick={() => openWhatsApp(done.sPhone, true, done)} className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl">📱 Send SMS / WhatsApp</button></div> );
