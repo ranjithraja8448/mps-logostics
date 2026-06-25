@@ -193,13 +193,10 @@ function exportToCSV(title, parcelsList) {
   document.body.appendChild(link); link.click(); link.remove();
 }
 
-// 🔥 UPDATED WHATSAPP MESSAGE FORMAT (No Website Link) 🔥
 function openWhatsApp(phone, isSender, p) {
-  const text = `📦 *MPS PARCEL SERVICE*\n\nவணக்கம் / Hello *${isSender ? p.sName : p.rName}*,\nYour parcel is booked successfully! 🎉\n\n🧾 *LR No:* ${p.id}\n📤 *From:* ${p.sName}\n📥 *To:* ${p.rName}\n📍 *Route:* ${p.from} ➔ ${p.to}\n📦 *Items:* ${p.count} ${p.type}\n💰 *Mode:* ${p.payment} (₹${p.price})\n\n📞 *Support:* 90033 77185\n\nThank you for choosing MPS! ✨`;
-  
+  const text = `📦 *MPS Logistics*\n\nHello *${isSender ? p.sName : p.rName}*,\nYour parcel is booked successfully!\n\n*LR No:* ${p.id}\n*Route:* ${p.from} ➔ ${p.to}\n*Items:* ${p.count} ${p.type}\n*Mode:* ${p.payment}\n*Amount:* ₹${p.price}\n\nThank you for choosing MPS!`;
   window.open(`https://api.whatsapp.com/send?phone=91${phone}&text=${encodeURIComponent(text)}`, '_blank');
 }
-
 
 const handleBoxTravel = (e, targets) => {
   let nextId = null; const isSelect = e.target.tagName === 'SELECT'; let isStart = true, isEnd = true;
@@ -269,7 +266,16 @@ const local={ async get(k){try{const r=window.localStorage.getItem(k);return r?J
 class DB{
   constructor(url, key){ this.isLive = Boolean(url && key); if(this.isLive) { this.base = url.replace(/\/+$/,"")+"/rest/v1"; this.h = {"apikey":key,"Authorization":`Bearer ${key}`,"Content-Type":"application/json"}; } } 
   async getParcels(){ if(this.isLive) { try { const r=await fetch(`${this.base}/parcels?select=*`,{headers:this.h}); if(r.ok) return await r.json(); } catch(e){} } return await local.get("mps_parcels")||[]; }
-  async insertParcel(p){ if(this.isLive) { try { await fetch(`${this.base}/parcels`,{method:"POST",headers:this.h,body:JSON.stringify(p)}); } catch(e){} } await local.set("mps_parcels", [p, ...(await local.get("mps_parcels")||[])]); }
+  async insertParcel(p){ 
+    if(this.isLive) { 
+       const r = await fetch(`${this.base}/parcels`,{method:"POST",headers:this.h,body:JSON.stringify(p)}); 
+       // 🔥 PUDHUSU: Error vantha theliva throw pannum
+       if(!r.ok) {
+           throw new Error("Duplicate ID or Network Issue");
+       }
+    } 
+    await local.set("mps_parcels", [p, ...(await local.get("mps_parcels")||[])]); 
+  }
   async updateParcel(id, data){ if(this.isLive) { try { await fetch(`${this.base}/parcels?id=eq.${encodeURIComponent(id)}`,{method:"PATCH",headers:this.h,body:JSON.stringify(data)}); } catch(e){} } await local.set("mps_parcels", (await local.get("mps_parcels")||[]).map(x => x.id === id ? {...x, ...data} : x)); }
   async deleteParcel(id){ if(this.isLive) { try { await fetch(`${this.base}/parcels?id=eq.${encodeURIComponent(id)}`,{method:"DELETE",headers:this.h}); } catch(e){} } await local.set("mps_parcels", (await local.get("mps_parcels")||[]).filter(x => x.id !== id)); }
   async getUsers(){ if(this.isLive) { try { const r=await fetch(`${this.base}/app_users?select=*`,{headers:this.h}); if(r.ok) return await r.json(); } catch(e){} } let usrs = await local.get("mps_users"); if (!usrs || usrs.length === 0) { usrs = [{id:'super-1', username:'superadmin', password:'123', role:'superadmin', branch:'All'}, {id:'admin-1', username:'admin', password:'123', role:'admin', branch: CITIES[0]}, {id:'staff-1', username:'staff', password:'123', role:'staff', branch: CITIES[0]}]; await local.set("mps_users", usrs); } else if (!usrs.find(u => u.username === 'superadmin')) { usrs.push({id:'super-1', username:'superadmin', password:'123', role:'superadmin', branch:'All'}); await local.set("mps_users", usrs); } return usrs; }
@@ -860,14 +866,42 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
   const uniqueCompanies = [...new Set(creditAuthList.map(c => c.company))];
 
   const submit = async () => {
-    if(isSubmitting) return; if(!f.sName || !f.sPhone || !f.from || !f.rName || !f.rPhone || !f.to || !f.count || !f.rate || !f.type) return showMsg("Please fill all mandatory fields marked with (*)", "error");
+    if(isSubmitting) return; 
+    if(!f.sName || !f.sPhone || !f.from || !f.rName || !f.rPhone || !f.to || !f.count || !f.rate || !f.type) return showMsg("Please fill all mandatory fields marked with (*)", "error");
     if(f.payment === "Credit") { 
       if(!f.creditCustomer) return showMsg("Search and Select a Credit Account!", "error");
     }
-    setIsSubmitting(true); const dObj = new Date(); const isoDate = dObj.toISOString(); const locDateStr = dObj.toLocaleDateString('en-IN'); const lrNumber = generateLR(f.from, f.to, parcels);
-    const p = {...f, notes: f.payment === 'Credit' ? `[A/c: ${f.creditCustomer}] ${f.notes}` : f.notes, creditSettled: false, id: lrNumber, date: locDateStr, isoDate: isoDate, status: "Booked", price: ep, bookedBy: user.username, bookedBranch: user.branch, settledBranches: [], history: [{status: "Booked", loc: f.from, time: dObj.toLocaleString()}]};
+    
+    setIsSubmitting(true); 
+    const dObj = new Date(); const isoDate = dObj.toISOString(); const locDateStr = dObj.toLocaleDateString('en-IN'); 
+
+    // 🔥 DUPLICATE LR VANTHAA AUTO-A RETRY PANNUM LOGIC 🔥
+    let success = false;
+    let currentParcels = parcels;
+    let finalP = null;
+
+    for(let attempt = 1; attempt <= 3; attempt++) {
+       const newLR = generateLR(f.from, f.to, currentParcels);
+       finalP = {...f, notes: f.payment === 'Credit' ? `[A/c: ${f.creditCustomer}] ${f.notes}` : f.notes, creditSettled: false, id: newLR, date: locDateStr, isoDate: isoDate, status: "Booked", price: ep, bookedBy: user.username, bookedBranch: user.branch, settledBranches: [], history: [{status: "Booked", loc: f.from, time: dObj.toLocaleString()}]};
+
+       try {
+          await db.insertParcel(finalP);
+          success = true;
+          break; // Save aayiducha? Loop-a vittu veliya vaa!
+       } catch(err) {
+          // Save aagalaiya? Fresh list eduthu pudhu number vachu thirumba try pannu!
+          console.log("Duplicate LR hit, fetching fresh list and retrying...");
+          currentParcels = await db.getParcels(); 
+       }
+    }
+
+    if(!success) {
+       setIsSubmitting(false);
+       return showMsg("Server Busy! Please click Submit again.", "error");
+    }
+
     const saved = await local.get("mps_contacts") || {}; saved[f.sPhone] = { name: f.sName, gst: f.sGst }; saved[f.rPhone] = { name: f.rName, gst: f.rGst }; await local.set("mps_contacts", saved);
-    await db.insertParcel(p); setParcels([p, ...parcels]); setDone(p); showMsg("LR Generated cleanly."); setIsSubmitting(false);
+    setParcels([finalP, ...currentParcels]); setDone(finalP); showMsg("LR Generated cleanly."); setIsSubmitting(false);
   };
 
   if(done) return ( <div className={`${cardBg} p-6 md:p-10 rounded-3xl max-w-xl mx-auto text-center border-t-4 border-emerald-500`}><h2 className="text-xl md:text-2xl font-black mb-4">Parcel Registered Successfully</h2><div className="bg-indigo-600/10 text-indigo-500 text-xl md:text-2xl font-mono font-bold p-3 rounded-xl mb-6">{done.id}</div><button onClick={()=>{setDone(null); setF(initF); setEway("");}} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl mb-3">New Registration</button><button onClick={()=>generatePDF(done)} className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl mb-3">Download Receipt</button><button onClick={() => openWhatsApp(done.sPhone, true, done)} className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl">📱 Send SMS / WhatsApp (Manual)</button></div> );
