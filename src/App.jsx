@@ -833,14 +833,31 @@ function Pending({parcels, isDark, user, setGlobalView}) {
   );
 }
 
+// 🔥 UPGRADED BOOK COMPONENT (WITH SMART AUTO/MANUAL TOGGLE) 🔥
 function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, user, creditAuthList}) {
   const initF = {sName:"", sPhone:"", sGst:"", rName:"", rPhone:"", rGst:"", from: user.branch === 'All' ? "" : user.branch, to:"", rate:"", count:"1", actualWeight:"", type:"Box", payment:"Paid", creditCustomer:"", notes:""};
   const [f, setF] = useState(initF); const [done, setDone] = useState(null); const [eway, setEway] = useState(""); const [contacts, setContacts] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
+  
+  // 🔥 PUDHUSU: LR Number & Manual Toggle State 🔥
+  const [lrNo, setLrNo] = useState("");
+  const [isManualLR, setIsManualLR] = useState(false);
 
   useEffect(() => { if(shortcutMode) setF(prev => ({...prev, payment: shortcutMode})); }, [shortcutMode]);
+  
   useEffect(() => { async function load() { const cMap = {}; parcels.forEach(p => { if (p.sPhone && !cMap[p.sPhone]) cMap[p.sPhone] = { name: p.sName, gst: p.sGst || "" }; if (p.rPhone && !cMap[p.rPhone]) cMap[p.rPhone] = { name: p.rName, gst: p.rGst || "" }; }); const localC = await local.get("mps_contacts") || {}; Object.assign(cMap, localC); setContacts(Object.entries(cMap).map(([phone, data]) => ({ phone, ...data }))); } load(); }, [parcels]);
+
+  // 🔥 PUDHUSU: Auto mode-la irunthaal mattum LR generate aagum 🔥
+  useEffect(() => {
+     if(!isManualLR) {
+        if(f.from && f.to) {
+           setLrNo(generateLR(f.from, f.to, parcels));
+        } else {
+           setLrNo("");
+        }
+     }
+  }, [f.from, f.to, parcels, isManualLR]);
 
   const handleQRScan = (text) => {
     setShowScanner(false);
@@ -867,6 +884,13 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
 
   const submit = async () => {
     if(isSubmitting) return; 
+    
+    if(!lrNo || lrNo.trim() === "") return showMsg("LR Number is mandatory!", "error");
+    const finalLR = lrNo.trim().toUpperCase();
+    if(parcels.some(p => p.id.toUpperCase() === finalLR)) {
+       return showMsg(`LR Number ${finalLR} already exists in the system!`, "error");
+    }
+
     if(!f.sName || !f.sPhone || !f.from || !f.rName || !f.rPhone || !f.to || !f.count || !f.rate || !f.type) return showMsg("Please fill all mandatory fields marked with (*)", "error");
     if(f.payment === "Credit") { 
       if(!f.creditCustomer) return showMsg("Search and Select a Credit Account!", "error");
@@ -874,46 +898,54 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
     
     setIsSubmitting(true); 
     const dObj = new Date(); const isoDate = dObj.toISOString(); const locDateStr = dObj.toLocaleDateString('en-IN'); 
-
-    // 🔥 DUPLICATE LR VANTHAA AUTO-A RETRY PANNUM LOGIC 🔥
-    let success = false;
-    let currentParcels = parcels;
-    let finalP = null;
-
-    for(let attempt = 1; attempt <= 3; attempt++) {
-       const newLR = generateLR(f.from, f.to, currentParcels);
-       finalP = {...f, notes: f.payment === 'Credit' ? `[A/c: ${f.creditCustomer}] ${f.notes}` : f.notes, creditSettled: false, id: newLR, date: locDateStr, isoDate: isoDate, status: "Booked", price: ep, bookedBy: user.username, bookedBranch: user.branch, settledBranches: [], history: [{status: "Booked", loc: f.from, time: dObj.toLocaleString()}]};
-
-       try {
-          await db.insertParcel(finalP);
-          success = true;
-          break; // Save aayiducha? Loop-a vittu veliya vaa!
-       } catch(err) {
-          // Save aagalaiya? Fresh list eduthu pudhu number vachu thirumba try pannu!
-          console.log("Duplicate LR hit, fetching fresh list and retrying...");
-          currentParcels = await db.getParcels(); 
-       }
+    
+    const p = {...f, notes: f.payment === 'Credit' ? `[A/c: ${f.creditCustomer}] ${f.notes}` : f.notes, creditSettled: false, id: finalLR, date: locDateStr, isoDate: isoDate, status: "Booked", price: ep, bookedBy: user.username, bookedBranch: user.branch, settledBranches: [], history: [{status: "Booked", loc: f.from, time: dObj.toLocaleString()}]};
+    
+    try {
+        await db.insertParcel(p); 
+        const saved = await local.get("mps_contacts") || {}; saved[f.sPhone] = { name: f.sName, gst: f.sGst }; saved[f.rPhone] = { name: f.rName, gst: f.rGst }; await local.set("mps_contacts", saved);
+        setParcels([p, ...parcels]); 
+        setDone(p); 
+        showMsg("LR Generated cleanly."); 
+    } catch(err) {
+        showMsg("Network or Duplicate LR Database Error!", "error");
     }
-
-    if(!success) {
-       setIsSubmitting(false);
-       return showMsg("Server Busy! Please click Submit again.", "error");
-    }
-
-    const saved = await local.get("mps_contacts") || {}; saved[f.sPhone] = { name: f.sName, gst: f.sGst }; saved[f.rPhone] = { name: f.rName, gst: f.rGst }; await local.set("mps_contacts", saved);
-    setParcels([finalP, ...currentParcels]); setDone(finalP); showMsg("LR Generated cleanly."); setIsSubmitting(false);
+    setIsSubmitting(false);
   };
 
-  if(done) return ( <div className={`${cardBg} p-6 md:p-10 rounded-3xl max-w-xl mx-auto text-center border-t-4 border-emerald-500`}><h2 className="text-xl md:text-2xl font-black mb-4">Parcel Registered Successfully</h2><div className="bg-indigo-600/10 text-indigo-500 text-xl md:text-2xl font-mono font-bold p-3 rounded-xl mb-6">{done.id}</div><button onClick={()=>{setDone(null); setF(initF); setEway("");}} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl mb-3">New Registration</button><button onClick={()=>generatePDF(done)} className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl mb-3">Download Receipt</button><button onClick={() => openWhatsApp(done.sPhone, true, done)} className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl">📱 Send SMS / WhatsApp (Manual)</button></div> );
+  // 🔥 PUDHUSU: Reset pandrappo Auto mode-kku maathirum 🔥
+  if(done) return ( <div className={`${cardBg} p-6 md:p-10 rounded-3xl max-w-xl mx-auto text-center border-t-4 border-emerald-500`}><h2 className="text-xl md:text-2xl font-black mb-4">Parcel Registered Successfully</h2><div className="bg-indigo-600/10 text-indigo-500 text-xl md:text-2xl font-mono font-bold p-3 rounded-xl mb-6">{done.id}</div><button onClick={()=>{setDone(null); setF(initF); setEway(""); setLrNo(""); setIsManualLR(false);}} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl mb-3">New Registration</button><button onClick={()=>generatePDF(done)} className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl mb-3">Download Receipt</button><button onClick={() => openWhatsApp(done.sPhone, true, done)} className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl">📱 Send SMS / WhatsApp</button></div> );
 
   return (
     <div className="space-y-4 md:space-y-6">
       
-      <div className={`${cardBg} p-4 rounded-2xl border mb-2 flex flex-col sm:flex-row items-center gap-4 relative z-10`}>
-        <span className="text-xl hidden sm:block">⚡</span>
-        <input id="eway" onKeyDown={e=>handleBoxTravel(e,{enter:'sPhone', down:'sPhone'})} value={eway} onChange={handleEwayChange} placeholder="Enter 12-Digit E-Way Bill Number..." className={`w-full sm:flex-1 px-4 py-3 rounded-lg outline-none font-mono font-bold tracking-widest text-center sm:text-left ${inputBg}`} />
-        <button onClick={() => setShowScanner(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl shadow-md whitespace-nowrap flex items-center justify-center gap-2">📷 Scan QR</button>
-        {eway.length === 12 && <span className="text-emerald-500 font-bold px-4">Verified ✅</span>}
+      {/* 🔥 SMART LR BOX WITH TOGGLE BUTTON 🔥 */}
+      <div className={`${cardBg} p-4 rounded-2xl border mb-2 flex flex-col lg:flex-row gap-4 relative z-10`}>
+         <div className="flex-1">
+            <div className="flex justify-between items-center mb-1 ml-1">
+               <label className="text-[10px] uppercase font-bold opacity-80 text-indigo-500">📑 LR Number Booking</label>
+               <button 
+                  onClick={() => setIsManualLR(!isManualLR)} 
+                  className={`text-[9px] font-black px-3 py-1 rounded-md shadow-sm transition-all ${isManualLR ? 'bg-amber-500 text-white ring-2 ring-amber-500/50' : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}`}
+               >
+                  {isManualLR ? '🔓 MANUAL MODE' : '🔒 AUTO MODE'}
+               </button>
+            </div>
+            <input 
+               value={lrNo} 
+               onChange={e=>setLrNo(e.target.value.toUpperCase())} 
+               readOnly={!isManualLR} // 🔥 Auto mode-la lock aagirukkum 🔥
+               placeholder={isManualLR ? "Type Manual LR Code..." : "Auto Generated..."} 
+               className={`w-full px-4 py-3 rounded-xl outline-none font-black tracking-widest uppercase border focus:ring-2 focus:ring-indigo-500 shadow-inner ${inputBg} ${isManualLR ? 'text-amber-500 border-amber-500/50' : 'text-indigo-500 opacity-80 bg-black/5 cursor-not-allowed'}`} 
+            />
+         </div>
+         <div className="flex-1">
+            <label className="text-[10px] uppercase font-bold opacity-60 ml-1 mb-1 block">⚡ Quick Fill (E-Way Bill)</label>
+            <div className="flex gap-2">
+               <input id="eway" onKeyDown={e=>handleBoxTravel(e,{enter:'sPhone', down:'sPhone'})} value={eway} onChange={handleEwayChange} placeholder="Enter 12-Digit E-Way..." className={`w-full px-4 py-3 rounded-xl outline-none font-mono font-bold tracking-widest border focus:ring-2 focus:ring-indigo-500 ${inputBg}`} />
+               <button onClick={() => setShowScanner(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl shadow-md whitespace-nowrap flex items-center justify-center gap-2">📷 Scan</button>
+            </div>
+         </div>
       </div>
       
       {showScanner && <EwayScannerModal onScan={handleQRScan} onClose={() => setShowScanner(false)} />}
@@ -941,7 +973,7 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
           <div className="bg-slate-950 p-4 rounded-xl flex justify-between items-center text-white h-full"><span className="text-sm opacity-50">Total Income Allocation</span><span className="text-xl md:text-2xl font-black text-emerald-400">₹{ep}</span></div>
         </div>
       </div>
-      <button id="btnSubmit" onClick={submit} disabled={isSubmitting} className={`w-full text-white font-bold py-4 rounded-xl shadow-lg transition-transform transform hover:-translate-y-1 relative z-10 ${isSubmitting ? 'bg-slate-500 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}>{isSubmitting ? "Generating LR Number..." : "Confirm Booking"}</button>
+      <button id="btnSubmit" onClick={submit} disabled={isSubmitting} className={`w-full text-white font-bold py-4 rounded-xl shadow-lg transition-transform transform hover:-translate-y-1 relative z-10 ${isSubmitting ? 'bg-slate-500 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}>{isSubmitting ? "Generating Booking..." : "Confirm Booking"}</button>
     </div>
   );
 }
