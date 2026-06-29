@@ -152,7 +152,7 @@ function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList) {
   window.open(doc.output('bloburl'), '_blank');
 }
 
-// 🔥 UNIVERSAL LIST PDF PRINTER (For Dash, Track & Pending) 🔥
+// 🔥 UNIVERSAL LIST PDF PRINTER 🔥
 function generateListPDF(title, branch, parcelsList) {
   const doc = new jsPDF();
   doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.text(`MPS - ${title}`, 105, 15, { align: "center" });
@@ -193,8 +193,10 @@ function exportToCSV(title, parcelsList) {
   document.body.appendChild(link); link.click(); link.remove();
 }
 
+// 🔥 EXACT WHATSAPP MESSAGE FORMAT 🔥
 function openWhatsApp(phone, isSender, p) {
-  const text = `📦 *MPS Logistics*\n\nHello *${isSender ? p.sName : p.rName}*,\nYour parcel is booked successfully!\n\n*LR No:* ${p.id}\n*Route:* ${p.from} ➔ ${p.to}\n*Items:* ${p.count} ${p.type}\n*Mode:* ${p.payment}\n*Amount:* ₹${p.price}\n\nThank you for choosing MPS!`;
+  const text = `📦 *MPS PARCEL SERVICE*\n\nவணக்கம் / Hello *${isSender ? p.sName : p.rName}*,\nYour parcel is booked successfully! 🎉\n\n🧾 *LR No:* ${p.id}\n📤 *From:* ${p.sName}\n📥 *To:* ${p.rName}\n📍 *Route:* ${p.from} ➔ ${p.to}\n📦 *Items:* ${p.count} ${p.type}\n💰 *Mode:* ${p.payment} (₹${p.price})\n\n📞 *Support:* 90033 77185\n\nThank you for choosing MPS! ✨`;
+  
   window.open(`https://api.whatsapp.com/send?phone=91${phone}&text=${encodeURIComponent(text)}`, '_blank');
 }
 
@@ -269,10 +271,7 @@ class DB{
   async insertParcel(p){ 
     if(this.isLive) { 
        const r = await fetch(`${this.base}/parcels`,{method:"POST",headers:this.h,body:JSON.stringify(p)}); 
-       // 🔥 PUDHUSU: Error vantha theliva throw pannum
-       if(!r.ok) {
-           throw new Error("Duplicate ID or Network Issue");
-       }
+       if(!r.ok) { throw new Error("Duplicate ID or Network Issue"); }
     } 
     await local.set("mps_parcels", [p, ...(await local.get("mps_parcels")||[])]); 
   }
@@ -508,12 +507,9 @@ function ParcelModal({item, creditAuthList, onClose, db, parcels, setParcels, us
   );
 }
 
-// 🔥 UPGRADED DASHBOARD (WITH DATE-WISE DELIVERY FILTER) 🔥
 function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalView}) {
   const [selectedBranch, setSelectedBranch] = useState(user.branch === 'All' ? 'All' : user.branch);
   const [expandedStaff, setExpandedStaff] = useState(null); 
-  
-  // 🔥 PUDHUSU: Delivery Thethi filter pandra state (Default: Innaiku) 🔥
   const [deliveryDate, setDeliveryDate] = useState(new Date().toISOString().split('T')[0]);
   
   const activeParcels = parcels.filter(p => p.status !== 'Deleted');
@@ -522,7 +518,6 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-100";
   const chartData = STATUSES.filter(s=>s!=='Deleted').map(s => ({ name: s, count: branchParcels.filter(p=>p.status===s).length, fill: S_CLR[s] }));
 
-  // 🔥 5th BOX DATA: Calculating Pending Parcels for selected branch 🔥
   const pendingCount = branchParcels.filter(p => p.status === 'Booked' || p.status === 'In Transit').length;
 
   const goToTrack = (status) => {
@@ -530,7 +525,6 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
      setPage('track');
   };
 
-  // 🔥 MASTER DATE MATCHING LOGIC (Browser formats mix aanaalum exact-a pudikkum) 🔥
   const [selY, selM, selD] = deliveryDate.split('-');
   const targetDate = new Date(selY, selM - 1, selD);
   const targetDateString = targetDate.toDateString();
@@ -638,18 +632,11 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
 
          <div className={`${cardBg} p-4 md:p-6 rounded-2xl border shadow-sm flex flex-col h-auto md:h-[400px]`}>
             <div className="flex justify-between items-center mb-4 border-b border-slate-500/20 pb-2">
-               {/* 🔥 DATE PICKER INJECT PANNUNA IDAM 🔥 */}
                <div className="flex items-center gap-2">
                   <h3 className="font-black text-sm text-emerald-500 uppercase hidden sm:block">🏆 Deliveries</h3>
-                  <input 
-                     type="date" 
-                     value={deliveryDate} 
-                     onChange={e => setDeliveryDate(e.target.value)} 
-                     className={`px-2 py-0.5 text-[10px] md:text-xs font-bold rounded outline-none border cursor-pointer ${isDark ? 'bg-slate-900 border-emerald-500/30 text-emerald-400' : 'bg-emerald-50 border-emerald-300 text-emerald-700'}`}
-                  />
+                  <input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} className={`px-2 py-0.5 text-[10px] md:text-xs font-bold rounded outline-none border cursor-pointer ${isDark ? 'bg-slate-900 border-emerald-500/30 text-emerald-400' : 'bg-emerald-50 border-emerald-300 text-emerald-700'}`} />
                </div>
                <div className="flex gap-2">
-                  {/* 🔥 DYNAMIC PRINT BUTTON 🔥 */}
                   <button onClick={() => generateListPDF(`Deliveries - ${deliveryDate}`, selectedBranch, filteredDelParcels)} className="bg-blue-500 text-white text-[10px] px-2 py-1 rounded-md font-bold shadow hover:bg-blue-600 transition-colors">🖨️ PRINT</button>
                   <span className="bg-emerald-500 text-white text-[10px] px-2 py-1 rounded-md font-bold shadow">{filteredDelParcels.length} Items</span>
                </div>
@@ -661,10 +648,7 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
                ) : (
                   Object.entries(staffStats).sort((a,b)=>b[1].count-a[1].count).map(([staff, stats], i) => (
                      <div key={i} className={`flex flex-col rounded-xl border overflow-hidden ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                        <div 
-                           onClick={() => setExpandedStaff(expandedStaff === staff ? null : staff)} 
-                           className="flex justify-between items-center p-3 cursor-pointer hover:bg-black/5 transition-colors"
-                        >
+                        <div onClick={() => setExpandedStaff(expandedStaff === staff ? null : staff)} className="flex justify-between items-center p-3 cursor-pointer hover:bg-black/5 transition-colors">
                            <div className="flex flex-col">
                               <div className="flex items-center gap-2">
                                  <span className="text-lg">{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '👤'}</span>
@@ -680,23 +664,16 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
 
                         {expandedStaff === staff && (
                            <div className={`p-2 space-y-2 border-t ${isDark ? 'border-slate-700 bg-slate-950/50' : 'border-slate-200 bg-white'}`}>
-                              
                               <div className="flex justify-between text-[9px] uppercase font-bold opacity-70 px-1 pt-1">
                                  <span>Paid: ₹{stats.paid}</span>
                                  <span>ToPay: ₹{stats.toPay}</span>
                                  <span>Credit: ₹{stats.credit}</span>
                               </div>
-                              
                               <div className="text-[10px] font-black text-emerald-500 px-1 pb-1 border-b border-slate-500/20 mb-1">
                                  👉 Cash to Collect: ₹{stats.collected}
                               </div>
-
                               {stats.parcels.map(p => (
-                                 <div 
-                                    key={p.id} 
-                                    onClick={() => setGlobalView(p)}
-                                    className="flex justify-between items-center p-2 rounded-lg cursor-pointer hover:bg-indigo-500/10 transition-colors"
-                                 >
+                                 <div key={p.id} onClick={() => setGlobalView(p)} className="flex justify-between items-center p-2 rounded-lg cursor-pointer hover:bg-indigo-500/10 transition-colors">
                                     <div className="flex flex-col">
                                        <span className="text-[11px] font-black text-indigo-500 hover:underline">📦 {p.id}</span>
                                        <span className="text-[10px] opacity-70 font-bold truncate w-32 md:w-40" title={p.rName}>{p.rName}</span>
@@ -704,9 +681,7 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
                                     <div className="flex items-center gap-3">
                                        <div className="flex flex-col text-right">
                                           <span className="text-[11px] font-bold">₹{p.price}</span>
-                                          <span className="text-[9px] opacity-60 font-bold">
-                                             {p.payment === 'To Pay' ? p.deliveryMode : p.payment}
-                                          </span>
+                                          <span className="text-[9px] opacity-60 font-bold">{p.payment === 'To Pay' ? p.deliveryMode : p.payment}</span>
                                        </div>
                                        <button onClick={(e) => { e.stopPropagation(); generatePDF(p); }} className="p-1.5 bg-blue-500/10 text-blue-500 hover:bg-blue-500 hover:text-white rounded-md transition-colors" title="Print Receipt">🖨️</button>
                                     </div>
@@ -731,13 +706,13 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
                   </div>
                </div>
             )}
-
          </div>
       </div>
     </div>
   );
 }
 
+// 🔥 UPGRADED PENDING (WITH SUMMARY TOTALS AT BOTTOM) 🔥
 function Pending({parcels, isDark, user, setGlobalView}) {
   const [fLR, setFLR] = useState(""); const [fFrom, setFFrom] = useState("All"); const [fTo, setFTo] = useState("All"); 
   const [fFromDate, setFFromDate] = useState(""); const [fToDate, setFToDate] = useState("");
@@ -768,6 +743,10 @@ function Pending({parcels, isDark, user, setGlobalView}) {
     return 0;
   });
 
+  const pendingQty = pendingParcels.reduce((sum, p) => sum + (Number(p.count)||0), 0);
+  const pendingPaid = pendingParcels.filter(p=>p.payment==='Paid').reduce((sum, p) => sum + (Number(p.price)||0), 0);
+  const pendingToPay = pendingParcels.filter(p=>p.payment==='To Pay').reduce((sum, p) => sum + (Number(p.price)||0), 0);
+
   return (
     <div className="space-y-4">
       <div className={`${cardBg} p-4 rounded-2xl border space-y-3`}>
@@ -790,7 +769,6 @@ function Pending({parcels, isDark, user, setGlobalView}) {
         <div className="bg-amber-500/10 text-amber-600 p-4 font-bold md:text-lg flex justify-between items-center border-b border-amber-500/20">
             <span>⏳ Global Pending Parcels</span>
             <div className="flex gap-2">
-               {/* 🔥 PENDING PRINT & EXPORT BUTTONS 🔥 */}
                <button onClick={() => exportToCSV("Pending_List", pendingParcels)} className="bg-amber-600 hover:bg-amber-700 text-white text-xs px-3 py-1.5 rounded-lg shadow-md transition-colors">📥 Excel</button>
                <button onClick={() => generateListPDF("Pending Manifest", user.branch, pendingParcels)} className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded-lg shadow-md transition-colors">🖨️ Print List</button>
                <span className="bg-amber-500 text-white px-3 py-1.5 rounded-lg text-xs md:text-sm">{pendingParcels.length} Items</span>
@@ -806,26 +784,39 @@ function Pending({parcels, isDark, user, setGlobalView}) {
                   <th className="p-4">Qty</th>
                   <th className="p-4">Status</th>
                   <th className="p-4">Age</th>
+                  <th className="p-4 text-center">Action</th>
                </tr>
             </thead>
             <tbody>
-              {pendingParcels.length === 0 ? <tr><td colSpan="6" className="p-8 text-center opacity-50 font-bold">No pending parcels! All cleared.</td></tr> : pendingParcels.map(p => {
+              {pendingParcels.length === 0 ? <tr><td colSpan="7" className="p-8 text-center opacity-50 font-bold">No pending parcels! All cleared.</td></tr> : pendingParcels.map(p => {
                 const days = getDays(p.isoDate);
                 return (
                   <tr key={p.id} className="border-t border-slate-500/10 hover:bg-black/5 cursor-pointer" onClick={() => setGlobalView(p)}>
                     <td className="p-4 font-black text-indigo-500 hover:underline">{p.id}</td>
                     <td className="p-4 font-bold">{p.from} ➔ {p.to}</td>
-                    <td className="p-4 text-xs">
-                       <p className="font-bold text-slate-400">{p.sName || "Unknown"} ➔ {p.rName || "Unknown"}</p>
-                       <p className="opacity-50 text-[11px]">{p.sPhone} | {p.rPhone}</p>
-                    </td>
-                    <td className="p-4 font-black text-amber-500">{p.count} {p.type}</td>
+                    <td className="p-4 text-xs"><p className="font-bold text-slate-400">{p.sName || "Unknown"} ➔ {p.rName || "Unknown"}</p><p className="opacity-50 text-[11px]">{p.sPhone} | {p.rPhone}</p></td>
+                    <td className="p-4 font-black text-amber-500">{p.count} <span className="text-[10px] font-normal">{p.type}</span></td>
                     <td className="p-4"><span className="px-2 py-1 rounded-full text-[10px] font-bold" style={{backgroundColor: S_CLR[p.status]+'22', color: S_CLR[p.status]}}>{p.status}</span></td>
                     <td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold ${days > 2 ? 'bg-red-500/10 text-red-500' : 'bg-emerald-500/10 text-emerald-500'}`}>{days === 0 ? 'Today' : `${days} Days`}</span></td>
+                    <td className="p-4 text-center"><button onClick={(e) => { e.stopPropagation(); generatePDF(p); }} className="bg-blue-500/10 text-blue-500 hover:bg-blue-500 hover:text-white px-3 py-1.5 rounded-lg text-[10px] font-black transition-colors border border-blue-500/20">🖨️ PRINT</button></td>
                   </tr>
                 )
               })}
             </tbody>
+            {pendingParcels.length > 0 && (
+              <tfoot className={`${isDark?'bg-slate-900 border-slate-700':'bg-slate-100 border-slate-200'} border-t-2 font-black`}>
+                 <tr>
+                    <td colSpan="3" className="p-4 text-right opacity-50 uppercase text-xs">Pending Summary :</td>
+                    <td className="p-4 text-amber-500 text-lg">{pendingQty} <span className="text-xs">Items</span></td>
+                    <td colSpan="3" className="p-4">
+                       <div className="flex gap-4 text-xs bg-black/5 p-2 rounded-xl inline-flex border border-slate-500/10">
+                          {pendingPaid > 0 && <span className="text-emerald-500">Paid: ₹{pendingPaid}</span>}
+                          {pendingToPay > 0 && <span className="text-rose-500">ToPay: ₹{pendingToPay}</span>}
+                       </div>
+                    </td>
+                 </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>
@@ -833,14 +824,13 @@ function Pending({parcels, isDark, user, setGlobalView}) {
   );
 }
 
-// 🔥 UPGRADED BOOK COMPONENT (WITH SMART AUTO/MANUAL TOGGLE) 🔥
+// 🔥 UPGRADED BOOK COMPONENT (WITH AUTO UPPERCASE) 🔥
 function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, user, creditAuthList}) {
   const initF = {sName:"", sPhone:"", sGst:"", rName:"", rPhone:"", rGst:"", from: user.branch === 'All' ? "" : user.branch, to:"", rate:"", count:"1", actualWeight:"", type:"Box", payment:"Paid", creditCustomer:"", notes:""};
   const [f, setF] = useState(initF); const [done, setDone] = useState(null); const [eway, setEway] = useState(""); const [contacts, setContacts] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   
-  // 🔥 PUDHUSU: LR Number & Manual Toggle State 🔥
   const [lrNo, setLrNo] = useState("");
   const [isManualLR, setIsManualLR] = useState(false);
 
@@ -848,14 +838,10 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
   
   useEffect(() => { async function load() { const cMap = {}; parcels.forEach(p => { if (p.sPhone && !cMap[p.sPhone]) cMap[p.sPhone] = { name: p.sName, gst: p.sGst || "" }; if (p.rPhone && !cMap[p.rPhone]) cMap[p.rPhone] = { name: p.rName, gst: p.rGst || "" }; }); const localC = await local.get("mps_contacts") || {}; Object.assign(cMap, localC); setContacts(Object.entries(cMap).map(([phone, data]) => ({ phone, ...data }))); } load(); }, [parcels]);
 
-  // 🔥 PUDHUSU: Auto mode-la irunthaal mattum LR generate aagum 🔥
   useEffect(() => {
      if(!isManualLR) {
-        if(f.from && f.to) {
-           setLrNo(generateLR(f.from, f.to, parcels));
-        } else {
-           setLrNo("");
-        }
+        if(f.from && f.to) { setLrNo(generateLR(f.from, f.to, parcels)); } 
+        else { setLrNo(""); }
      }
   }, [f.from, f.to, parcels, isManualLR]);
 
@@ -867,22 +853,24 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
         setEway(val);
         showMsg("QR Scanned! E-Way number extracted: " + val, "success");
         setTimeout(() => { 
-            setF(p => ({...p, sName: "Scanned Client", sPhone: "9999999999", rName: "Target Client", rPhone: "8888888888", count: "10", type: "Box", payment: "To Pay" })); 
+            setF(p => ({...p, sName: "SCANNED CLIENT", sPhone: "9999999999", rName: "TARGET CLIENT", rPhone: "8888888888", count: "10", type: "Box", payment: "To Pay" })); 
             showMsg("E-Way Bill Content Auto-Filled!", "info"); 
         }, 800);
     } else { showMsg("Invalid QR Code! No E-Way Bill Number found.", "error"); }
   };
 
   const smartFocus = (d, isSender) => { setTimeout(() => { if (isSender) { if (!d.name) document.getElementById('sName')?.focus(); else if (!d.gst) document.getElementById('sGst')?.focus(); else if (user.branch !== 'All') document.getElementById('rPhone')?.focus(); else document.getElementById('sFrom')?.focus(); } else { if (!d.name) document.getElementById('rName')?.focus(); else if (!d.gst) document.getElementById('rGst')?.focus(); else document.getElementById('rTo')?.focus(); } }, 50); };
-  const handlePhoneChange = async (isSender, value) => { const fieldPrefix = isSender ? 's' : 'r'; setF(prev => ({ ...prev, [`${fieldPrefix}Phone`]: value })); if (value.length === 10) { const found = contacts.find(c => c.phone === value); if (found) { setF(prev => ({...prev, [`${fieldPrefix}Name`]: found.name || "", [`${fieldPrefix}Gst`]: found.gst || "" })); showMsg("Customer details loaded automatically!", "success"); smartFocus(found, isSender); } } };
-  const handleContactSelect = (isSender, d) => { const px = isSender ? 's' : 'r'; setF(p => ({ ...p, [`${px}Phone`]: d.phone, [`${px}Name`]: d.name, [`${px}Gst`]: d.gst||'' })); smartFocus(d, isSender); };
-  const handleEwayChange = (e) => { const val = e.target.value.replace(/\D/g, '').slice(0, 12); setEway(val); if (val.length === 12) { showMsg("Validating E-Way Bill Parameters...", "info"); setTimeout(() => { setF(p => ({...p, sName: "Sri Murugan Textiles", sPhone: "9876543210", sGst: "33AABCU1234F1Z1", from: user.branch === 'All' ? "Salem" : user.branch, rName: "City Fashions", rPhone: "9988776655", rGst: "29AAAAA0000A1Z5", to: "Bangalore", rate: "120", count: "15", type: "Bale", payment: "To Pay" })); showMsg("E-Way Bill Content Processed & Populated!", "success"); document.getElementById("pQty").focus(); }, 750); } };
+  
+  const handlePhoneChange = async (isSender, value) => { const fieldPrefix = isSender ? 's' : 'r'; setF(prev => ({ ...prev, [`${fieldPrefix}Phone`]: value })); if (value.length === 10) { const found = contacts.find(c => c.phone === value); if (found) { setF(prev => ({...prev, [`${fieldPrefix}Name`]: (found.name || "").toUpperCase(), [`${fieldPrefix}Gst`]: found.gst || "" })); showMsg("Customer details loaded automatically!", "success"); smartFocus(found, isSender); } } };
+  const handleContactSelect = (isSender, d) => { const px = isSender ? 's' : 'r'; setF(p => ({ ...p, [`${px}Phone`]: d.phone, [`${px}Name`]: (d.name||'').toUpperCase(), [`${px}Gst`]: d.gst||'' })); smartFocus(d, isSender); };
+  
+  const handleEwayChange = (e) => { const val = e.target.value.replace(/\D/g, '').slice(0, 12); setEway(val); if (val.length === 12) { showMsg("Validating E-Way Bill Parameters...", "info"); setTimeout(() => { setF(p => ({...p, sName: "SRI MURUGAN TEXTILES", sPhone: "9876543210", sGst: "33AABCU1234F1Z1", from: user.branch === 'All' ? "Salem" : user.branch, rName: "CITY FASHIONS", rPhone: "9988776655", rGst: "29AAAAA0000A1Z5", to: "Bangalore", rate: "120", count: "15", type: "Bale", payment: "To Pay" })); showMsg("E-Way Bill Content Processed & Populated!", "success"); document.getElementById("pQty").focus(); }, 750); } };
 
   const ep = calcPrice(f.from, f.to, f.rate, f.count, f.type, f.payment);
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800";
   const uniqueCompanies = [...new Set(creditAuthList.map(c => c.company))];
 
-    const submit = async () => {
+  const submit = async () => {
     if(isSubmitting) return; 
     
     if(isManualLR && (!lrNo || lrNo.trim() === "")) return showMsg("LR Number is mandatory in Manual Mode!", "error");
@@ -895,79 +883,44 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
     const dObj = new Date(); const isoDate = dObj.toISOString(); const locDateStr = dObj.toLocaleDateString('en-IN'); 
     
     try {
-        // 🔥 ANTI-RACE CONDITION: Booking save aagurathukku oru second munnadi FRESH data fetch panrom 🔥
         const freshParcels = await db.getParcels();
         let finalLR = "";
 
         if (isManualLR) {
            finalLR = lrNo.trim().toUpperCase();
-           
-           // 1. Full LR Exact Match Check (Ex: 02/01/0021 already irukka nu paakum)
            if(freshParcels.some(p => p.id.toUpperCase() === finalLR)) {
-              setIsSubmitting(false);
-              return showMsg(`LR Number ${finalLR} already exists!`, "error");
+              setIsSubmitting(false); return showMsg(`LR Number ${finalLR} already exists!`, "error");
            }
-           
-           // 2. Sequence Overlap Check (Ex: 02/03/0021 irukkum pothu, 02/01/0021 pottal thaduthurum)
            const parts = finalLR.split('/');
            if(parts.length === 3) {
                const fCode = parts[0], seq = parts[2];
-               const overlap = freshParcels.some(p => {
-                   const pParts = p.id.split('/');
-                   return pParts.length === 3 && pParts[0] === fCode && pParts[2] === seq;
-               });
-               if (overlap) {
-                   setIsSubmitting(false);
-                   return showMsg(`Sequence Number ${seq} is already used by another route in your branch!`, "error");
-               }
+               const overlap = freshParcels.some(p => { const pParts = p.id.split('/'); return pParts.length === 3 && pParts[0] === fCode && pParts[2] === seq; });
+               if (overlap) { setIsSubmitting(false); return showMsg(`Sequence Number ${seq} is already used by another route in your branch!`, "error"); }
            }
         } else {
-           // AUTO MODE: Fresh Data-va vachu puthusa accurate-a number generate pannum!
            finalLR = generateLR(f.from, f.to, freshParcels);
         }
 
-        const p = {...f, notes: f.payment === 'Credit' ? `[A/c: ${f.creditCustomer}] ${f.notes}` : f.notes, creditSettled: false, id: finalLR, date: locDateStr, isoDate: isoDate, status: "Booked", price: ep, bookedBy: user.username, bookedBranch: user.branch, settledBranches: [], history: [{status: "Booked", loc: f.from, time: dObj.toLocaleString()}]};
+        const p = {...f, sName: f.sName.toUpperCase(), rName: f.rName.toUpperCase(), notes: f.payment === 'Credit' ? `[A/c: ${f.creditCustomer}] ${f.notes}` : f.notes, creditSettled: false, id: finalLR, date: locDateStr, isoDate: isoDate, status: "Booked", price: ep, bookedBy: user.username, bookedBranch: user.branch, settledBranches: [], history: [{status: "Booked", loc: f.from, time: dObj.toLocaleString()}]};
         
         await db.insertParcel(p); 
-        
-        const saved = await local.get("mps_contacts") || {}; saved[f.sPhone] = { name: f.sName, gst: f.sGst }; saved[f.rPhone] = { name: f.rName, gst: f.rGst }; await local.set("mps_contacts", saved);
-        
-        // Ulle erakkuna puthu list-a appadiye screen-la refresh pandrom
-        setParcels([p, ...freshParcels]); 
-        setDone(p); 
-        showMsg("LR Generated cleanly without duplicates!"); 
-    } catch(err) {
-        showMsg("Network or Database Error! Please try again.", "error");
-    }
+        const saved = await local.get("mps_contacts") || {}; saved[f.sPhone] = { name: p.sName, gst: f.sGst }; saved[f.rPhone] = { name: p.rName, gst: f.rGst }; await local.set("mps_contacts", saved);
+        setParcels([p, ...freshParcels]); setDone(p); showMsg("LR Generated cleanly without duplicates!"); 
+    } catch(err) { showMsg("Network or Database Error! Please try again.", "error"); }
     setIsSubmitting(false);
   };
 
-
-  // 🔥 PUDHUSU: Reset pandrappo Auto mode-kku maathirum 🔥
   if(done) return ( <div className={`${cardBg} p-6 md:p-10 rounded-3xl max-w-xl mx-auto text-center border-t-4 border-emerald-500`}><h2 className="text-xl md:text-2xl font-black mb-4">Parcel Registered Successfully</h2><div className="bg-indigo-600/10 text-indigo-500 text-xl md:text-2xl font-mono font-bold p-3 rounded-xl mb-6">{done.id}</div><button onClick={()=>{setDone(null); setF(initF); setEway(""); setLrNo(""); setIsManualLR(false);}} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl mb-3">New Registration</button><button onClick={()=>generatePDF(done)} className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl mb-3">Download Receipt</button><button onClick={() => openWhatsApp(done.sPhone, true, done)} className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl">📱 Send SMS / WhatsApp</button></div> );
 
   return (
     <div className="space-y-4 md:space-y-6">
-      
-      {/* 🔥 SMART LR BOX WITH TOGGLE BUTTON 🔥 */}
       <div className={`${cardBg} p-4 rounded-2xl border mb-2 flex flex-col lg:flex-row gap-4 relative z-10`}>
          <div className="flex-1">
             <div className="flex justify-between items-center mb-1 ml-1">
                <label className="text-[10px] uppercase font-bold opacity-80 text-indigo-500">📑 LR Number Booking</label>
-               <button 
-                  onClick={() => setIsManualLR(!isManualLR)} 
-                  className={`text-[9px] font-black px-3 py-1 rounded-md shadow-sm transition-all ${isManualLR ? 'bg-amber-500 text-white ring-2 ring-amber-500/50' : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}`}
-               >
-                  {isManualLR ? '🔓 MANUAL MODE' : '🔒 AUTO MODE'}
-               </button>
+               <button onClick={() => setIsManualLR(!isManualLR)} className={`text-[9px] font-black px-3 py-1 rounded-md shadow-sm transition-all ${isManualLR ? 'bg-amber-500 text-white ring-2 ring-amber-500/50' : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}`}>{isManualLR ? '🔓 MANUAL MODE' : '🔒 AUTO MODE'}</button>
             </div>
-            <input 
-               value={lrNo} 
-               onChange={e=>setLrNo(e.target.value.toUpperCase())} 
-               readOnly={!isManualLR} // 🔥 Auto mode-la lock aagirukkum 🔥
-               placeholder={isManualLR ? "Type Manual LR Code..." : "Auto Generated..."} 
-               className={`w-full px-4 py-3 rounded-xl outline-none font-black tracking-widest uppercase border focus:ring-2 focus:ring-indigo-500 shadow-inner ${inputBg} ${isManualLR ? 'text-amber-500 border-amber-500/50' : 'text-indigo-500 opacity-80 bg-black/5 cursor-not-allowed'}`} 
-            />
+            <input value={lrNo} onChange={e=>setLrNo(e.target.value.toUpperCase())} readOnly={!isManualLR} placeholder={isManualLR ? "Type Manual LR Code..." : "Auto Generated..."} className={`w-full px-4 py-3 rounded-xl outline-none font-black tracking-widest uppercase border focus:ring-2 focus:ring-indigo-500 shadow-inner ${inputBg} ${isManualLR ? 'text-amber-500 border-amber-500/50' : 'text-indigo-500 opacity-80 bg-black/5 cursor-not-allowed'}`} />
          </div>
          <div className="flex-1">
             <label className="text-[10px] uppercase font-bold opacity-60 ml-1 mb-1 block">⚡ Quick Fill (E-Way Bill)</label>
@@ -981,8 +934,20 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
       {showScanner && <EwayScannerModal onScan={handleQRScan} onClose={() => setShowScanner(false)} />}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 relative z-30">
-        <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}><h3 className="font-bold text-indigo-500">Sender Profile</h3><SuggestInput id="sPhone" onKeyDown={e=>handleBoxTravel(e,{enter:'sName', down:'sName', right:'rPhone', up:'eway'})} label="Mobile Number *" value={f.sPhone} onChange={v=>handlePhoneChange(true, v)} onSelect={d=>handleContactSelect(true, d)} dataList={contacts} isPhone={true} theme={theme} /><SuggestInput id="sName" onKeyDown={e=>handleBoxTravel(e,{enter:'sGst', down:'sGst', right:'rName', up:'sPhone'})} label="Full Name *" value={f.sName} onChange={v=>setF({...f, sName:v})} onSelect={d=>handleContactSelect(true, d)} dataList={contacts} isPhone={false} theme={theme} /><input id="sGst" onKeyDown={e=>handleBoxTravel(e,{enter: user.branch === 'All' ? 'sFrom' : 'rPhone', down: user.branch === 'All' ? 'sFrom' : 'rPhone', right:'rGst', up:'sName'})} value={f.sGst} onChange={e=>setF({...f, sGst:e.target.value})} placeholder="GST Number" className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 ${inputBg}`} /><select id="sFrom" disabled={user.branch !== 'All'} onKeyDown={e=>handleBoxTravel(e,{enter:'rPhone', down:'pQty', right:'rTo', up:'sGst'})} value={f.from} onChange={e=>setF({...f, from:e.target.value})} className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 ${inputBg} ${user.branch !== 'All' ? 'opacity-50 cursor-not-allowed' : ''}`}><option value="">Select Origin *</option>{CITIES.map(c=><option key={c}>{c}</option>)}</select></div>
-        <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}><h3 className="font-bold text-emerald-500">Receiver Profile</h3><SuggestInput id="rPhone" onKeyDown={e=>handleBoxTravel(e,{enter:'rName', down:'rName', left:'sPhone', up:'eway'})} label="Mobile Number *" value={f.rPhone} onChange={v=>handlePhoneChange(false, v)} onSelect={d=>handleContactSelect(false, d)} dataList={contacts} isPhone={true} theme={theme} /><SuggestInput id="rName" onKeyDown={e=>handleBoxTravel(e,{enter:'rGst', down:'rGst', left:'sName', up:'rPhone'})} label="Full Name *" value={f.rName} onChange={v=>setF({...f, rName:v})} onSelect={d=>handleContactSelect(false, d)} dataList={contacts} isPhone={false} theme={theme} /><input id="rGst" onKeyDown={e=>handleBoxTravel(e,{enter:'rTo', down:'rTo', left:'sGst', up:'rName'})} value={f.rGst} onChange={e=>setF({...f, rGst:e.target.value})} placeholder="GST Number" className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 ${inputBg}`} /><select id="rTo" onKeyDown={e=>handleBoxTravel(e,{enter:'pQty', down:'pQty', left:'sFrom', up:'rGst'})} value={f.to} onChange={e=>setF({...f, to:e.target.value})} className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 ${inputBg}`}><option value="">Select Destination *</option>{CITIES.map(c=><option key={c}>{c}</option>)}</select></div>
+        <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}>
+            <h3 className="font-bold text-indigo-500">Sender Profile</h3>
+            <SuggestInput id="sPhone" onKeyDown={e=>handleBoxTravel(e,{enter:'sName', down:'sName', right:'rPhone', up:'eway'})} label="Mobile Number *" value={f.sPhone} onChange={v=>handlePhoneChange(true, v)} onSelect={d=>handleContactSelect(true, d)} dataList={contacts} isPhone={true} theme={theme} />
+            <SuggestInput id="sName" onKeyDown={e=>handleBoxTravel(e,{enter:'sGst', down:'sGst', right:'rName', up:'sPhone'})} label="Full Name *" value={f.sName} onChange={v=>setF({...f, sName:v.toUpperCase()})} onSelect={d=>handleContactSelect(true, d)} dataList={contacts} isPhone={false} theme={theme} />
+            <input id="sGst" onKeyDown={e=>handleBoxTravel(e,{enter: user.branch === 'All' ? 'sFrom' : 'rPhone', down: user.branch === 'All' ? 'sFrom' : 'rPhone', right:'rGst', up:'sName'})} value={f.sGst} onChange={e=>setF({...f, sGst:e.target.value.toUpperCase()})} placeholder="GST Number" className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 uppercase ${inputBg}`} />
+            <select id="sFrom" disabled={user.branch !== 'All'} onKeyDown={e=>handleBoxTravel(e,{enter:'rPhone', down:'pQty', right:'rTo', up:'sGst'})} value={f.from} onChange={e=>setF({...f, from:e.target.value})} className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 ${inputBg} ${user.branch !== 'All' ? 'opacity-50 cursor-not-allowed' : ''}`}><option value="">Select Origin *</option>{CITIES.map(c=><option key={c}>{c}</option>)}</select>
+        </div>
+        <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}>
+            <h3 className="font-bold text-emerald-500">Receiver Profile</h3>
+            <SuggestInput id="rPhone" onKeyDown={e=>handleBoxTravel(e,{enter:'rName', down:'rName', left:'sPhone', up:'eway'})} label="Mobile Number *" value={f.rPhone} onChange={v=>handlePhoneChange(false, v)} onSelect={d=>handleContactSelect(false, d)} dataList={contacts} isPhone={true} theme={theme} />
+            <SuggestInput id="rName" onKeyDown={e=>handleBoxTravel(e,{enter:'rGst', down:'rGst', left:'sName', up:'rPhone'})} label="Full Name *" value={f.rName} onChange={v=>setF({...f, rName:v.toUpperCase()})} onSelect={d=>handleContactSelect(false, d)} dataList={contacts} isPhone={false} theme={theme} />
+            <input id="rGst" onKeyDown={e=>handleBoxTravel(e,{enter:'rTo', down:'rTo', left:'sGst', up:'rName'})} value={f.rGst} onChange={e=>setF({...f, rGst:e.target.value.toUpperCase()})} placeholder="GST Number" className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 uppercase ${inputBg}`} />
+            <select id="rTo" onKeyDown={e=>handleBoxTravel(e,{enter:'pQty', down:'pQty', left:'sFrom', up:'rGst'})} value={f.to} onChange={e=>setF({...f, to:e.target.value})} className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 ${inputBg}`}><option value="">Select Destination *</option>{CITIES.map(c=><option key={c}>{c}</option>)}</select>
+        </div>
       </div>
       <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4 relative z-20`}>
         <h3 className="font-bold">Cargo Details</h3>
@@ -990,15 +955,7 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mt-2">
           <div className="flex flex-col gap-3">
             <select id="pPay" onKeyDown={e=>handleBoxTravel(e,{enter:'btnSubmit', up:'pQty', down:'btnSubmit'})} value={f.payment} onChange={e=>setF({...f, payment:e.target.value})} className="p-3 border rounded-xl font-bold bg-indigo-600 text-white outline-none w-full">{PAY_MODES.map(p=><option key={p} value={p}>{p.toUpperCase()}</option>)}</select>
-            
-            {f.payment === 'Credit' && (
-               <CreditSearchDropdown 
-                  value={f.creditCustomer} 
-                  onChange={val => setF({...f, creditCustomer: val})} 
-                  uniqueCompanies={uniqueCompanies} 
-                  isDark={isDark} 
-               />
-            )}
+            {f.payment === 'Credit' && ( <CreditSearchDropdown value={f.creditCustomer} onChange={val => setF({...f, creditCustomer: val})} uniqueCompanies={uniqueCompanies} isDark={isDark} /> )}
           </div>
           <div className="bg-slate-950 p-4 rounded-xl flex justify-between items-center text-white h-full"><span className="text-sm opacity-50">Total Income Allocation</span><span className="text-xl md:text-2xl font-black text-emerald-400">₹{ep}</span></div>
         </div>
@@ -1058,7 +1015,6 @@ function Track({parcels, isDark, user, setGlobalView, initialStatus}) {
         <div className="flex justify-between items-center">
            <h3 className="font-bold text-sm text-indigo-500">Advanced Search Filter</h3>
            <div className="flex gap-2">
-              {/* 🔥 TRACK PRINT & EXPORT BUTTONS 🔥 */}
               <button onClick={() => exportToCSV("Track_List", results)} className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded-lg shadow-md transition-colors">📥 Excel</button>
               <button onClick={() => generateListPDF("Tracked Parcels List", user.branch, results)} className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded-lg shadow-md transition-colors">🖨️ Print List</button>
            </div>
@@ -1070,7 +1026,6 @@ function Track({parcels, isDark, user, setGlobalView, initialStatus}) {
           <select value={fStatus} onChange={e=>setFStatus(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`}><option value="All">Any Status</option>{STATUSES.map(s => <option key={s}>{s}</option>)}</select>
           <input type="date" title="From Date" value={fFromDate} onChange={e=>setFFromDate(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`} />
           <input type="date" title="To Date" value={fToDate} onChange={e=>setFToDate(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`} />
-          
           <select value={sortOrder} onChange={e=>setSortOrder(e.target.value)} className={`p-2 rounded-xl border text-sm font-black text-indigo-500 ${inputBg}`}>
             <option value="date_desc">Sort: Newest First</option>
             <option value="date_asc">Sort: Oldest First</option>
@@ -1130,6 +1085,9 @@ function Track({parcels, isDark, user, setGlobalView, initialStatus}) {
   );
 }
 
+// 🔥 REST OF THE COMPONENTS REMAIN THE SAME 🔥
+// Delivery, Accounts, DeletedParcelsLog, Admin, Login...
+
 function Delivery({parcels, setParcels, db, showMsg, isDark, user, creditAuthList, setGlobalView}) {
   const [id, setId] = useState(""); 
   const searchLR = () => { const item = parcels.find(p=>p.id === id.toUpperCase()); if(item) { if(item.status === 'Deleted') return showMsg("Consignment deleted by admin.", "error"); setGlobalView(item); setId(""); } else showMsg("No consignment found", "error"); };
@@ -1185,7 +1143,6 @@ function Accounts({parcels, setParcels, db, showMsg, isDark, user}) {
 
   return (
     <div className="space-y-6 md:space-y-8">
-      
       <div className={`${cardBg} p-6 rounded-3xl border border-indigo-500/30 flex flex-col md:flex-row items-center justify-between gap-4`}>
         <div><h3 className="font-black text-lg text-indigo-500">💵 Daily EOD Settlement (Day-Book)</h3><p className="text-xs opacity-60">Generate complete collection & expense report for any date.</p></div>
         <div className="flex gap-2 w-full md:w-auto overflow-x-auto">
@@ -1196,7 +1153,6 @@ function Accounts({parcels, setParcels, db, showMsg, isDark, user}) {
           <button onClick={triggerEOD} className="bg-indigo-600 text-white font-bold py-3 px-6 rounded-xl shadow-md whitespace-nowrap">Print EOD Report</button>
         </div>
       </div>
-      
       <div className={`${cardBg} p-6 rounded-3xl border shadow-xl`}>
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-500/20 pb-4 mb-4 gap-4">
           <div><h3 className="font-black text-xl text-indigo-500">Franchise Reconciliation & Payout</h3><p className="text-xs opacity-60">Active Settlement View (Filtered)</p></div>
@@ -1208,7 +1164,6 @@ function Accounts({parcels, setParcels, db, showMsg, isDark, user}) {
             <input type="date" title="To Date" value={reconTo} onChange={e=>setReconTo(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`} />
           </div>
         </div>
-
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6"><div className={`p-4 rounded-2xl border border-dashed border-slate-500/30 text-center`}><p className="text-[10px] uppercase font-bold opacity-60 mb-1">Unsettled Box Count</p><p className="text-2xl font-black">{bookedCount} <span className="text-sm opacity-50 font-normal">Bk</span> + {deliveredCount} <span className="text-sm opacity-50 font-normal">Dl</span></p></div><div className={`p-4 rounded-2xl border border-dashed border-emerald-500/30 text-center bg-emerald-500/5`}><p className="text-[10px] uppercase font-bold text-emerald-600 mb-1">Branch Cash in Hand</p><p className="text-2xl font-black text-emerald-600">₹{cashCollected.toLocaleString()}</p><p className="text-[8px] opacity-60 mt-1">From Paid & Cash To-Pay</p></div><div className={`p-4 rounded-2xl border border-dashed border-amber-500/30 text-center bg-amber-500/5`}><p className="text-[10px] uppercase font-bold text-amber-600 mb-1">Commission Earned</p><div className="flex justify-center items-center gap-2"><p className="text-2xl font-black text-amber-600">₹{branchCommission.toLocaleString()}</p><input type="number" title="Rate" value={payoutRate} onChange={e=>setPayoutRate(Number(e.target.value))} className={`w-10 p-1 text-xs text-center border rounded ${inputBg}`} /></div><p className="text-[8px] opacity-60 mt-1">Total Parcels × Rate</p></div><div className={`p-4 rounded-2xl border text-center text-white shadow-inner ${netRemittance >= 0 ? 'bg-indigo-600 border-indigo-700' : 'bg-red-500 border-red-600'}`}><p className="text-[10px] uppercase font-bold opacity-80 mb-1">{netRemittance >= 0 ? 'Branch Remit to HQ' : 'HQ Pays Branch'}</p><p className="text-2xl font-black">₹{Math.abs(netRemittance).toLocaleString()}</p><p className="text-[8px] opacity-80 mt-1">Net Balance Transfer</p></div></div><div className="flex gap-4"><button className="flex-1 border border-indigo-500 text-indigo-500 font-bold py-3 rounded-xl hover:bg-indigo-500/10">📥 Download Statement PDF</button><button onClick={markLedgerSettled} className="flex-1 bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700 shadow-md">🔒 Mark Ledger as Settled</button></div></div>
       <div className={`${cardBg} p-4 md:p-6 rounded-3xl border border-dashed border-indigo-500/40 grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6`}><div className="md:col-span-3"><h3 className="text-base md:text-lg font-black text-indigo-500">⚡ Master Global Sheet</h3></div><div className="bg-slate-950 p-4 rounded-xl text-white"><p className="text-[10px] md:text-xs text-slate-400 font-bold uppercase">📊 Gross Network Revenue</p><p className="text-2xl md:text-3xl font-black text-blue-400 mt-1">₹{totalSystemRevenue.toLocaleString()}</p></div><div className="bg-slate-950 p-4 rounded-xl text-white"><p className="text-[10px] md:text-xs text-slate-400 font-bold uppercase">📉 Total Fixed Expense</p><p className="text-2xl md:text-3xl font-black text-red-400 mt-1">₹{exp.toLocaleString()}</p></div><div className="bg-slate-950 p-4 rounded-xl text-white"><p className="text-[10px] md:text-xs text-slate-400 font-bold uppercase">☕ Total Petty Cash</p><p className="text-2xl md:text-3xl font-black text-orange-400 mt-1">₹{totalPetty.toLocaleString()}</p></div></div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8"><div className={`${cardBg} p-4 md:p-6 rounded-3xl border space-y-4`}><h3 className="font-bold text-sm md:text-md text-indigo-500">Fixed Operational Expenses</h3><div className="space-y-4"><div><label className="text-[10px] md:text-xs font-bold opacity-60 uppercase">Monthly Vehicle EMI (₹)</label><input type="number" value={acc.emi} onChange={e=>setAcc({...acc, emi:Number(e.target.value)})} className={`w-full p-2 md:p-3 mt-1 rounded-xl border outline-none font-bold [appearance:textfield] ${inputBg}`} /></div><div><label className="text-[10px] md:text-xs font-bold opacity-60 uppercase">Diesel & Highway Toll Log (₹)</label><input type="number" value={acc.diesel} onChange={e=>setAcc({...acc, diesel:Number(e.target.value)})} className={`w-full p-2 md:p-3 mt-1 rounded-xl border outline-none font-bold [appearance:textfield] ${inputBg}`} /></div><div><label className="text-[10px] md:text-xs font-bold opacity-60 uppercase">Misc Office Rent & Utilities (₹)</label><input type="number" value={acc.other} onChange={e=>setAcc({...acc, other:Number(e.target.value)})} className={`w-full p-2 md:p-3 mt-1 rounded-xl border outline-none font-bold [appearance:textfield] ${inputBg}`} /></div></div></div><div className="bg-slate-950 p-6 md:p-8 rounded-3xl text-white flex flex-col justify-center shadow-xl"><div className="flex justify-between items-center mb-2 md:mb-4"><h3 className="text-lg md:text-xl font-black tracking-wider text-indigo-400">PARTNERSHIP SETTLEMENT</h3><div className="flex items-center gap-2"><span className="text-xs opacity-60 uppercase">Partners:</span><input type="number" value={partnerCount} onChange={e=>setPartnerCount(Number(e.target.value))} className="w-16 bg-slate-800 text-white font-bold p-1 rounded text-center border border-slate-700 outline-none" /></div></div><p className="text-xs md:text-sm opacity-60">Global Base Profit Yield: ₹{net.toLocaleString()}</p><div className="mt-4 md:mt-6 bg-white/5 p-4 md:p-6 rounded-2xl text-center border border-white/10"><p className="text-[10px] md:text-xs opacity-50 uppercase tracking-widest mb-1">Per Partner Yield</p><p className="text-3xl md:text-4xl font-black text-emerald-400">₹{((net / (partnerCount||1)) || 0).toLocaleString()}</p></div></div></div>
@@ -1229,29 +1184,17 @@ function DeletedParcelsLog({ parcels, isDark }) {
             <h3 className="font-black text-red-500 uppercase">Deleted Parcels Audit Log</h3>
             <span className="ml-auto bg-red-500 text-white text-[10px] px-2 py-1 rounded-full font-bold">{deletedList.length} Items</span>
          </div>
-         
          <div className="overflow-x-auto custom-scrollbar">
             <table className="w-full text-left whitespace-nowrap text-sm">
                <thead className={`${tblBg} opacity-70 text-[10px] uppercase font-bold`}>
-                  <tr>
-                     <th className="p-3">LR No</th>
-                     <th className="p-3">Route & Customer</th>
-                     <th className="p-3">Deleted By (Staff)</th>
-                     <th className="p-3">Deleted Time</th>
-                  </tr>
+                  <tr><th className="p-3">LR No</th><th className="p-3">Route & Customer</th><th className="p-3">Deleted By (Staff)</th><th className="p-3">Deleted Time</th></tr>
                </thead>
                <tbody>
                   {deletedList.length === 0 ? <tr><td colSpan="4" className="p-6 text-center opacity-50 font-bold">No deleted parcels found. Safe!</td></tr> : deletedList.map(p => (
                      <tr key={p.id} className="border-t border-slate-500/10 hover:bg-red-500/5">
                         <td className="p-3 font-black text-red-400 line-through">📦 {p.id}</td>
-                        <td className="p-3">
-                           <p className="font-bold">{p.from} ➔ {p.to}</p>
-                           <p className="text-[10px] opacity-70">{p.sName} ➔ {p.rName}</p>
-                        </td>
-                        <td className="p-3 font-black text-indigo-500">
-                           👤 {p.deletedBy || p.history?.slice(-1)[0]?.user || "System/Unknown"} <br/>
-                           <span className="text-[9px] opacity-60">Reason: {p.deleteReason || "N/A"}</span>
-                        </td>
+                        <td className="p-3"><p className="font-bold">{p.from} ➔ {p.to}</p><p className="text-[10px] opacity-70">{p.sName} ➔ {p.rName}</p></td>
+                        <td className="p-3 font-black text-indigo-500">👤 {p.deletedBy || p.history?.slice(-1)[0]?.user || "System/Unknown"} <br/><span className="text-[9px] opacity-60">Reason: {p.deleteReason || "N/A"}</span></td>
                         <td className="p-3 text-xs font-bold opacity-70">{p.history?.slice(-1)[0]?.time || p.date}</td>
                      </tr>
                   ))}
@@ -1262,6 +1205,7 @@ function DeletedParcelsLog({ parcels, isDark }) {
    );
 }
 
+// 🔥 UPGRADED ADMIN COMPONENT (Deleted Log Keezha Kondu Vanthachu) 🔥
 function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user, creditAuthList, setCreditAuthList, setGlobalView}) {
   const [tab, setTab] = useState('parcels'); const [editF, setEditF] = useState(null); 
   const [newUser, setNewUser] = useState(""); const [newPass, setNewPass] = useState(""); const [newRole, setNewRole] = useState("staff"); const [newBranch, setNewBranch] = useState(CITIES[0]);
@@ -1276,19 +1220,14 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
   
   const addCreditAuth = async () => { 
     if(newCPhone.length !== 10 || !newCName) return showMsg("Invalid Credit details", "error"); 
-    const newData = {phone: newCPhone, company: newCName}; 
+    const newData = {phone: newCPhone, company: newCName.toUpperCase()}; 
     const newList = [...creditAuthList, newData]; 
-    setCreditAuthList(newList); 
-    await db.insertCreditAuth(newData); 
-    setNewCPhone(""); setNewCName(""); 
-    showMsg("Credit Account Authorized!"); 
+    setCreditAuthList(newList); await db.insertCreditAuth(newData); setNewCPhone(""); setNewCName(""); showMsg("Credit Account Authorized!"); 
   };
   
   const removeCredit = async (phone) => { 
     const newList = creditAuthList.filter(c => c.phone !== phone); 
-    setCreditAuthList(newList); 
-    await db.deleteCreditAuth(phone); 
-    showMsg("Credit Auth Revoked", "error"); 
+    setCreditAuthList(newList); await db.deleteCreditAuth(phone); showMsg("Credit Auth Revoked", "error"); 
   };
 
   const deleteRecord = async (id) => { const reason = window.prompt(`Exact reason for deleting ${id}:`); if (!reason || reason.trim() === "") return showMsg("Deletion reason mandatory.", "error"); const target = parcels.find(p => p.id === id); const updatedHistory = [...target.history, {status: "Deleted", loc: user.branch, time: new Date().toLocaleString(), reason: reason}]; const updatedParcel = { ...target, status: 'Deleted', deletedBy: user.username, deleteReason: reason, history: updatedHistory }; await db.updateParcel(id, updatedParcel); setParcels(parcels.map(p => p.id === id ? updatedParcel : p)); showMsg("Consignment dropped.", "error"); };
@@ -1307,7 +1246,6 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
   
   const triggerInvoice = () => { 
     if(!invCustomer) return showMsg("Select a Customer Account!", "error"); 
-    
     const invoiceParcels = parcels.filter(p => {
         if (p.status === 'Deleted') return false;
         const isCreditLedger = p.payment === "Credit" || p.deliveryMode === "Credit" || (p.notes && p.notes.includes("Mode: Credit"));
@@ -1318,10 +1256,8 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
     });
 
     if(invoiceParcels.length === 0) return showMsg("No credit bills found for this period.", "error"); 
-    
     const sampleAuth = creditAuthList.find(c => c.company.toLowerCase() === invCustomer.toLowerCase());
     const displayPhone = sampleAuth ? sampleAuth.phone : "Multiple Acc Numbers";
-
     generateInvoicePDF(invCustomer, displayPhone, fromDate, toDate, invoiceParcels); 
     showMsg(`Invoice Generated for ${invCustomer}`); 
   };
@@ -1347,13 +1283,26 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
 
   const uniqueCompanies = [...new Set(creditAuthList.map(c => c.company))];
 
+  const unpaidCreditParcels = parcels.filter(p => p.status !== 'Deleted' && !p.creditSettled && (p.payment === 'Credit' || p.deliveryMode === 'Credit' || (p.notes && p.notes.includes("Mode: Credit"))));
+  const customerBalances = {};
+  let grandTotalCredit = 0;
+  unpaidCreditParcels.forEach(p => {
+     if(p.creditCustomer) {
+         const amt = Number(p.price) || 0;
+         if(!customerBalances[p.creditCustomer]) customerBalances[p.creditCustomer] = 0;
+         customerBalances[p.creditCustomer] += amt;
+         grandTotalCredit += amt;
+     }
+  });
+
   return (
     <div className="space-y-4 md:space-y-6">
       <div className="flex flex-wrap gap-2 md:gap-4"><button onClick={()=>setTab('parcels')} className={`px-4 md:px-6 py-2 rounded-full text-[10px] md:text-sm font-bold ${tab==='parcels'?'bg-indigo-600 text-white':cardBg}`}>📋 Audits & Analytics</button><button onClick={()=>setTab('staff')} className={`px-4 md:px-6 py-2 rounded-full text-[10px] md:text-sm font-bold ${tab==='staff'?'bg-indigo-600 text-white':cardBg}`}>👥 System RBAC</button><button onClick={()=>setTab('credit')} className={`px-4 md:px-6 py-2 rounded-full text-[10px] md:text-sm font-bold ${tab==='credit'?'bg-amber-600 text-white':cardBg}`}>💳 Credit Control</button></div>
       {tab === 'staff' && ( <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6"><div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}><h3 className="font-black text-sm md:text-base">Assign Privilege Context</h3><input value={newUser} onChange={e=>setNewUser(e.target.value)} placeholder="Username Identifier" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} /><input value={newPass} onChange={e=>setNewPass(e.target.value)} type="password" placeholder="Account Password" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} />{isSuper && ( <select value={newRole} onChange={e=>setNewRole(e.target.value)} className={`w-full p-2 md:p-3 rounded-xl border font-bold outline-none text-sm ${inputBg}`}><option value="staff">Privilege Level: STAFF</option><option value="admin">Privilege Level: ADMIN</option><option value="superadmin">Privilege Level: SUPERADMIN</option></select> )}<select disabled={newRole === 'superadmin'} value={newBranch} onChange={e=>setNewBranch(e.target.value)} className={`w-full p-2 md:p-3 rounded-xl border font-bold outline-none text-sm ${inputBg} ${newRole==='superadmin'?'opacity-50 cursor-not-allowed':''}`}>{(isSuper && (newRole === 'admin' || newRole === 'superadmin')) && <option value="All">Global Access (All Branches)</option>}{CITIES.map(c => <option key={c} value={c}>Branch: {c}</option>)}</select><button onClick={handleAddUser} className="w-full bg-indigo-600 text-white font-bold py-2 md:py-3 rounded-xl text-sm md:text-base">Commit Assignment</button></div><div className={`${cardBg} p-4 md:p-6 rounded-2xl border lg:col-span-2 space-y-3`}><h3 className="font-black text-sm md:text-base">Identity Mapping Matrix</h3><div className="space-y-2 max-h-64 overflow-y-auto pr-2">{users.filter(u => isSuper ? true : u.role === 'staff').map(u => { const canManage = isSuper ? (u.username !== user.username) : true; return ( <div key={u.id} className="flex flex-col sm:flex-row justify-between sm:items-center p-3 border rounded-xl bg-black/5 gap-2"><div><p className="font-bold text-sm">{u.username} <span className="text-[10px] ml-1 opacity-50">({u.branch})</span></p><p className={`text-[10px] uppercase font-black ${u.role === 'superadmin' ? 'text-amber-500' : 'text-indigo-500'}`}>{u.role}</p></div>{canManage && ( <div className="flex items-center gap-2"><button onClick={async ()=>{ await db.deleteUser(u.id); setUsers(users.filter(x=>x.id!==u.id)); showMsg("Access revoked", "error"); }} className="text-red-500 text-[10px] font-bold border border-red-500/20 px-2 py-1 rounded bg-red-500/10">Revoke 🗑️</button></div> )}</div> ) })}</div></div></div> )}
+      
       {tab === 'credit' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}><h3 className="font-black text-sm md:text-base text-amber-500">Add Authorized Credit Account</h3><p className="text-[10px] md:text-xs opacity-60">You can add multiple phone numbers under the same Company Name.</p><input value={newCPhone} onChange={e=>setNewCPhone(e.target.value)} placeholder="Customer 10-digit Mobile" maxLength="10" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} /><input value={newCName} onChange={e=>setNewCName(e.target.value)} placeholder="Company / Individual Name" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} /><button onClick={addCreditAuth} className="w-full bg-amber-600 text-white font-bold py-2 md:py-3 rounded-xl text-sm md:text-base">Authorize Account</button></div>
+          <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}><h3 className="font-black text-sm md:text-base text-amber-500">Add Authorized Credit Account</h3><p className="text-[10px] md:text-xs opacity-60">You can add multiple phone numbers under the same Company Name.</p><input value={newCPhone} onChange={e=>setNewCPhone(e.target.value)} placeholder="Customer 10-digit Mobile" maxLength="10" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} /><input value={newCName} onChange={e=>setNewCName(e.target.value)} placeholder="Company / Individual Name" className={`w-full p-2 md:p-3 rounded-xl border outline-none uppercase ${inputBg}`} /><button onClick={addCreditAuth} className="w-full bg-amber-600 text-white font-bold py-2 md:py-3 rounded-xl text-sm md:text-base">Authorize Account</button></div>
           <div className={`${cardBg} p-4 md:p-6 rounded-2xl border h-96 overflow-y-auto`}><h3 className="font-black text-sm md:text-base mb-4">Approved Credit Ledger</h3>{creditAuthList.length === 0 ? <p className="text-sm opacity-50">No credit accounts authorized.</p> : <div className="space-y-2">{creditAuthList.map((c, i) => ( <div key={i} className="flex justify-between items-center p-3 border border-slate-500/20 rounded-xl bg-black/5"><div><p className="font-bold text-sm text-amber-500">{c.company}</p><p className="text-[10px] opacity-80 font-mono">📱 {c.phone}</p></div><button onClick={()=>removeCredit(c.phone)} className="text-red-500 text-[10px] font-bold bg-red-500/10 px-2 py-1 rounded border border-red-500/20">Revoke</button></div> ))}</div> }</div>
           <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4 lg:col-span-2 border-indigo-500/30`}>
              <h3 className="font-black text-sm md:text-base text-indigo-500">📑 Generate Monthly Credit Invoice</h3>
@@ -1367,15 +1316,35 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
              </div>
              <div className="flex gap-2 flex-col md:flex-row"><button onClick={triggerInvoice} className="flex-1 bg-indigo-600 text-white font-bold py-3 rounded-xl shadow-md">🖨️ Print Consolidated Invoice</button><button onClick={settleCreditBill} className="flex-1 bg-emerald-600 text-white font-bold py-3 rounded-xl shadow-md">✅ Mark Bill as PAID</button></div>
           </div>
+          <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4 lg:col-span-2 border-red-500/30 bg-red-500/5`}>
+             <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-red-500/20 pb-4 gap-2">
+                 <div>
+                     <h3 className="font-black text-sm md:text-base text-red-500 uppercase">💰 Unpaid Credit Balances</h3>
+                     <p className="text-[10px] opacity-60 font-bold">Total unsettled outstanding amount by company.</p>
+                 </div>
+                 <span className="bg-red-500 text-white px-4 py-2 rounded-xl text-sm font-black shadow-md">Overall: ₹{grandTotalCredit.toLocaleString()}</span>
+             </div>
+             {Object.keys(customerBalances).length === 0 ? (
+                 <p className="text-sm opacity-50 font-bold text-center py-6">All credit bills are settled! No pending dues.</p>
+             ) : (
+                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    {Object.entries(customerBalances).sort((a,b)=>b[1]-a[1]).map(([customer, amt]) => (
+                        <div key={customer} className={`p-3 md:p-4 border border-red-500/20 rounded-xl flex flex-col justify-between ${isDark ? 'bg-slate-900' : 'bg-white'}`}>
+                            <span className="font-bold text-xs md:text-sm text-slate-500 truncate mb-1" title={customer}>{customer}</span>
+                            <span className="font-black text-red-500 text-lg md:text-xl">₹{amt.toLocaleString()}</span>
+                        </div>
+                    ))}
+                 </div>
+             )}
+          </div>
         </div>
       )}
+      
       {tab === 'parcels' && (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4"><input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="🔍 Keyword" className={`p-2 md:p-3 rounded-xl border text-sm ${cardBg}`} /><select disabled={!isSuper} value={branchFilter} onChange={e=>setBranchFilter(e.target.value)} className={`p-2 md:p-3 rounded-xl border font-bold text-sm ${cardBg} ${!isSuper && 'opacity-50 cursor-not-allowed'}`}>{isSuper && <option value="All">All Branches</option>}{CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select><input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} className={`p-2 md:p-3 rounded-xl border font-bold text-sm ${cardBg}`} title="From Date" /><input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} className={`p-2 md:p-3 rounded-xl border font-bold text-sm ${cardBg}`} title="To Date" /><select value={paymentFilter} onChange={e=>setPaymentFilter(e.target.value)} className={`p-2 md:p-3 rounded-xl border font-bold text-sm ${cardBg}`}><option value="All">All Modes</option><option value="Paid">Paid</option><option value="To Pay">To Pay</option><option value="Credit">Credit</option></select></div>
           <button onClick={exportData} className="w-full py-2 bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500 hover:text-white transition-colors text-[10px] md:text-xs font-bold rounded-lg border border-indigo-500/20">📥 Export CSV Record</button>
           
-          {isSuper && <DeletedParcelsLog parcels={parcels} isDark={isDark} />}
-
           <div className={`${cardBg} rounded-2xl border overflow-x-auto shadow-sm mt-6`}>
             <table className="min-w-[800px] w-full text-left whitespace-nowrap">
               <thead className={`${tblBg} text-[10px] md:text-xs font-bold uppercase opacity-80`}><tr><th className="p-3 md:p-4">LR Code</th><th className="p-3 md:p-4">Route Info</th><th className="p-3 md:p-4">Billing Parameters</th><th className="p-3 md:p-4">Tracking Node</th><th className="p-3 md:p-4">Operations Control</th></tr></thead>
@@ -1398,9 +1367,13 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
               </tbody>
             </table>
           </div>
+
+          {/* 🔥 MAIN TABLE-KKU KEEZHA KONDU VANTHACHU 🔥 */}
+          {isSuper && <DeletedParcelsLog parcels={parcels} isDark={isDark} />}
+
         </>
       )}
-      {editF && ( <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[200]"><div className={`${cardBg} p-6 rounded-2xl max-w-lg w-full space-y-4 animate-bounce-in`}><h3 className="font-black text-lg">Modify Manifest Parameters: {editF.id}</h3><div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><input value={editF.sName} onChange={e=>setEditF({...editF, sName:e.target.value})} placeholder="Sender Identity" className={`p-2 border rounded text-sm ${inputBg}`} /><input value={editF.rName} onChange={e=>setEditF({...editF, rName:e.target.value})} placeholder="Receiver Identity" className={`p-2 border rounded text-sm ${inputBg}`} /><select value={editF.status} onChange={e=>setEditF({...editF, status:e.target.value})} className={`p-2 border rounded text-sm ${inputBg}`}>{STATUSES.filter(s=>s!=='Deleted').map(s=><option key={s}>{s}</option>)}</select><input type="number" value={editF.price} onChange={e=>setEditF({...editF, price:Number(e.target.value)})} placeholder="Price Override" className={`p-2 border rounded font-bold text-sm ${inputBg}`} /></div><div className="flex gap-2 mt-4"><button onClick={saveOverrides} className="bg-indigo-600 text-white font-bold py-2 px-4 rounded-xl flex-1 text-sm">Save Changes</button><button onClick={()=>setEditF(null)} className="bg-slate-500 text-white py-2 px-4 rounded-xl text-sm">Dismiss</button></div></div></div> )}
+      {editF && ( <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[200]"><div className={`${cardBg} p-6 rounded-2xl max-w-lg w-full space-y-4 animate-bounce-in`}><h3 className="font-black text-lg">Modify Manifest Parameters: {editF.id}</h3><div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><input value={editF.sName} onChange={e=>setEditF({...editF, sName:e.target.value.toUpperCase()})} placeholder="Sender Identity" className={`p-2 border rounded text-sm uppercase ${inputBg}`} /><input value={editF.rName} onChange={e=>setEditF({...editF, rName:e.target.value.toUpperCase()})} placeholder="Receiver Identity" className={`p-2 border rounded text-sm uppercase ${inputBg}`} /><select value={editF.status} onChange={e=>setEditF({...editF, status:e.target.value})} className={`p-2 border rounded text-sm ${inputBg}`}>{STATUSES.filter(s=>s!=='Deleted').map(s=><option key={s}>{s}</option>)}</select><input type="number" value={editF.price} onChange={e=>setEditF({...editF, price:Number(e.target.value)})} placeholder="Price Override" className={`p-2 border rounded font-bold text-sm ${inputBg}`} /></div><div className="flex gap-2 mt-4"><button onClick={saveOverrides} className="bg-indigo-600 text-white font-bold py-2 px-4 rounded-xl flex-1 text-sm">Save Changes</button><button onClick={()=>setEditF(null)} className="bg-slate-500 text-white py-2 px-4 rounded-xl text-sm">Dismiss</button></div></div></div> )}
     </div>
   );
 }
