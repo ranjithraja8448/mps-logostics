@@ -191,45 +191,6 @@ function generateListPDF(title, branch, parcelsList) {
       willDrawCell: function (data) { if (data.row.index === tableRows.length - 1) { data.cell.styles.fontStyle = 'bold'; data.cell.styles.fillColor = [240, 240, 240]; } }
   });
   window.open(doc.output('bloburl'), '_blank');
-}// 🔥 UNIVERSAL LIST PDF PRINTER (UPDATED WITH DATE & NO STATUS) 🔥
-function generateListPDF(title, branch, parcelsList) {
-  const doc = new jsPDF();
-  doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.text(`MPS - ${title}`, 105, 15, { align: "center" });
-  doc.setFontSize(10); doc.setFont("helvetica", "normal");
-  doc.text(`Branch: ${branch} | Print Date: ${new Date().toLocaleString('en-IN')}`, 105, 22, { align: "center" });
-  
-  // 🔥 Status thookiyachu, Date column ulla erakkiyachu 🔥
-  const tableColumn = ["S.No", "LR Number", "Date", "Route", "Customer (Sender -> Receiver)", "Cargo", "Amount"];
-  const tableRows = [];
-  let totalQty = 0, totalAmt = 0;
-
-  parcelsList.forEach((p, index) => {
-      // 🔥 Values theliva Date format-ku yetha maathiri maathiyachu 🔥
-      tableRows.push([ 
-         index + 1, 
-         p.id, 
-         p.date, 
-         `${p.from} -> ${p.to}`, 
-         `${p.sName} -> ${p.rName}`, 
-         `${p.count} ${p.type}`, 
-         `Rs.${p.price} (${p.payment})` 
-      ]);
-      totalQty += Number(p.count) || 0;
-      totalAmt += Number(p.price) || 0;
-  });
-
-  // 🔥 Total varisaiyai correct aana edathula ukanthu vachachu 🔥
-  tableRows.push(["TOTAL", "", "", "", "", `${totalQty} Items`, `Rs.${totalAmt}`]);
-
-  autoTable(doc, {
-      startY: 28, head: [tableColumn], body: tableRows, theme: 'grid',
-      headStyles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8, halign: 'center' },
-      bodyStyles: { fontSize: 7, textColor: [0, 0, 0] },
-      // 🔥 Amount column 6th index-ku maariduchu, so alignment updated 🔥
-      columnStyles: { 0: { halign: 'center' }, 2: { halign: 'center' }, 5: { halign: 'center' }, 6: { halign: 'right', fontStyle: 'bold' } },
-      willDrawCell: function (data) { if (data.row.index === tableRows.length - 1) { data.cell.styles.fontStyle = 'bold'; data.cell.styles.fillColor = [240, 240, 240]; } }
-  });
-  window.open(doc.output('bloburl'), '_blank');
 }
 
 // 🔥 UNIVERSAL EXCEL (CSV) EXPORTER 🔥
