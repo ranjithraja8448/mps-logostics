@@ -96,7 +96,8 @@ function generateEOD_PDF(dateStr, branch, parcelsList, pettyList) {
   window.open(doc.output('bloburl'), '_blank');
 }
 
-function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList) {
+// 🔥 UPGRADED INVOICE PDF PRINTER (MANUAL INVOICE NUMBER) 🔥
+function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList, manualInvoiceNo) {
   const doc = new jsPDF();
   doc.setFont("helvetica", "bold"); doc.setFontSize(18); 
   doc.text("MPS Parcel Service", 105, 15, { align: "center" });
@@ -105,7 +106,10 @@ function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList) {
   doc.text("Phone Number : 90033 77185 / 80726 72255", 105, 24, { align: "center" });
   doc.setFontSize(14); doc.setFont("helvetica", "bold");
   doc.text("INVOICE", 105, 34, { align: "center" });
-  const invoiceNo = Math.floor(1000 + Math.random() * 9000);
+  
+  // 🔥 MANUAL NUMBER INPUT 🔥
+  const invoiceNo = manualInvoiceNo || "N/A"; 
+  
   const printDate = new Date().toLocaleDateString('en-IN');
   doc.setFontSize(10); doc.setFont("helvetica", "bold");
   
@@ -1217,13 +1221,17 @@ function DeletedParcelsLog({ parcels, isDark }) {
    );
 }
 
-// 🔥 UPGRADED ADMIN COMPONENT (Deleted Log Keezha Kondu Vanthachu) 🔥
+// 🔥 UPGRADED ADMIN COMPONENT (WITH MANUAL INVOICE INPUT BOX) 🔥
 function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user, creditAuthList, setCreditAuthList, setGlobalView}) {
   const [tab, setTab] = useState('parcels'); const [editF, setEditF] = useState(null); 
   const [newUser, setNewUser] = useState(""); const [newPass, setNewPass] = useState(""); const [newRole, setNewRole] = useState("staff"); const [newBranch, setNewBranch] = useState(CITIES[0]);
   const [newCPhone, setNewCPhone] = useState(""); const [newCName, setNewCName] = useState(""); const [paymentFilter, setPaymentFilter] = useState("All"); const [branchFilter, setBranchFilter] = useState(user.branch); const [searchQuery, setSearchQuery] = useState("");
   const d = new Date(); const todayStr = d.toISOString().split('T')[0]; d.setDate(1); const firstDayStr = d.toISOString().split('T')[0];
   const [fromDate, setFromDate] = useState(firstDayStr); const [toDate, setToDate] = useState(todayStr); const [invCustomer, setInvCustomer] = useState("");
+  
+  // 🔥 PUDHUSU: Manual Invoice Number State 🔥
+  const [manualInvNo, setManualInvNo] = useState("");
+
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800"; const tblBg = isDark ? "bg-slate-800/40" : "bg-slate-50"; const isSuper = user.role === 'superadmin';
 
   useEffect(() => { if (newRole === 'superadmin') setNewBranch('All'); else if (newRole === 'staff' && newBranch === 'All') setNewBranch(CITIES[0]); }, [newRole]);
@@ -1258,6 +1266,9 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
   
   const triggerInvoice = () => { 
     if(!invCustomer) return showMsg("Select a Customer Account!", "error"); 
+    // 🔥 PUDHUSU: Invoice number type pannalana error varum 🔥
+    if(!manualInvNo || manualInvNo.trim() === "") return showMsg("Please enter an Invoice Number!", "error");
+
     const invoiceParcels = parcels.filter(p => {
         if (p.status === 'Deleted') return false;
         const isCreditLedger = p.payment === "Credit" || p.deliveryMode === "Credit" || (p.notes && p.notes.includes("Mode: Credit"));
@@ -1270,7 +1281,9 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
     if(invoiceParcels.length === 0) return showMsg("No credit bills found for this period.", "error"); 
     const sampleAuth = creditAuthList.find(c => c.company.toLowerCase() === invCustomer.toLowerCase());
     const displayPhone = sampleAuth ? sampleAuth.phone : "Multiple Acc Numbers";
-    generateInvoicePDF(invCustomer, displayPhone, fromDate, toDate, invoiceParcels); 
+    
+    // 🔥 PUDHUSU: manualInvNo va ulla anuprom 🔥
+    generateInvoicePDF(invCustomer, displayPhone, fromDate, toDate, invoiceParcels, manualInvNo.toUpperCase()); 
     showMsg(`Invoice Generated for ${invCustomer}`); 
   };
 
@@ -1318,14 +1331,24 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
           <div className={`${cardBg} p-4 md:p-6 rounded-2xl border h-96 overflow-y-auto`}><h3 className="font-black text-sm md:text-base mb-4">Approved Credit Ledger</h3>{creditAuthList.length === 0 ? <p className="text-sm opacity-50">No credit accounts authorized.</p> : <div className="space-y-2">{creditAuthList.map((c, i) => ( <div key={i} className="flex justify-between items-center p-3 border border-slate-500/20 rounded-xl bg-black/5"><div><p className="font-bold text-sm text-amber-500">{c.company}</p><p className="text-[10px] opacity-80 font-mono">📱 {c.phone}</p></div><button onClick={()=>removeCredit(c.phone)} className="text-red-500 text-[10px] font-bold bg-red-500/10 px-2 py-1 rounded border border-red-500/20">Revoke</button></div> ))}</div> }</div>
           <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4 lg:col-span-2 border-indigo-500/30`}>
              <h3 className="font-black text-sm md:text-base text-indigo-500">📑 Generate Monthly Credit Invoice</h3>
-             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+             
+             {/* 🔥 PUDHUSU: INVOICE BOX ULLA VANTHACHU 🔥 */}
+             <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
                 <select value={invCustomer} onChange={e=>setInvCustomer(e.target.value)} className={`sm:col-span-2 p-3 rounded-xl border font-bold text-sm ${inputBg}`}>
                   <option value="">Select Account...</option>
                   {uniqueCompanies.map((c,i) => <option key={i} value={c}>{c}</option>)}
                 </select>
+                <input 
+                   type="text" 
+                   value={manualInvNo} 
+                   onChange={e => setManualInvNo(e.target.value)} 
+                   placeholder="Inv No (Ex: 0001)" 
+                   className={`p-3 rounded-xl border text-sm font-bold uppercase focus:ring-2 focus:ring-indigo-500 ${inputBg}`} 
+                />
                 <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} className={`p-3 rounded-xl border text-sm font-bold ${inputBg}`} />
                 <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} className={`p-3 rounded-xl border text-sm font-bold ${inputBg}`} />
              </div>
+             
              <div className="flex gap-2 flex-col md:flex-row"><button onClick={triggerInvoice} className="flex-1 bg-indigo-600 text-white font-bold py-3 rounded-xl shadow-md">🖨️ Print Consolidated Invoice</button><button onClick={settleCreditBill} className="flex-1 bg-emerald-600 text-white font-bold py-3 rounded-xl shadow-md">✅ Mark Bill as PAID</button></div>
           </div>
           <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4 lg:col-span-2 border-red-500/30 bg-red-500/5`}>
@@ -1380,9 +1403,7 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
             </table>
           </div>
 
-          {/* 🔥 MAIN TABLE-KKU KEEZHA KONDU VANTHACHU 🔥 */}
           {isSuper && <DeletedParcelsLog parcels={parcels} isDark={isDark} />}
-
         </>
       )}
       {editF && ( <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[200]"><div className={`${cardBg} p-6 rounded-2xl max-w-lg w-full space-y-4 animate-bounce-in`}><h3 className="font-black text-lg">Modify Manifest Parameters: {editF.id}</h3><div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><input value={editF.sName} onChange={e=>setEditF({...editF, sName:e.target.value.toUpperCase()})} placeholder="Sender Identity" className={`p-2 border rounded text-sm uppercase ${inputBg}`} /><input value={editF.rName} onChange={e=>setEditF({...editF, rName:e.target.value.toUpperCase()})} placeholder="Receiver Identity" className={`p-2 border rounded text-sm uppercase ${inputBg}`} /><select value={editF.status} onChange={e=>setEditF({...editF, status:e.target.value})} className={`p-2 border rounded text-sm ${inputBg}`}>{STATUSES.filter(s=>s!=='Deleted').map(s=><option key={s}>{s}</option>)}</select><input type="number" value={editF.price} onChange={e=>setEditF({...editF, price:Number(e.target.value)})} placeholder="Price Override" className={`p-2 border rounded font-bold text-sm ${inputBg}`} /></div><div className="flex gap-2 mt-4"><button onClick={saveOverrides} className="bg-indigo-600 text-white font-bold py-2 px-4 rounded-xl flex-1 text-sm">Save Changes</button><button onClick={()=>setEditF(null)} className="bg-slate-500 text-white py-2 px-4 rounded-xl text-sm">Dismiss</button></div></div></div> )}
