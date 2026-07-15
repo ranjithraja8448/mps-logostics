@@ -96,8 +96,8 @@ function generateEOD_PDF(dateStr, branch, parcelsList, pettyList) {
   window.open(doc.output('bloburl'), '_blank');
 }
 
-// 🔥 UPGRADED INVOICE PDF PRINTER (MANUAL INVOICE NUMBER) 🔥
-function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList, manualInvoiceNo) {
+// 🔥 UPGRADED INVOICE PDF PRINTER (MANUAL INVOICE NUMBER & DATE) 🔥
+function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList, manualInvoiceNo, manualInvDate) {
   const doc = new jsPDF();
   doc.setFont("helvetica", "bold"); doc.setFontSize(18); 
   doc.text("MPS Parcel Service", 105, 15, { align: "center" });
@@ -107,10 +107,12 @@ function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList, ma
   doc.setFontSize(14); doc.setFont("helvetica", "bold");
   doc.text("INVOICE", 105, 34, { align: "center" });
   
-  // 🔥 MANUAL NUMBER INPUT 🔥
+  // 🔥 MANUAL NUMBER 🔥
   const invoiceNo = manualInvoiceNo || "N/A"; 
   
-  const printDate = new Date().toLocaleDateString('en-IN');
+  // 🔥 MANUAL DATE 🔥
+  const printDate = manualInvDate ? new Date(manualInvDate).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN');
+  
   doc.setFontSize(10); doc.setFont("helvetica", "bold");
   
   let partyName = customer;
@@ -1221,7 +1223,7 @@ function DeletedParcelsLog({ parcels, isDark }) {
    );
 }
 
-// 🔥 UPGRADED ADMIN COMPONENT (WITH MANUAL INVOICE INPUT BOX) 🔥
+// 🔥 UPGRADED ADMIN COMPONENT (WITH MANUAL DATE & INVOICE NUMBER) 🔥
 function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user, creditAuthList, setCreditAuthList, setGlobalView}) {
   const [tab, setTab] = useState('parcels'); const [editF, setEditF] = useState(null); 
   const [newUser, setNewUser] = useState(""); const [newPass, setNewPass] = useState(""); const [newRole, setNewRole] = useState("staff"); const [newBranch, setNewBranch] = useState(CITIES[0]);
@@ -1229,8 +1231,9 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
   const d = new Date(); const todayStr = d.toISOString().split('T')[0]; d.setDate(1); const firstDayStr = d.toISOString().split('T')[0];
   const [fromDate, setFromDate] = useState(firstDayStr); const [toDate, setToDate] = useState(todayStr); const [invCustomer, setInvCustomer] = useState("");
   
-  // 🔥 PUDHUSU: Manual Invoice Number State 🔥
+  // 🔥 MANUAL DATE & INVOICE NO STATE 🔥
   const [manualInvNo, setManualInvNo] = useState("");
+  const [manualInvDate, setManualInvDate] = useState(todayStr);
 
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800"; const tblBg = isDark ? "bg-slate-800/40" : "bg-slate-50"; const isSuper = user.role === 'superadmin';
 
@@ -1266,7 +1269,6 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
   
   const triggerInvoice = () => { 
     if(!invCustomer) return showMsg("Select a Customer Account!", "error"); 
-    // 🔥 PUDHUSU: Invoice number type pannalana error varum 🔥
     if(!manualInvNo || manualInvNo.trim() === "") return showMsg("Please enter an Invoice Number!", "error");
 
     const invoiceParcels = parcels.filter(p => {
@@ -1282,8 +1284,8 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
     const sampleAuth = creditAuthList.find(c => c.company.toLowerCase() === invCustomer.toLowerCase());
     const displayPhone = sampleAuth ? sampleAuth.phone : "Multiple Acc Numbers";
     
-    // 🔥 PUDHUSU: manualInvNo va ulla anuprom 🔥
-    generateInvoicePDF(invCustomer, displayPhone, fromDate, toDate, invoiceParcels, manualInvNo.toUpperCase()); 
+    // 🔥 PASSING MANUAL NUMBER AND DATE 🔥
+    generateInvoicePDF(invCustomer, displayPhone, fromDate, toDate, invoiceParcels, manualInvNo.toUpperCase(), manualInvDate); 
     showMsg(`Invoice Generated for ${invCustomer}`); 
   };
 
@@ -1323,6 +1325,7 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
   return (
     <div className="space-y-4 md:space-y-6">
       <div className="flex flex-wrap gap-2 md:gap-4"><button onClick={()=>setTab('parcels')} className={`px-4 md:px-6 py-2 rounded-full text-[10px] md:text-sm font-bold ${tab==='parcels'?'bg-indigo-600 text-white':cardBg}`}>📋 Audits & Analytics</button><button onClick={()=>setTab('staff')} className={`px-4 md:px-6 py-2 rounded-full text-[10px] md:text-sm font-bold ${tab==='staff'?'bg-indigo-600 text-white':cardBg}`}>👥 System RBAC</button><button onClick={()=>setTab('credit')} className={`px-4 md:px-6 py-2 rounded-full text-[10px] md:text-sm font-bold ${tab==='credit'?'bg-amber-600 text-white':cardBg}`}>💳 Credit Control</button></div>
+      
       {tab === 'staff' && ( <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6"><div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}><h3 className="font-black text-sm md:text-base">Assign Privilege Context</h3><input value={newUser} onChange={e=>setNewUser(e.target.value)} placeholder="Username Identifier" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} /><input value={newPass} onChange={e=>setNewPass(e.target.value)} type="password" placeholder="Account Password" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} />{isSuper && ( <select value={newRole} onChange={e=>setNewRole(e.target.value)} className={`w-full p-2 md:p-3 rounded-xl border font-bold outline-none text-sm ${inputBg}`}><option value="staff">Privilege Level: STAFF</option><option value="admin">Privilege Level: ADMIN</option><option value="superadmin">Privilege Level: SUPERADMIN</option></select> )}<select disabled={newRole === 'superadmin'} value={newBranch} onChange={e=>setNewBranch(e.target.value)} className={`w-full p-2 md:p-3 rounded-xl border font-bold outline-none text-sm ${inputBg} ${newRole==='superadmin'?'opacity-50 cursor-not-allowed':''}`}>{(isSuper && (newRole === 'admin' || newRole === 'superadmin')) && <option value="All">Global Access (All Branches)</option>}{CITIES.map(c => <option key={c} value={c}>Branch: {c}</option>)}</select><button onClick={handleAddUser} className="w-full bg-indigo-600 text-white font-bold py-2 md:py-3 rounded-xl text-sm md:text-base">Commit Assignment</button></div><div className={`${cardBg} p-4 md:p-6 rounded-2xl border lg:col-span-2 space-y-3`}><h3 className="font-black text-sm md:text-base">Identity Mapping Matrix</h3><div className="space-y-2 max-h-64 overflow-y-auto pr-2">{users.filter(u => isSuper ? true : u.role === 'staff').map(u => { const canManage = isSuper ? (u.username !== user.username) : true; return ( <div key={u.id} className="flex flex-col sm:flex-row justify-between sm:items-center p-3 border rounded-xl bg-black/5 gap-2"><div><p className="font-bold text-sm">{u.username} <span className="text-[10px] ml-1 opacity-50">({u.branch})</span></p><p className={`text-[10px] uppercase font-black ${u.role === 'superadmin' ? 'text-amber-500' : 'text-indigo-500'}`}>{u.role}</p></div>{canManage && ( <div className="flex items-center gap-2"><button onClick={async ()=>{ await db.deleteUser(u.id); setUsers(users.filter(x=>x.id!==u.id)); showMsg("Access revoked", "error"); }} className="text-red-500 text-[10px] font-bold border border-red-500/20 px-2 py-1 rounded bg-red-500/10">Revoke 🗑️</button></div> )}</div> ) })}</div></div></div> )}
       
       {tab === 'credit' && (
@@ -1332,21 +1335,28 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
           <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4 lg:col-span-2 border-indigo-500/30`}>
              <h3 className="font-black text-sm md:text-base text-indigo-500">📑 Generate Monthly Credit Invoice</h3>
              
-             {/* 🔥 PUDHUSU: INVOICE BOX ULLA VANTHACHU 🔥 */}
-             <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
+             {/* 🔥 PUDHUSU: INVOICE BOX & DATE BOX ULLA VANTHACHU 🔥 */}
+             <div className="grid grid-cols-1 sm:grid-cols-6 gap-4">
                 <select value={invCustomer} onChange={e=>setInvCustomer(e.target.value)} className={`sm:col-span-2 p-3 rounded-xl border font-bold text-sm ${inputBg}`}>
                   <option value="">Select Account...</option>
                   {uniqueCompanies.map((c,i) => <option key={i} value={c}>{c}</option>)}
                 </select>
-                <input 
-                   type="text" 
-                   value={manualInvNo} 
-                   onChange={e => setManualInvNo(e.target.value)} 
-                   placeholder="Inv No (Ex: 0001)" 
-                   className={`p-3 rounded-xl border text-sm font-bold uppercase focus:ring-2 focus:ring-indigo-500 ${inputBg}`} 
-                />
-                <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} className={`p-3 rounded-xl border text-sm font-bold ${inputBg}`} />
-                <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} className={`p-3 rounded-xl border text-sm font-bold ${inputBg}`} />
+                <div className="flex flex-col">
+                   <label className="text-[9px] uppercase font-bold opacity-60 ml-1 mb-1">Invoice No</label>
+                   <input type="text" value={manualInvNo} onChange={e => setManualInvNo(e.target.value)} placeholder="Ex: 0001" className={`p-3 rounded-xl border text-sm font-bold uppercase focus:ring-2 focus:ring-indigo-500 ${inputBg}`} />
+                </div>
+                <div className="flex flex-col">
+                   <label className="text-[9px] uppercase font-bold opacity-60 ml-1 mb-1">Invoice Date</label>
+                   <input type="date" value={manualInvDate} onChange={e => setManualInvDate(e.target.value)} className={`p-3 rounded-xl border text-sm font-bold focus:ring-2 focus:ring-indigo-500 ${inputBg}`} />
+                </div>
+                <div className="flex flex-col">
+                   <label className="text-[9px] uppercase font-bold opacity-60 ml-1 mb-1">From Bill Date</label>
+                   <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} className={`p-3 rounded-xl border text-sm font-bold ${inputBg}`} />
+                </div>
+                <div className="flex flex-col">
+                   <label className="text-[9px] uppercase font-bold opacity-60 ml-1 mb-1">To Bill Date</label>
+                   <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} className={`p-3 rounded-xl border text-sm font-bold ${inputBg}`} />
+                </div>
              </div>
              
              <div className="flex gap-2 flex-col md:flex-row"><button onClick={triggerInvoice} className="flex-1 bg-indigo-600 text-white font-bold py-3 rounded-xl shadow-md">🖨️ Print Consolidated Invoice</button><button onClick={settleCreditBill} className="flex-1 bg-emerald-600 text-white font-bold py-3 rounded-xl shadow-md">✅ Mark Bill as PAID</button></div>
