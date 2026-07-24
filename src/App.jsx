@@ -29,6 +29,21 @@ const generateLR = (fromCity, toCity) => {
 
 const MpsLogo = () => (<svg className="w-8 h-8 text-indigo-500 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>);
 
+function calcPrice(from, to, ratePerUnit, count = 1, type = "Box", paymentMode = "Paid", size = "Standard"){
+  if(paymentMode === "FOC") return 0; 
+  if(!ratePerUnit || ratePerUnit<=0) return 0; 
+  let rate = parseFloat(ratePerUnit); 
+  
+  let sizeMultiplier = 1;
+  if(size === "Medium") sizeMultiplier = 1.5;
+  if(size === "Large") sizeMultiplier = 2.0;
+  if(size === "Jumbo") sizeMultiplier = 3.0;
+
+  let tc = 0;
+  if(type==="Electronics") tc = 60; if(type==="Furniture") tc = 150; if(type==="Medical") tc = 40; if(type==="Machinery") tc = 120;
+  return Math.round((rate * sizeMultiplier * (parseInt(count) || 1)) + tc);
+}
+
 function numberToWords(num) {
   const a = ['','One ','Two ','Three ','Four ', 'Five ','Six ','Seven ','Eight ','Nine ','Ten ','Eleven ','Twelve ','Thirteen ','Fourteen ','Fifteen ','Sixteen ','Seventeen ','Eighteen ','Nineteen '];
   const b = ['', '', 'Twenty','Thirty','Forty','Fifty', 'Sixty','Seventy','Eighty','Ninety'];
@@ -43,113 +58,112 @@ function numberToWords(num) {
   return str.toUpperCase();
 }
 
-// 🔥 INLINE PRINT BUTTON GROUP (AVAILABLE EVERYWHERE) 🔥
+// 🔥 UNIVERSAL PRINT GROUP BUTTONS 🔥
 const PrintGroup = ({ p }) => (
-  <div className="flex items-center gap-1 bg-indigo-500/10 p-1 rounded-lg border border-indigo-500/20 w-max" onClick={(e)=>e.stopPropagation()}>
-    <span className="text-[9px] font-black text-indigo-600 ml-1 mr-1 uppercase">Print:</span>
-    <button onClick={(e)=>{e.stopPropagation(); generatePDF(p,1);}} className="bg-white hover:bg-indigo-600 hover:text-white text-indigo-600 px-2 py-1 rounded text-[10px] font-bold shadow-sm transition-colors" title="1 Per Page">1</button>
-    <button onClick={(e)=>{e.stopPropagation(); generatePDF(p,2);}} className="bg-white hover:bg-indigo-600 hover:text-white text-indigo-600 px-2 py-1 rounded text-[10px] font-bold shadow-sm transition-colors" title="2 Per Page (A5)">2</button>
-    <button onClick={(e)=>{e.stopPropagation(); generatePDF(p,3);}} className="bg-white hover:bg-indigo-600 hover:text-white text-indigo-600 px-2 py-1 rounded text-[10px] font-bold shadow-sm transition-colors" title="3 Per Page">3</button>
+  <div className="flex items-center gap-1 bg-slate-500/10 p-1 rounded-md border border-slate-500/20 w-max" onClick={(e)=>e.stopPropagation()}>
+    <span className="text-[8px] font-black opacity-60 ml-1 uppercase">Print:</span>
+    <button onClick={(e)=>{e.stopPropagation(); generatePDF(p,1);}} className="bg-white dark:bg-slate-700 hover:bg-blue-500 hover:text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-sm transition-colors" title="1 Per Page">1</button>
+    <button onClick={(e)=>{e.stopPropagation(); generatePDF(p,2);}} className="bg-white dark:bg-slate-700 hover:bg-indigo-500 hover:text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-sm transition-colors" title="2 Per Page (A5)">2</button>
+    <button onClick={(e)=>{e.stopPropagation(); generatePDF(p,3);}} className="bg-white dark:bg-slate-700 hover:bg-emerald-500 hover:text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-sm transition-colors" title="3 Per Page">3</button>
   </div>
 );
 
-// 🔥 COMPRESSED PDF ALIGNMENT (FIXED FOR 3 PER PAGE) 🔥
+// 🔥 PERFECTLY ALIGNED COMPACT RECEIPT (Fits exactly 3 on A4) 🔥
 function drawReceipt(doc, p, startY) {
-  // Exact 92mm height map
-  doc.rect(10, startY, 190, 92);
-  doc.line(10, startY + 22, 200, startY + 22); 
-  doc.line(10, startY + 28, 200, startY + 28); 
-  doc.line(10, startY + 52, 145, startY + 52); 
-  doc.line(10, startY + 62, 145, startY + 62); 
-  doc.line(95, startY + 72, 145, startY + 72); 
-  doc.line(145, startY + 75, 200, startY + 75); 
-  doc.line(10, startY + 80, 200, startY + 80); 
+  doc.setDrawColor(0);
+  doc.setLineWidth(0.3);
+  doc.rect(10, startY, 190, 93); 
+
+  doc.line(10, startY + 20, 200, startY + 20); 
+  doc.line(10, startY + 26, 200, startY + 26); 
+  doc.line(10, startY + 50, 145, startY + 50); 
+  doc.line(10, startY + 56, 145, startY + 56); 
+  doc.line(145, startY + 68, 200, startY + 68); 
+  doc.line(10, startY + 76, 200, startY + 76); 
+
+  doc.line(145, startY, 145, startY + 76); 
+  doc.line(175, startY + 20, 175, startY + 76); 
+  doc.line(77, startY + 20, 77, startY + 50); 
+  doc.line(16, startY + 26, 16, startY + 50); 
+  doc.line(83, startY + 26, 83, startY + 50); 
   
-  doc.line(145, startY, 145, startY + 80); 
-  doc.line(175, startY + 22, 175, startY + 80); 
-  doc.line(77, startY + 22, 77, startY + 52); 
-  doc.line(16, startY + 28, 16, startY + 52); 
-  doc.line(83, startY + 28, 83, startY + 52); 
-  doc.line(25, startY + 52, 25, startY + 80); 
-  doc.line(95, startY + 52, 95, startY + 72); 
-  doc.line(110, startY + 52, 110, startY + 72); 
-  doc.line(125, startY + 52, 125, startY + 72); 
-  
-  doc.line(77, startY + 80, 77, startY + 92); 
-  doc.line(145, startY + 80, 145, startY + 92);
-  
-  doc.setFont("helvetica", "bolditalic"); doc.setFontSize(20); doc.text("MPS", 12, startY + 12); 
-  doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.text("MECHERI", 36, startY + 10); doc.text("PARCEL SERVICE", 36, startY + 15);
-  doc.setFont("helvetica", "normal"); doc.setFontSize(6); doc.text("• WE DELIVER TRUST •", 42, startY + 18);
+  doc.line(22, startY + 50, 22, startY + 76); 
+  doc.line(95, startY + 50, 95, startY + 76); 
+  doc.line(110, startY + 50, 110, startY + 76); 
+  doc.line(125, startY + 50, 125, startY + 76); 
+
+  doc.line(77, startY + 76, 77, startY + 93);
+  doc.line(145, startY + 76, 145, startY + 93);
+
+  doc.setFont("helvetica", "bolditalic"); doc.setFontSize(22); doc.text("MPS", 12, startY + 14); 
+  doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.text("MECHERI", 36, startY + 10); doc.text("PARCEL SERVICE", 36, startY + 16);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(6); doc.text("• WE DELIVER TRUST •", 42, startY + 19);
   
   const centerX = 107; 
   doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.text("GSTIN : 33CICPS6965E1Z1", centerX, startY + 6, { align: "center" }); 
   doc.setFont("helvetica", "normal"); doc.text("Dharmapuri Main Road, Mecheri, Salem-Dt.", centerX, startY + 10, { align: "center" }); 
   doc.setFont("helvetica", "bold"); doc.text("90033 77185 / 80726 72255", centerX, startY + 14, { align: "center" }); 
   
-  doc.setFontSize(9); doc.text(`LR. NO.  :  ${p.id}`, 147, startY + 7); 
-  doc.text(`Date     :  ${p.date}`, 147, startY + 13); 
-  doc.text(`Pay Mode:  ${p.payment}`, 147, startY + 19);
-  
+  doc.setFontSize(9); doc.text(`LR. NO.  :  ${p.id}`, 147, startY + 6); 
+  doc.text(`Date     :  ${p.date}`, 147, startY + 12); 
+  doc.text(`Pay Mode:  ${p.payment}`, 147, startY + 18);
+
   doc.setFont("helvetica", "normal"); doc.setFontSize(8); 
-  doc.text(`From : ${p.from}`, 12, startY + 26); 
-  doc.text(`To : ${p.to}`, 79, startY + 26); 
-  doc.text("Particulars", 152, startY + 26); 
-  doc.text("Amount", 182, startY + 26);
-  
+  doc.text(`From : ${p.from}`, 12, startY + 24); 
+  doc.text(`To : ${p.to}`, 79, startY + 24); 
+  doc.text("Particulars", 152, startY + 24); 
+  doc.text("Amount", 182, startY + 24);
+
   doc.setFont("helvetica", "bold"); doc.setFontSize(7); 
-  doc.text("Consignor", 13, startY + 48, { angle: 90 }); 
-  doc.text("Consignee", 80, startY + 48, { angle: 90 }); 
-  
+  doc.text("Consignor", 14, startY + 45, { angle: 90 }); 
+  doc.text("Consignee", 81, startY + 45, { angle: 90 }); 
+
   doc.setFontSize(8); doc.setFont("helvetica", "normal"); 
-  doc.text(`Tel : ${p.sPhone}`, 18, startY + 38); doc.text(`GST : ${p.sGst || ""}`, 18, startY + 44); doc.setFont("helvetica", "bold"); doc.text(`${p.sName}`, 18, startY + 50);
-  doc.setFont("helvetica", "normal"); doc.text(`Tel : ${p.rPhone}`, 85, startY + 38); doc.text(`GST : ${p.rGst || ""}`, 85, startY + 44); doc.setFont("helvetica", "bold"); doc.text(`${p.rName}`, 85, startY + 50);
-  
+  doc.text(`Tel : ${p.sPhone}`, 18, startY + 32); doc.text(`GST : ${p.sGst || ""}`, 18, startY + 38); doc.setFont("helvetica", "bold"); doc.text(`${p.sName}`, 18, startY + 46);
+  doc.setFont("helvetica", "normal"); doc.text(`Tel : ${p.rPhone}`, 85, startY + 32); doc.text(`GST : ${p.rGst || ""}`, 85, startY + 38); doc.setFont("helvetica", "bold"); doc.text(`${p.rName}`, 85, startY + 46);
+
   doc.setFontSize(7); doc.setFont("helvetica", "normal"); 
-  const particulars = ["Freight", "Hamali", "Fuel Sur", "Docket", "Article", "Collection", "Delivery", "Others"]; 
-  particulars.forEach((item, i) => { doc.text(item, 147, startY + 32 + (i * 5)); });
-  
-  doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.text(`Rs. ${p.price}`, 178, startY + 32); 
+  const particulars = ["Freight", "Hamali", "Fuel Sur", "Docket", "Collection", "Others"]; 
+  particulars.forEach((item, i) => { doc.text(item, 147, startY + 31 + (i * 6)); });
+  doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.text(`Rs. ${p.price}`, 178, startY + 31); 
+
   doc.setFontSize(7); doc.setFont("helvetica", "normal"); 
-  doc.text("Articles", 12, startY + 59); doc.text("Description", 45, startY + 57); doc.text("Value", 98, startY + 58); doc.text("Actual Wt", 112, startY + 58); doc.text("Charged", 128, startY + 58);
+  doc.text("Qty", 12, startY + 54); doc.text("Description (Cargo)", 40, startY + 54); doc.text("Value", 98, startY + 54); doc.text("Actual Wt", 111, startY + 54); doc.text("Charged Wt", 126, startY + 54);
   
-  // 🔥 DYNAMIC MULTI-ITEM PRINTING 🔥
-  const items = p.items || [{ count: p.count, type: p.type, size: p.size, actualWeight: p.actualWeight }];
   doc.setFontSize(8); doc.setFont("helvetica", "bold"); 
-  items.forEach((it, idx) => {
-     let itemY = startY + 66 + (idx * 4);
-     if (idx < 3) { // Max 3 rows visually fit
-        doc.text(`${it.count}`, 16, itemY); 
-        doc.text(`${it.type} ${it.size && it.size !== 'Standard' ? `(${it.size})` : ''}`, 28, itemY); 
-        doc.text(`${it.actualWeight || "-"}`, 115, itemY); 
-     }
+  const cList = p.cargoList && p.cargoList.length > 0 ? p.cargoList : [{count: p.count, type: p.type, size: p.size, weight: p.actualWeight}];
+  
+  cList.slice(0, 3).forEach((item, idx) => {
+     const yPos = startY + 61 + (idx * 6);
+     doc.text(`${item.count}`, 14, yPos); 
+     doc.text(`${item.type} ${item.size && item.size !== 'Standard' ? `(${item.size})` : ''}`, 24, yPos); 
+     doc.text(`${item.weight || "-"}`, 115, yPos); 
   });
 
-  doc.setFontSize(6); doc.setFont("helvetica", "normal"); doc.text("Door Delivery Ground Floor Only", 96, startY + 78); 
-  doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.text("Total", 155, startY + 78); doc.text(`Rs. ${p.price}`, 178, startY + 78);
-  
-  doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.text("GSTIN Payable by :", 13, startY + 84); 
+  doc.setFontSize(6); doc.setFont("helvetica", "normal"); doc.text("Door Delivery Ground Floor Only", 96, startY + 74); 
+  doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.text("Total", 155, startY + 74); doc.text(`Rs. ${p.price}`, 178, startY + 74);
+
+  doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.text("GSTIN Payable by :", 13, startY + 81); 
   doc.setFontSize(7); doc.setFont("helvetica", "normal"); 
-  doc.rect(13, startY + 87, 2, 2); doc.text("Consignor", 17, startY + 89); 
-  doc.rect(35, startY + 87, 2, 2); doc.text("Consignee", 39, startY + 89); 
-  if(p.payment === "Paid" || p.payment === "Credit" || p.payment === "FOC") doc.text("✔", 13.2, startY + 88.5); 
-  if(p.payment === "To Pay") doc.text("✔", 35.2, startY + 88.5);
+  doc.rect(13, startY + 84, 2, 2); doc.text("Consignor", 17, startY + 86); 
+  doc.rect(35, startY + 84, 2, 2); doc.text("Consignee", 39, startY + 86); 
+  if(p.payment === "Paid" || p.payment === "Credit" || p.payment === "FOC") doc.text("X", 13.2, startY + 85.8); 
+  if(p.payment === "To Pay") doc.text("X", 35.2, startY + 85.8);
   
-  doc.setFontSize(7); doc.text("Consignee Signature", 79, startY + 84); doc.text("For Mecheri Parcel Service", 147, startY + 84);
+  doc.setFontSize(7); doc.text("Consignee Signature", 85, startY + 81); doc.text("For Mecheri Parcel Service", 152, startY + 81);
 }
 
 function generatePDF(p, layout = 1) {
   const doc = new jsPDF();
-  doc.setLineWidth(0.4);
   if (layout === 1) {
     drawReceipt(doc, p, 10);
   } else if (layout === 2) {
     drawReceipt(doc, p, 10);
-    drawReceipt(doc, p, 145);
+    drawReceipt(doc, p, 110);
   } else if (layout === 3) {
-    drawReceipt(doc, p, 5);
-    drawReceipt(doc, p, 103);
-    drawReceipt(doc, p, 201); // Fits perfectly within 297mm
+    drawReceipt(doc, p, 10);
+    drawReceipt(doc, p, 105);
+    drawReceipt(doc, p, 200);
   }
   window.open(doc.output('bloburl'), '_blank');
 }
@@ -283,15 +297,9 @@ function exportToCSV(title, parcelsList) {
 
 function openWhatsApp(phone, isSender, p) {
   const text = `📦 *MPS PARCEL SERVICE*\n\nவணக்கம் / Hello *${isSender ? p.sName : p.rName}*,\nYour parcel is booked successfully! 🎉\n\n🧾 *LR No:* ${p.id}\n📤 *From:* ${p.sName}\n📥 *To:* ${p.rName}\n📍 *Route:* ${p.from} ➔ ${p.to}\n📦 *Items:* ${p.count} ${p.type}\n💰 *Mode:* ${p.payment} (₹${p.price})\n\n📞 *Support:* 90033 77185\n\nThank you for choosing MPS! ✨`;
+  
   window.open(`https://api.whatsapp.com/send?phone=91${phone}&text=${encodeURIComponent(text)}`, '_blank');
 }
-
-const handleBoxTravel = (e, targets) => {
-  let nextId = null; const isSelect = e.target.tagName === 'SELECT'; let isStart = true, isEnd = true;
-  try { if(e.target.selectionStart !== null && e.target.selectionStart !== undefined) { isStart = e.target.selectionStart === 0; isEnd = e.target.selectionEnd === e.target.value?.length; } } catch(err){}
-  if (e.key === 'Enter') nextId = targets.enter; else if (!isSelect && e.key === 'ArrowUp') nextId = targets.up; else if (!isSelect && e.key === 'ArrowDown') nextId = targets.down; else if (!isSelect && e.key === 'ArrowLeft' && isStart) nextId = targets.left; else if (!isSelect && e.key === 'ArrowRight' && isEnd) nextId = targets.right;
-  if (nextId) { if (e.key === 'Enter' || (!isSelect && (e.key === 'ArrowUp' || e.key === 'ArrowDown'))) e.preventDefault(); const nextElem = document.getElementById(nextId); if (nextElem) { nextElem.focus(); if (nextElem.tagName === 'INPUT') nextElem.select(); } }
-};
 
 function SuggestInput({ id, label, value, onChange, onSelect, dataList, isPhone, theme, onKeyDown }) {
   const [open, setOpen] = useState(false); const [activeIndex, setActiveIndex] = useState(-1);
@@ -527,22 +535,15 @@ function ParcelModal({item, creditAuthList, onClose, db, parcels, setParcels, us
           <div className="col-span-2"><p className="opacity-50">Consignor (Sender)</p><p className="font-bold">{item.sName} <span className="opacity-60 font-normal">({item.sPhone})</span></p></div>
           <div className="col-span-2"><p className="opacity-50">Consignee (Receiver)</p><p className="font-bold">{item.rName} <span className="opacity-60 font-normal">({item.rPhone})</span></p></div>
           
-          <div className="col-span-2">
-             <p className="opacity-50 mb-1">Cargo Detail Breakdown</p>
-             <div className="bg-black/5 p-2 rounded-lg border border-slate-500/20">
-                {item.items && item.items.length > 0 ? (
-                   item.items.map((it, i) => (
-                      <div key={i} className="flex justify-between border-b border-slate-500/10 last:border-0 py-1">
-                         <span className="font-bold">{it.count} x {it.type} {it.size && it.size !== 'Standard' ? `(${it.size})` : ''}</span>
-                         <span className="opacity-70">{it.actualWeight ? `${it.actualWeight} Kg` : '-'}</span>
-                      </div>
-                   ))
-                ) : (
-                   <p className="font-bold">{item.count} {item.type} {item.size && item.size !== 'Standard' ? `(${item.size})` : ''}</p>
-                )}
-             </div>
+          <div className="col-span-2 bg-black/5 p-2 rounded-xl">
+             <p className="opacity-50 mb-1">Cargo Details ({item.count} Items Total)</p>
+             {item.cargoList ? item.cargoList.map((c, idx) => (
+                <p key={idx} className="font-bold text-xs">{c.count} x {c.type} {c.size && c.size !== 'Standard' ? <span className="text-amber-500">({c.size})</span> : ''} <span className="opacity-50 text-[10px] ml-1">{c.weight ? `${c.weight}kg` : ''}</span></p>
+             )) : (
+                <p className="font-bold text-xs">{item.count} {item.type} {item.size && item.size !== 'Standard' ? <span className="text-[10px] text-amber-500 font-black">({item.size})</span> : ''}</p>
+             )}
           </div>
-
+          
           <div className="col-span-2"><p className="opacity-50">Financial Parameter</p><p className="font-bold text-emerald-500 text-lg">₹{item.price} ({item.payment})</p></div>
           
           {item.status === 'Delivered' && (
@@ -601,8 +602,8 @@ function ParcelModal({item, creditAuthList, onClose, db, parcels, setParcels, us
         )}
 
         <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-slate-500/20">
-          <PrintGroup p={item} />
-          <button onClick={onClose} className="w-full bg-slate-600 text-white font-bold py-3 rounded-xl text-sm shadow-md hover:bg-slate-700 mt-2">Dismiss Details</button>
+          <div className="flex justify-center"><PrintGroup p={item} /></div>
+          <button onClick={onClose} className="w-full bg-slate-600 text-white font-bold py-3 rounded-xl text-sm shadow-md hover:bg-slate-700 mt-2">Dismiss</button>
         </div>
       </div>
     </div>
@@ -925,17 +926,17 @@ function Pending({parcels, isDark, user, setGlobalView}) {
   );
 }
 
-// 🔥 UPGRADED BOOK COMPONENT (WITH DYNAMIC MULTI-ITEM SUPPORT) 🔥
+// 🔥 UPGRADED BOOK COMPONENT (MULTI-CARGO SUPPORT) 🔥
 function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, user, creditAuthList}) {
-  const [f, setF] = useState({sName:"", sPhone:"", sGst:"", rName:"", rPhone:"", rGst:"", from: user.branch === 'All' ? "" : user.branch, to:"", payment:"Paid", creditCustomer:"", notes:""});
+  const initCargo = { count: "1", type: "Box", size: "Standard", weight: "", rate: "" };
+  const initF = {sName:"", sPhone:"", sGst:"", rName:"", rPhone:"", rGst:"", from: user.branch === 'All' ? "" : user.branch, to:"", payment:"Paid", creditCustomer:"", notes:""};
   
-  // 🔥 DYNAMIC ITEMS ARRAY 🔥
-  const [items, setItems] = useState([{ id: Date.now(), count: "1", type: "Box", size: "Standard", actualWeight: "", rate: "" }]);
-
+  const [f, setF] = useState(initF); 
+  const [cargoList, setCargoList] = useState([{...initCargo}]);
+  
   const [done, setDone] = useState(null); const [eway, setEway] = useState(""); const [contacts, setContacts] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
-  
   const [lrNo, setLrNo] = useState("");
   const [isManualLR, setIsManualLR] = useState(false);
 
@@ -948,19 +949,20 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
         if(f.from && f.to) { setLrNo(generateLR(f.from, f.to)); } 
         else { setLrNo(""); }
      }
-  }, [f.from, f.to, isManualLR]);
-
-  // Handle Multi-Row Items
-  const addItemRow = () => setItems([...items, { id: Date.now(), count: "1", type: "Box", size: "Standard", actualWeight: "", rate: "" }]);
-  const removeItemRow = (id) => { if(items.length > 1) setItems(items.filter(it => it.id !== id)); };
-  const updateItem = (id, field, value) => setItems(items.map(it => it.id === id ? { ...it, [field]: value } : it));
+  }, [f.from, f.to, isManualLR]); 
 
   const handleQRScan = (text) => {
     setShowScanner(false);
     const ewayMatch = text.match(/\b\d{12}\b/); 
     if(ewayMatch) {
-        const val = ewayMatch[0]; setEway(val); showMsg("QR Scanned! E-Way number extracted: " + val, "success");
-        setTimeout(() => { setF(p => ({...p, sName: "SCANNED CLIENT", sPhone: "9999999999", rName: "TARGET CLIENT", rPhone: "8888888888", payment: "To Pay" })); setItems([{ id: Date.now(), count: "10", type: "Box", size: "Standard", actualWeight: "50", rate: "100" }]); showMsg("E-Way Bill Content Auto-Filled!", "info"); }, 800);
+        const val = ewayMatch[0];
+        setEway(val);
+        showMsg("QR Scanned! E-Way number extracted: " + val, "success");
+        setTimeout(() => { 
+            setF(p => ({...p, sName: "SCANNED CLIENT", sPhone: "9999999999", rName: "TARGET CLIENT", rPhone: "8888888888", payment: "To Pay" })); 
+            setCargoList([{count: "10", type: "Box", size: "Standard", weight: "", rate: ""}]);
+            showMsg("E-Way Bill Content Auto-Filled!", "info"); 
+        }, 800);
     } else { showMsg("Invalid QR Code! No E-Way Bill Number found.", "error"); }
   };
 
@@ -969,25 +971,17 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
   const handlePhoneChange = async (isSender, value) => { const fieldPrefix = isSender ? 's' : 'r'; setF(prev => ({ ...prev, [`${fieldPrefix}Phone`]: value })); if (value.length === 10) { const found = contacts.find(c => c.phone === value); if (found) { setF(prev => ({...prev, [`${fieldPrefix}Name`]: (found.name || "").toUpperCase(), [`${fieldPrefix}Gst`]: found.gst || "" })); showMsg("Customer details loaded automatically!", "success"); smartFocus(found, isSender); } } };
   const handleContactSelect = (isSender, d) => { const px = isSender ? 's' : 'r'; setF(p => ({ ...p, [`${px}Phone`]: d.phone, [`${px}Name`]: (d.name||'').toUpperCase(), [`${px}Gst`]: d.gst||'' })); smartFocus(d, isSender); };
   
-  const handleEwayChange = (e) => { const val = e.target.value.replace(/\D/g, '').slice(0, 12); setEway(val); if (val.length === 12) { showMsg("Validating E-Way Bill Parameters...", "info"); setTimeout(() => { setF(p => ({...p, sName: "SRI MURUGAN TEXTILES", sPhone: "9876543210", sGst: "33AABCU1234F1Z1", from: user.branch === 'All' ? "Salem" : user.branch, rName: "CITY FASHIONS", rPhone: "9988776655", rGst: "29AAAAA0000A1Z5", to: "Bangalore", payment: "To Pay" })); setItems([{ id: Date.now(), count: "15", type: "Bale", size: "Medium", actualWeight: "350", rate: "120" }]); showMsg("E-Way Bill Content Processed!", "success"); }, 750); } };
+  const updateCargo = (index, field, value) => {
+      const newList = [...cargoList];
+      newList[index][field] = value;
+      setCargoList(newList);
+  };
+  
+  const addCargoRow = () => { setCargoList([...cargoList, {...initCargo}]); };
+  const removeCargoRow = (index) => { const newList = [...cargoList]; newList.splice(index, 1); setCargoList(newList); };
 
-  // 🔥 PRICING DYNAMIC CALCULATION FOR MULTIPLE ITEMS 🔥
-  const calculateTotal = () => {
-     if(f.payment === "FOC") return 0;
-     let grandTotal = 0;
-     items.forEach(it => {
-         let rate = parseFloat(it.rate) || 0; 
-         let sizeMultiplier = 1;
-         if(it.size === "Medium") sizeMultiplier = 1.5;
-         if(it.size === "Large") sizeMultiplier = 2.0;
-         if(it.size === "Jumbo") sizeMultiplier = 3.0;
-         let tc = 0;
-         if(it.type==="Electronics") tc = 60; if(it.type==="Furniture") tc = 150; if(it.type==="Medical") tc = 40; if(it.type==="Machinery") tc = 120;
-         grandTotal += Math.round((rate * sizeMultiplier * (parseInt(it.count) || 1)) + tc);
-     });
-     return grandTotal;
-  }
-  const ep = calculateTotal();
+  // 🔥 PRICING DYNAMIC ALLOCATION FOR ALL ITEMS 🔥
+  const ep = cargoList.reduce((total, item) => total + calcPrice(f.from, f.to, item.rate, item.count, item.type, f.payment, item.size), 0);
   
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800";
   const uniqueCompanies = [...new Set(creditAuthList.map(c => c.company))];
@@ -995,13 +989,15 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
   const submit = async () => {
     if(isSubmitting) return; 
     if(isManualLR && (!lrNo || lrNo.trim() === "")) return showMsg("LR Number is mandatory in Manual Mode!", "error");
-    if(!f.sName || !f.sPhone || !f.from || !f.rName || !f.rPhone || !f.to) return showMsg("Please fill all mandatory profile fields marked with (*)", "error");
+    if(!f.sName || !f.sPhone || !f.from || !f.rName || !f.rPhone || !f.to) return showMsg("Please fill all profile fields marked with (*)", "error");
     
-    let itemsValid = true;
-    items.forEach(it => { if(!it.count || !it.rate || !it.type) itemsValid = false; });
-    if(!itemsValid) return showMsg("Please fill Qty, Type, and Rate for all cargo items!", "error");
+    // Check if all cargo items have qty and rate
+    const invalidCargo = cargoList.find(c => !c.count || !c.rate || !c.type);
+    if(invalidCargo) return showMsg("Please enter Quantity, Type, and Rate for all cargo items!", "error");
 
-    if(f.payment === "Credit") { if(!f.creditCustomer) return showMsg("Search and Select a Credit Account!", "error"); }
+    if(f.payment === "Credit") { 
+      if(!f.creditCustomer) return showMsg("Search and Select a Credit Account!", "error");
+    }
     
     setIsSubmitting(true); 
     const dObj = new Date(); const isoDate = dObj.toISOString(); const locDateStr = dObj.toLocaleDateString('en-IN'); 
@@ -1012,25 +1008,45 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
 
         if (isManualLR) {
            finalLR = lrNo.trim().toUpperCase();
-           if(freshParcels.some(p => p.id.toUpperCase() === finalLR)) { setIsSubmitting(false); return showMsg(`LR Number ${finalLR} already exists!`, "error"); }
+           if(freshParcels.some(p => p.id.toUpperCase() === finalLR)) {
+              setIsSubmitting(false); return showMsg(`LR Number ${finalLR} already exists!`, "error");
+           }
         } else {
            finalLR = generateLR(f.from, f.to);
         }
 
-        // Calculate summary for tables backward compatibility
-        const totalCount = items.reduce((sum, it) => sum + (parseInt(it.count)||0), 0);
-        const primaryType = items.length > 1 ? "Multiple Items" : items[0].type;
+        const totalQty = cargoList.reduce((sum, item) => sum + Number(item.count), 0);
+        const primaryType = cargoList.length > 1 ? "Mixed Items" : cargoList[0].type;
+        const totalWeight = cargoList.reduce((sum, item) => sum + Number(item.weight||0), 0);
 
-        const p = {...f, count: totalCount, type: primaryType, items: items, sName: f.sName.toUpperCase(), rName: f.rName.toUpperCase(), notes: f.payment === 'Credit' ? `[A/c: ${f.creditCustomer}] ${f.notes}` : f.notes, creditSettled: false, id: finalLR, date: locDateStr, isoDate: isoDate, status: "Booked", price: ep, bookedBy: user.username, bookedBranch: user.branch, settledBranches: [], history: [{status: "Booked", loc: f.from, time: dObj.toLocaleString()}]};
+        const p = {...f, count: totalQty.toString(), type: primaryType, actualWeight: totalWeight.toString(), cargoList: cargoList, sName: f.sName.toUpperCase(), rName: f.rName.toUpperCase(), notes: f.payment === 'Credit' ? `[A/c: ${f.creditCustomer}] ${f.notes}` : f.notes, creditSettled: false, id: finalLR, date: locDateStr, isoDate: isoDate, status: "Booked", price: ep, bookedBy: user.username, bookedBranch: user.branch, settledBranches: [], history: [{status: "Booked", loc: f.from, time: dObj.toLocaleString()}]};
         
         await db.insertParcel(p); 
         const saved = await local.get("mps_contacts") || {}; saved[f.sPhone] = { name: p.sName, gst: f.sGst }; saved[f.rPhone] = { name: p.rName, gst: f.rGst }; await local.set("mps_contacts", saved);
         setParcels([p, ...freshParcels]); setDone(p); showMsg("Booking Successful!"); 
-    } catch(err) { showMsg("Network or Database Error! Please try again.", "error"); }
+    } catch(err) { 
+        console.error(err);
+        showMsg("Network or Database Error! Please try again.", "error"); 
+    }
     setIsSubmitting(false);
   };
 
-  if(done) return ( <div className={`${cardBg} p-6 md:p-10 rounded-3xl max-w-xl mx-auto text-center border-t-4 border-emerald-500`}><h2 className="text-xl md:text-2xl font-black mb-4">Parcel Registered Successfully</h2><div className="bg-indigo-600/10 text-indigo-500 text-xl md:text-2xl font-mono font-bold p-3 rounded-xl mb-6">{done.id}</div><button onClick={()=>{setDone(null); setF({sName:"", sPhone:"", sGst:"", rName:"", rPhone:"", rGst:"", from: user.branch === 'All' ? "" : user.branch, to:"", payment:"Paid", creditCustomer:"", notes:""}); setItems([{ id: Date.now(), count: "1", type: "Box", size: "Standard", actualWeight: "", rate: "" }]); setEway(""); setLrNo(""); setIsManualLR(false);}} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl mb-3">New Registration</button><button onClick={()=>generatePDF(done, 1)} className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl mb-3">Download Receipt (Full Page)</button><button onClick={()=>generatePDF(done, 2)} className="w-full bg-indigo-500 text-white font-bold py-3 rounded-xl mb-3">Download Receipt (A5 - Paper Saver)</button><button onClick={() => openWhatsApp(done.sPhone, true, done)} className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl">📱 Send SMS / WhatsApp</button></div> );
+  if(done) return ( 
+     <div className={`${cardBg} p-6 md:p-10 rounded-3xl max-w-xl mx-auto text-center border-t-4 border-emerald-500 animate-bounce-in`}>
+        <h2 className="text-xl md:text-2xl font-black mb-4">Parcel Registered Successfully</h2>
+        <div className="bg-indigo-600/10 text-indigo-500 text-xl md:text-2xl font-mono font-bold p-3 rounded-xl mb-6">{done.id}</div>
+        
+        <p className="text-[10px] font-bold uppercase opacity-50 mb-2">Print Receipt Layouts:</p>
+        <div className="flex justify-center gap-2 mb-4">
+            <button onClick={()=>generatePDF(done, 1)} className="flex-1 bg-slate-800 text-white font-bold py-3 rounded-xl text-sm shadow-md">🖨️ Full Page</button>
+            <button onClick={()=>generatePDF(done, 2)} className="flex-1 bg-indigo-500 text-white font-bold py-3 rounded-xl text-sm shadow-md">🖨️ 2 Per Page</button>
+            <button onClick={()=>generatePDF(done, 3)} className="flex-1 bg-emerald-500 text-white font-bold py-3 rounded-xl text-sm shadow-md">🖨️ 3 Per Page</button>
+        </div>
+
+        <button onClick={()=>{setDone(null); setF(initF); setCargoList([{...initCargo}]); setEway(""); setLrNo(""); setIsManualLR(false);}} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl mb-3 mt-4 border border-indigo-500">New Registration</button>
+        <button onClick={() => openWhatsApp(done.sPhone, true, done)} className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl border border-emerald-500">📱 Send SMS / WhatsApp</button>
+     </div> 
+  );
 
   return (
     <div className="space-y-4 md:space-y-6">
@@ -1071,37 +1087,29 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
       </div>
       
       <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4 relative z-20`}>
-        <div className="flex justify-between items-center border-b border-slate-500/20 pb-2">
-            <h3 className="font-bold text-lg">📦 Cargo Items Builder</h3>
-            <button onClick={addItemRow} className="bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border border-indigo-500/20">➕ Add Item</button>
+        <div className="flex justify-between items-center mb-2">
+            <h3 className="font-bold">Dynamic Cargo Details</h3>
+            <button onClick={addCargoRow} className="bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500 hover:text-white px-4 py-1.5 rounded-lg text-xs font-black transition-colors shadow-sm border border-indigo-500/20">+ Add Cargo Item</button>
         </div>
         
-        {/* 🔥 DYNAMIC ITEMS BUILDER UI 🔥 */}
         <div className="space-y-3">
-           {items.map((it, idx) => (
-              <div key={it.id} className={`grid grid-cols-2 md:grid-cols-12 gap-2 items-center p-2 rounded-xl ${isDark ? 'bg-black/20' : 'bg-slate-100'}`}>
-                 <div className="md:col-span-2">
-                    <input type="number" value={it.count} onChange={e=>updateItem(it.id, 'count', e.target.value)} placeholder="Qty *" className={`w-full p-2 rounded-lg border outline-none [appearance:textfield] text-sm ${inputBg}`} />
-                 </div>
-                 <div className="md:col-span-3">
-                    <select value={it.type} onChange={e=>updateItem(it.id, 'type', e.target.value)} className={`w-full p-2 rounded-lg border outline-none text-sm ${inputBg}`}>{TYPES.map(t=><option key={t}>{t}</option>)}</select>
-                 </div>
-                 <div className="md:col-span-3">
-                    <select value={it.size} onChange={e=>updateItem(it.id, 'size', e.target.value)} className={`w-full p-2 rounded-lg border font-bold text-amber-600 outline-none text-sm ${inputBg}`}>
-                       <option value="Standard">Norm Size (1x Rate)</option>
-                       <option value="Medium">Medium Size (1.5x Rate)</option>
-                       <option value="Large">Large Size (2x Rate)</option>
-                       <option value="Jumbo">Jumbo/Heavy (3x Rate)</option>
-                    </select>
-                 </div>
-                 <div className="md:col-span-2">
-                    <input type="number" value={it.actualWeight} onChange={e=>updateItem(it.id, 'actualWeight', e.target.value)} placeholder="Wgt (Kg)" className={`w-full p-2 rounded-lg border outline-none [appearance:textfield] text-sm ${inputBg}`} />
-                 </div>
-                 <div className="md:col-span-2 flex gap-1">
-                    <input type="number" value={it.rate} onChange={e=>updateItem(it.id, 'rate', e.target.value)} placeholder="Rate/Unit*" className={`w-full p-2 rounded-lg border outline-none font-bold [appearance:textfield] text-sm ${inputBg}`} />
-                    {items.length > 1 && <button onClick={()=>removeItemRow(it.id)} className="bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white px-2 rounded-lg transition-colors" title="Remove Item">✖</button>}
-                 </div>
-              </div>
+           {cargoList.map((c, index) => (
+               <div key={index} className="grid grid-cols-2 md:grid-cols-12 gap-3 md:gap-2 items-center bg-black/5 p-3 rounded-xl border border-slate-500/10 animate-fade-in relative">
+                  {cargoList.length > 1 && (
+                     <button onClick={()=>removeCargoRow(index)} className="absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full text-[10px] font-black shadow-md border-2 border-white hover:scale-110">X</button>
+                  )}
+                  <div className="md:col-span-1 hidden md:block text-center font-black text-slate-400">#{index+1}</div>
+                  <input type="number" value={c.count} onChange={e=>updateCargo(index, 'count', e.target.value)} placeholder="Qty *" className={`md:col-span-2 p-3 rounded-xl border outline-none [appearance:textfield] ${inputBg}`} />
+                  <select value={c.type} onChange={e=>updateCargo(index, 'type', e.target.value)} className={`md:col-span-3 p-3 rounded-xl border outline-none ${inputBg}`}>{TYPES.map(t=><option key={t}>{t}</option>)}</select>
+                  <select value={c.size} onChange={e=>updateCargo(index, 'size', e.target.value)} className={`md:col-span-2 p-3 rounded-xl border font-bold text-amber-600 outline-none ${inputBg}`}>
+                     <option value="Standard">Normal (1x)</option>
+                     <option value="Medium">Medium (1.5x)</option>
+                     <option value="Large">Large (2x)</option>
+                     <option value="Jumbo">Jumbo (3x)</option>
+                  </select>
+                  <input type="number" value={c.weight} onChange={e=>updateCargo(index, 'weight', e.target.value)} placeholder="Wgt (Kg)" className={`md:col-span-2 p-3 rounded-xl border outline-none [appearance:textfield] ${inputBg}`} />
+                  <input type="number" value={c.rate} onChange={e=>updateCargo(index, 'rate', e.target.value)} placeholder="Rate/Unit*" className={`md:col-span-2 p-3 rounded-xl border outline-none font-bold [appearance:textfield] ${inputBg}`} />
+               </div>
            ))}
         </div>
 
@@ -1110,10 +1118,10 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
             <select value={f.payment} onChange={e=>setF({...f, payment:e.target.value})} className="p-3 border rounded-xl font-bold bg-indigo-600 text-white outline-none w-full">{PAY_MODES.map(p=><option key={p} value={p}>{p.toUpperCase()}</option>)}</select>
             {f.payment === 'Credit' && ( <CreditSearchDropdown value={f.creditCustomer} onChange={val => setF({...f, creditCustomer: val})} uniqueCompanies={uniqueCompanies} isDark={isDark} /> )}
           </div>
-          <div className="bg-slate-950 p-4 rounded-xl flex justify-between items-center text-white h-full"><span className="text-sm opacity-50">Total Income Allocation</span><span className="text-xl md:text-3xl font-black text-emerald-400">₹{ep}</span></div>
+          <div className="bg-slate-950 p-4 rounded-xl flex justify-between items-center text-white h-full shadow-inner border border-slate-800"><span className="text-sm opacity-50">Total Income Allocation</span><span className="text-xl md:text-3xl font-black text-emerald-400">₹{ep}</span></div>
         </div>
       </div>
-      <button id="btnSubmit" onClick={submit} disabled={isSubmitting} className={`w-full text-white font-bold py-4 rounded-xl shadow-lg transition-transform transform hover:-translate-y-1 relative z-10 text-lg ${isSubmitting ? 'bg-slate-500 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}>{isSubmitting ? "Generating Booking..." : "Confirm Booking"}</button>
+      <button id="btnSubmit" onClick={submit} disabled={isSubmitting} className={`w-full text-white font-bold py-4 rounded-xl shadow-lg transition-transform transform hover:-translate-y-1 relative z-10 ${isSubmitting ? 'bg-slate-500 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}>{isSubmitting ? "Generating Booking..." : "Confirm Booking"}</button>
     </div>
   );
 }
@@ -1194,7 +1202,7 @@ function Track({parcels, isDark, user, setGlobalView, initialStatus}) {
                 <th className="p-4">LR Code & Date</th>
                 <th className="p-4">Route Info</th>
                 <th className="p-4">Customer Details</th>
-                <th className="p-4">Cargo Summary</th>
+                <th className="p-4">Cargo (Qty)</th>
                 <th className="p-4">Amount & Payment</th>
                 <th className="p-4">Status</th>
                 <th className="p-4 text-center">Receipt</th>
@@ -1425,7 +1433,7 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
             </table>
           </div>
 
-          {isSuper && <DeletedParcelsLog parcels={isDark} isDark={isDark} />}
+          {isSuper && <DeletedParcelsLog parcels={parcels} isDark={isDark} />}
         </>
       )}
       {editF && ( <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[200]"><div className={`${cardBg} p-6 rounded-2xl max-w-lg w-full space-y-4 animate-bounce-in`}><h3 className="font-black text-lg">Modify Manifest Parameters: {editF.id}</h3><div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><input value={editF.sName} onChange={e=>setEditF({...editF, sName:e.target.value.toUpperCase()})} placeholder="Sender Identity" className={`p-2 border rounded text-sm uppercase ${inputBg}`} /><input value={editF.rName} onChange={e=>setEditF({...editF, rName:e.target.value.toUpperCase()})} placeholder="Receiver Identity" className={`p-2 border rounded text-sm uppercase ${inputBg}`} /><select value={editF.status} onChange={e=>setEditF({...editF, status:e.target.value})} className={`p-2 border rounded text-sm ${inputBg}`}>{STATUSES.filter(s=>s!=='Deleted').map(s=><option key={s}>{s}</option>)}</select><input type="number" value={editF.price} onChange={e=>setEditF({...editF, price:Number(e.target.value)})} placeholder="Price Override" className={`p-2 border rounded font-bold text-sm ${inputBg}`} /></div><div className="flex gap-2 mt-4"><button onClick={saveOverrides} className="bg-indigo-600 text-white font-bold py-2 px-4 rounded-xl flex-1 text-sm">Save Changes</button><button onClick={()=>setEditF(null)} className="bg-slate-500 text-white py-2 px-4 rounded-xl text-sm">Dismiss</button></div></div></div> )}
