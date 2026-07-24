@@ -953,6 +953,7 @@ function Pending({parcels, isDark, user, setGlobalView}) {
   );
 }
 
+// 🔥 UPGRADED BOOK COMPONENT (TERMINATOR RETRY LOGIC) 🔥
 function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, user, creditAuthList}) {
   const initCargo = { count: "1", type: "Box", size: "Standard", weight: "", rate: "" };
   const initF = {sName:"", sPhone:"", sGst:"", rName:"", rPhone:"", rGst:"", from: user.branch === 'All' ? "" : user.branch, to:"", payment:"Paid", creditCustomer:"", notes:""};
@@ -1038,7 +1039,7 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
     const dObj = new Date(); const isoDate = dObj.toISOString(); const locDateStr = dObj.toLocaleDateString('en-IN'); 
     
     try {
-        let freshParcels = await db.getParcels();
+        const freshParcels = await db.getParcels();
         let finalLR = "";
 
         if (isManualLR) {
@@ -1056,21 +1057,43 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
 
         const p = {...f, count: totalQty.toString(), type: primaryType, actualWeight: totalWeight.toString(), cargoList: cargoList, sName: f.sName.toUpperCase(), rName: f.rName.toUpperCase(), notes: f.payment === 'Credit' ? `[A/c: ${f.creditCustomer}] ${f.notes}` : f.notes, creditSettled: false, id: finalLR, date: locDateStr, isoDate: isoDate, status: "Booked", price: ep, bookedBy: user.username, bookedBranch: user.branch, settledBranches: [], history: [{status: "Booked", loc: f.from, time: dObj.toLocaleString()}]};
         
-        try {
-            await db.insertParcel(p); 
-        } catch(insertError) {
-            if(!isManualLR) {
-                freshParcels = await db.getParcels();
-                finalLR = generateLR(f.from, f.to, freshParcels);
-                p.id = finalLR;
+        // 🔥 TERMINATOR LOOP: 5 times instant retry with manual +1 increment 🔥
+        let success = false;
+        let retryLimit = 5;
+        let currentLR = finalLR;
+
+        while (!success && retryLimit > 0) {
+            try {
+                p.id = currentLR;
                 await db.insertParcel(p); 
-            } else {
-                throw insertError;
+                success = true;
+            } catch(insertError) {
+                if(!isManualLR) {
+                    retryLimit--;
+                    console.log(`409 Conflict hit for ${currentLR}. Bypassing database limit & Auto-incrementing...`);
+                    const parts = currentLR.split('/');
+                    if(parts.length === 3) {
+                        const nextNum = parseInt(parts[2], 10) + 1; // Direct +1
+                        currentLR = `${parts[0]}/${parts[1]}/${String(nextNum).padStart(4, '0')}`;
+                    } else {
+                        throw insertError;
+                    }
+                } else {
+                    throw insertError;
+                }
             }
         }
 
+        if(!success) {
+            throw new Error("Duplicate ID or Network Issue"); // Fail only if 5 retries fail
+        }
+
         const saved = await local.get("mps_contacts") || {}; saved[f.sPhone] = { name: p.sName, gst: f.sGst }; saved[f.rPhone] = { name: p.rName, gst: f.rGst }; await local.set("mps_contacts", saved);
-        setParcels([p, ...freshParcels]); setDone(p); showMsg("Booking Successful!"); 
+        
+        const finalParcels = await db.getParcels();
+        setParcels(finalParcels.length > 0 ? finalParcels : [p, ...parcels]); 
+        
+        setDone(p); showMsg("Booking Successful!"); 
     } catch(err) { 
         console.error(err);
         showMsg("Network or Database Error! Please try again.", "error"); 
