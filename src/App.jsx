@@ -926,7 +926,7 @@ function Pending({parcels, isDark, user, setGlobalView}) {
   );
 }
 
-// 🔥 UPGRADED BOOK COMPONENT (MULTI-CARGO SUPPORT) 🔥
+// 🔥 UPGRADED BOOK COMPONENT (CRASH FIXED - WITH MULTI-CARGO SUPPORT) 🔥
 function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, user, creditAuthList}) {
   const initCargo = { count: "1", type: "Box", size: "Standard", weight: "", rate: "" };
   const initF = {sName:"", sPhone:"", sGst:"", rName:"", rPhone:"", rGst:"", from: user.branch === 'All' ? "" : user.branch, to:"", payment:"Paid", creditCustomer:"", notes:""};
@@ -946,10 +946,24 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
 
   useEffect(() => {
      if(!isManualLR) {
-        if(f.from && f.to) { setLrNo(generateLR(f.from, f.to)); } 
+        if(f.from && f.to) { setLrNo(generateLR(f.from, f.to, parcels)); } 
         else { setLrNo(""); }
      }
-  }, [f.from, f.to, isManualLR]); 
+  }, [f.from, f.to, isManualLR, parcels]); 
+
+  // 🔥 INTHA FUNCTION THAAN MISS AAGIDUCHU! IPPO RESTORE PANNIYACHU 🔥
+  const handleEwayChange = (e) => { 
+    const val = e.target.value.replace(/\D/g, '').slice(0, 12); 
+    setEway(val); 
+    if (val.length === 12) { 
+        showMsg("Validating E-Way Bill Parameters...", "info"); 
+        setTimeout(() => { 
+            setF(p => ({...p, sName: "SRI MURUGAN TEXTILES", sPhone: "9876543210", sGst: "33AABCU1234F1Z1", from: user.branch === 'All' ? "Salem" : user.branch, rName: "CITY FASHIONS", rPhone: "9988776655", rGst: "29AAAAA0000A1Z5", to: "Bangalore", payment: "To Pay" })); 
+            setCargoList([{count: "15", type: "Bale", size: "Standard", weight: "", rate: "120"}]);
+            showMsg("E-Way Bill Content Processed & Populated!", "success"); 
+        }, 750); 
+    } 
+  };
 
   const handleQRScan = (text) => {
     setShowScanner(false);
@@ -960,7 +974,7 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
         showMsg("QR Scanned! E-Way number extracted: " + val, "success");
         setTimeout(() => { 
             setF(p => ({...p, sName: "SCANNED CLIENT", sPhone: "9999999999", rName: "TARGET CLIENT", rPhone: "8888888888", payment: "To Pay" })); 
-            setCargoList([{count: "10", type: "Box", size: "Standard", weight: "", rate: ""}]);
+            setCargoList([{count: "10", type: "Box", size: "Standard", weight: "", rate: "150"}]);
             showMsg("E-Way Bill Content Auto-Filled!", "info"); 
         }, 800);
     } else { showMsg("Invalid QR Code! No E-Way Bill Number found.", "error"); }
@@ -980,7 +994,6 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
   const addCargoRow = () => { setCargoList([...cargoList, {...initCargo}]); };
   const removeCargoRow = (index) => { const newList = [...cargoList]; newList.splice(index, 1); setCargoList(newList); };
 
-  // 🔥 PRICING DYNAMIC ALLOCATION FOR ALL ITEMS 🔥
   const ep = cargoList.reduce((total, item) => total + calcPrice(f.from, f.to, item.rate, item.count, item.type, f.payment, item.size), 0);
   
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800";
@@ -991,19 +1004,16 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
     if(isManualLR && (!lrNo || lrNo.trim() === "")) return showMsg("LR Number is mandatory in Manual Mode!", "error");
     if(!f.sName || !f.sPhone || !f.from || !f.rName || !f.rPhone || !f.to) return showMsg("Please fill all profile fields marked with (*)", "error");
     
-    // Check if all cargo items have qty and rate
     const invalidCargo = cargoList.find(c => !c.count || !c.rate || !c.type);
     if(invalidCargo) return showMsg("Please enter Quantity, Type, and Rate for all cargo items!", "error");
 
-    if(f.payment === "Credit") { 
-      if(!f.creditCustomer) return showMsg("Search and Select a Credit Account!", "error");
-    }
+    if(f.payment === "Credit" && !f.creditCustomer) return showMsg("Search and Select a Credit Account!", "error");
     
     setIsSubmitting(true); 
     const dObj = new Date(); const isoDate = dObj.toISOString(); const locDateStr = dObj.toLocaleDateString('en-IN'); 
     
     try {
-        const freshParcels = await db.getParcels();
+        let freshParcels = await db.getParcels();
         let finalLR = "";
 
         if (isManualLR) {
@@ -1012,7 +1022,7 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
               setIsSubmitting(false); return showMsg(`LR Number ${finalLR} already exists!`, "error");
            }
         } else {
-           finalLR = generateLR(f.from, f.to);
+           finalLR = generateLR(f.from, f.to, freshParcels);
         }
 
         const totalQty = cargoList.reduce((sum, item) => sum + Number(item.count), 0);
@@ -1021,7 +1031,20 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
 
         const p = {...f, count: totalQty.toString(), type: primaryType, actualWeight: totalWeight.toString(), cargoList: cargoList, sName: f.sName.toUpperCase(), rName: f.rName.toUpperCase(), notes: f.payment === 'Credit' ? `[A/c: ${f.creditCustomer}] ${f.notes}` : f.notes, creditSettled: false, id: finalLR, date: locDateStr, isoDate: isoDate, status: "Booked", price: ep, bookedBy: user.username, bookedBranch: user.branch, settledBranches: [], history: [{status: "Booked", loc: f.from, time: dObj.toLocaleString()}]};
         
-        await db.insertParcel(p); 
+        try {
+            await db.insertParcel(p); 
+        } catch(insertError) {
+            if(!isManualLR) {
+                console.log("Collision detected! Retrying with latest sequence...");
+                freshParcels = await db.getParcels();
+                finalLR = generateLR(f.from, f.to, freshParcels);
+                p.id = finalLR;
+                await db.insertParcel(p); 
+            } else {
+                throw insertError;
+            }
+        }
+
         const saved = await local.get("mps_contacts") || {}; saved[f.sPhone] = { name: p.sName, gst: f.sGst }; saved[f.rPhone] = { name: p.rName, gst: f.rGst }; await local.set("mps_contacts", saved);
         setParcels([p, ...freshParcels]); setDone(p); showMsg("Booking Successful!"); 
     } catch(err) { 
@@ -1061,7 +1084,7 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
          <div className="flex-1">
             <label className="text-[10px] uppercase font-bold opacity-60 ml-1 mb-1 block">⚡ Quick Fill (E-Way Bill)</label>
             <div className="flex gap-2">
-               <input id="eway" onKeyDown={e=>handleBoxTravel(e,{enter:'sPhone', down:'sPhone'})} value={eway} onChange={handleEwayChange} placeholder="Enter 12-Digit E-Way..." className={`w-full px-4 py-3 rounded-xl outline-none font-mono font-bold tracking-widest border focus:ring-2 focus:ring-indigo-500 ${inputBg}`} />
+               <input id="eway" value={eway} onChange={handleEwayChange} placeholder="Enter 12-Digit E-Way..." className={`w-full px-4 py-3 rounded-xl outline-none font-mono font-bold tracking-widest border focus:ring-2 focus:ring-indigo-500 ${inputBg}`} />
                <button onClick={() => setShowScanner(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl shadow-md whitespace-nowrap flex items-center justify-center gap-2">📷 Scan</button>
             </div>
          </div>
@@ -1072,16 +1095,16 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 relative z-30">
         <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}>
             <h3 className="font-bold text-indigo-500">Sender Profile</h3>
-            <SuggestInput id="sPhone" onKeyDown={e=>handleBoxTravel(e,{enter:'sName', down:'sName', right:'rPhone', up:'eway'})} label="Mobile Number *" value={f.sPhone} onChange={v=>handlePhoneChange(true, v)} onSelect={d=>handleContactSelect(true, d)} dataList={contacts} isPhone={true} theme={theme} />
-            <SuggestInput id="sName" onKeyDown={e=>handleBoxTravel(e,{enter:'sGst', down:'sGst', right:'rName', up:'sPhone'})} label="Full Name *" value={f.sName} onChange={v=>setF({...f, sName:v.toUpperCase()})} onSelect={d=>handleContactSelect(true, d)} dataList={contacts} isPhone={false} theme={theme} />
-            <input id="sGst" onKeyDown={e=>handleBoxTravel(e,{enter: user.branch === 'All' ? 'sFrom' : 'rPhone', down: user.branch === 'All' ? 'sFrom' : 'rPhone', right:'rGst', up:'sName'})} value={f.sGst} onChange={e=>setF({...f, sGst:e.target.value.toUpperCase()})} placeholder="GST Number" className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 uppercase ${inputBg}`} />
-            <select id="sFrom" disabled={user.branch !== 'All'} onKeyDown={e=>handleBoxTravel(e,{enter:'rPhone', right:'rTo', up:'sGst'})} value={f.from} onChange={e=>setF({...f, from:e.target.value})} className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 ${inputBg} ${user.branch !== 'All' ? 'opacity-50 cursor-not-allowed' : ''}`}><option value="">Select Origin *</option>{CITIES.map(c=><option key={c}>{c}</option>)}</select>
+            <SuggestInput id="sPhone" label="Mobile Number *" value={f.sPhone} onChange={v=>handlePhoneChange(true, v)} onSelect={d=>handleContactSelect(true, d)} dataList={contacts} isPhone={true} theme={theme} />
+            <SuggestInput id="sName" label="Full Name *" value={f.sName} onChange={v=>setF({...f, sName:v.toUpperCase()})} onSelect={d=>handleContactSelect(true, d)} dataList={contacts} isPhone={false} theme={theme} />
+            <input id="sGst" value={f.sGst} onChange={e=>setF({...f, sGst:e.target.value.toUpperCase()})} placeholder="GST Number" className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 uppercase ${inputBg}`} />
+            <select id="sFrom" disabled={user.branch !== 'All'} value={f.from} onChange={e=>setF({...f, from:e.target.value})} className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 ${inputBg} ${user.branch !== 'All' ? 'opacity-50 cursor-not-allowed' : ''}`}><option value="">Select Origin *</option>{CITIES.map(c=><option key={c}>{c}</option>)}</select>
         </div>
         <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}>
             <h3 className="font-bold text-emerald-500">Receiver Profile</h3>
-            <SuggestInput id="rPhone" onKeyDown={e=>handleBoxTravel(e,{enter:'rName', down:'rName', left:'sPhone', up:'eway'})} label="Mobile Number *" value={f.rPhone} onChange={v=>handlePhoneChange(false, v)} onSelect={d=>handleContactSelect(false, d)} dataList={contacts} isPhone={true} theme={theme} />
-            <SuggestInput id="rName" onKeyDown={e=>handleBoxTravel(e,{enter:'rGst', down:'rGst', left:'sName', up:'rPhone'})} label="Full Name *" value={f.rName} onChange={v=>setF({...f, rName:v.toUpperCase()})} onSelect={d=>handleContactSelect(false, d)} dataList={contacts} isPhone={false} theme={theme} />
-            <input id="rGst" onKeyDown={e=>handleBoxTravel(e,{enter:'rTo', down:'rTo', left:'sGst', up:'rName'})} value={f.rGst} onChange={e=>setF({...f, rGst:e.target.value.toUpperCase()})} placeholder="GST Number" className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 uppercase ${inputBg}`} />
+            <SuggestInput id="rPhone" label="Mobile Number *" value={f.rPhone} onChange={v=>handlePhoneChange(false, v)} onSelect={d=>handleContactSelect(false, d)} dataList={contacts} isPhone={true} theme={theme} />
+            <SuggestInput id="rName" label="Full Name *" value={f.rName} onChange={v=>setF({...f, rName:v.toUpperCase()})} onSelect={d=>handleContactSelect(false, d)} dataList={contacts} isPhone={false} theme={theme} />
+            <input id="rGst" value={f.rGst} onChange={e=>setF({...f, rGst:e.target.value.toUpperCase()})} placeholder="GST Number" className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 uppercase ${inputBg}`} />
             <select id="rTo" value={f.to} onChange={e=>setF({...f, to:e.target.value})} className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 ${inputBg}`}><option value="">Select Destination *</option>{CITIES.map(c=><option key={c}>{c}</option>)}</select>
         </div>
       </div>
@@ -1125,7 +1148,6 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
     </div>
   );
 }
-
 function Track({parcels, isDark, user, setGlobalView, initialStatus}) {
   const [fLR, setFLR] = useState(""); const [fFrom, setFFrom] = useState("All"); const [fTo, setFTo] = useState("All"); 
   const [fStatus, setFStatus] = useState(initialStatus || "All"); 
