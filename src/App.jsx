@@ -20,11 +20,31 @@ const PAY_MODES = ["Paid", "To Pay", "Credit", "FOC"];
 
 const genUserId = () => `USR-${Math.floor(Math.random()*10000)}`;
 
-const generateLR = (fromCity, toCity) => {
+// 🔥 AUTO-IGNORE LARGE/DUMMY NUMBERS FIX 🔥
+const generateLR = (fromCity, toCity, allParcels) => {
+  if (!fromCity || !toCity) return `MPS${String(Math.floor(Math.random()*1000)).padStart(6,'0')}`; 
   const fCode = BRANCH_CONFIG[fromCity] || "00"; 
   const tCode = BRANCH_CONFIG[toCity] || "00"; 
-  const uniqueCode = String(Date.now()).slice(-4) + Math.floor(10 + Math.random() * 90);
-  return `${fCode}/${tCode}/${uniqueCode}`;
+  const fromPrefix = `${fCode}/`; 
+  let max = 0;
+  
+  if(allParcels && allParcels.length > 0) {
+      allParcels.forEach(p => { 
+        if (p.id && p.id.startsWith(fromPrefix)) { 
+          const parts = p.id.split('/'); 
+          if (parts.length === 3) { 
+            const num = parseInt(parts[2], 10); 
+            
+            // 🔥 MAGIC TRICK: Ignore numbers above 9999 (6-digit dummy numbers) 🔥
+            if (!isNaN(num) && num > max && num < 10000) {
+               max = num; 
+            }
+            
+          } 
+        } 
+      });
+  }
+  return `${fCode}/${tCode}/${String(max + 1).padStart(4, '0')}`;
 };
 
 const MpsLogo = () => (<svg className="w-8 h-8 text-indigo-500 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>);
