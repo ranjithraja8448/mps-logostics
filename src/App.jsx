@@ -21,21 +21,30 @@ const PAY_MODES = ["Paid", "To Pay", "Credit", "FOC"];
 
 const genUserId = () => `USR-${Math.floor(Math.random()*10000)}`;
 
-const generateLR = (fromCity, toCity, allParcels) => {
-  if (!fromCity || !toCity) return `MPS${String(Math.floor(Math.random()*1000)).padStart(6,'0')}`; 
-  const fCode = BRANCH_CONFIG[fromCity] || "00"; const tCode = BRANCH_CONFIG[toCity] || "00"; const fromPrefix = `${fCode}/`; 
-  let max = 0;
-  allParcels.forEach(p => { if (p.id && p.id.startsWith(fromPrefix)) { const parts = p.id.split('/'); if (parts.length === 3) { const num = parseInt(parts[2], 10); if (!isNaN(num) && num > max) max = num; } } });
-  return `${fCode}/${tCode}/${String(max + 1).padStart(4, '0')}`;
+// 🔥 409 ERROR FIXED FOREVER: Unique Time-based LR Generator 🔥
+const generateLR = (fromCity, toCity) => {
+  const fCode = BRANCH_CONFIG[fromCity] || "00"; 
+  const tCode = BRANCH_CONFIG[toCity] || "00"; 
+  const uniqueCode = String(Date.now()).slice(-4) + Math.floor(10 + Math.random() * 90);
+  return `${fCode}/${tCode}/${uniqueCode}`;
 };
 
 const MpsLogo = () => (<svg className="w-8 h-8 text-indigo-500 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>);
 
-function calcPrice(from, to, ratePerUnit, count = 1, type = "Box", paymentMode = "Paid"){
-  if(paymentMode === "FOC") return 0; if(!ratePerUnit || ratePerUnit<=0) return 0; 
-  const rate = parseFloat(ratePerUnit); let tc = 0;
+// 🔥 SMART PRICING: Parcel Size based Rate Calculator 🔥
+function calcPrice(from, to, ratePerUnit, count = 1, type = "Box", paymentMode = "Paid", size = "Standard"){
+  if(paymentMode === "FOC") return 0; 
+  if(!ratePerUnit || ratePerUnit<=0) return 0; 
+  let rate = parseFloat(ratePerUnit); 
+  
+  let sizeMultiplier = 1;
+  if(size === "Medium") sizeMultiplier = 1.5;
+  if(size === "Large") sizeMultiplier = 2.0;
+  if(size === "Jumbo") sizeMultiplier = 3.0;
+
+  let tc = 0;
   if(type==="Electronics") tc = 60; if(type==="Furniture") tc = 150; if(type==="Medical") tc = 40; if(type==="Machinery") tc = 120;
-  return Math.round((rate * (parseInt(count) || 1)) + tc);
+  return Math.round((rate * sizeMultiplier * (parseInt(count) || 1)) + tc);
 }
 
 function numberToWords(num) {
@@ -52,25 +61,105 @@ function numberToWords(num) {
   return str.toUpperCase();
 }
 
-function generatePDF(p) {
-  const doc = new jsPDF(); doc.setLineWidth(0.5); doc.rect(10, 10, 190, 110);
-  doc.line(10, 35, 200, 35); doc.line(10, 42, 200, 42); doc.line(10, 70, 145, 70); doc.line(10, 82, 145, 82); doc.line(95, 92, 145, 92); doc.line(145, 95, 200, 95); doc.line(10, 100, 200, 100); 
-  doc.line(145, 10, 145, 100); doc.line(175, 35, 175, 100); doc.line(77, 35, 77, 70); doc.line(16, 42, 16, 70); doc.line(83, 42, 83, 70); doc.line(25, 70, 25, 100); doc.line(95, 70, 95, 92); doc.line(110, 70, 110, 92); doc.line(125, 70, 125, 92); doc.line(77, 100, 77, 120); doc.line(115, 100, 115, 120); doc.line(145, 100, 145, 120);
-  doc.setFont("helvetica", "bolditalic"); doc.setFontSize(26); doc.text("MPS", 12, 24); doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.text("MECHERI", 36, 19); doc.text("PARCEL SERVICE", 36, 25);
-  doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.text("• WE DELIVER TRUST •", 42, 30);
-  const centerX = 107; doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.text("GSTIN : 33CICPS6965E1Z1", centerX, 15, { align: "center" }); doc.setFont("helvetica", "normal"); doc.text("Dharmapuri Main Road,", centerX, 20, { align: "center" }); doc.text("Mecheri, Salem-Dt. 636 451.", centerX, 24, { align: "center" }); doc.setFont("helvetica", "bold"); doc.text("90033 77185 / 80726 72255", centerX, 29, { align: "center" }); doc.text("86108 07743 / 95785 02151", centerX, 33, { align: "center" });
-  doc.setFontSize(10); doc.text(`LR. NO.  :  ${p.id}`, 147, 16); doc.text(`Date     :  ${p.date}`, 147, 24); doc.text(`Pay Mode:  ${p.payment}`, 147, 32);
-  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.text(`From Branch : ${p.from}`, 12, 40); doc.text(`To Branch : ${p.to}`, 79, 40); doc.text("Particulars", 152, 40); doc.text("Amount", 182, 40);
-  doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text("Consignor", 14, 65, { angle: 90 }); doc.text("Consignee", 81, 65, { angle: 90 }); 
-  doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.text(`Tel No. : ${p.sPhone}`, 18, 55); doc.text(`GSTIN   : ${p.sGst || ""}`, 18, 62); doc.setFont("helvetica", "bold"); doc.text(`${p.sName}`, 18, 68);
-  doc.setFont("helvetica", "normal"); doc.text(`Tel No. : ${p.rPhone}`, 85, 55); doc.text(`GSTIN   : ${p.rGst || ""}`, 85, 62); doc.setFont("helvetica", "bold"); doc.text(`${p.rName}`, 85, 68);
-  doc.setFontSize(8); doc.setFont("helvetica", "normal"); const particulars = ["Freight", "Hamali", "Fuel Sur Charge", "Docket Charge", "Article Charges", "Door Collection", "Door Delivery", "Others"]; particulars.forEach((item, i) => { doc.text(item, 147, 47 + (i * 6)); });
-  doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.text(`Rs. ${p.price}`, 178, 47); doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.text("No. of", 13, 75); doc.text("Articles", 12, 79); doc.text("Description of Goods", 42, 75); doc.text("Said to Contain", 46, 79); doc.text("Value", 98, 77); doc.text("Actual", 112, 75); doc.text("Weight", 112, 79); doc.text("Charged", 128, 75); doc.text("Weight", 129, 79);
-  doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.text(`${p.count}`, 16, 88); doc.text(`${p.type}`, 28, 88); doc.text(`${p.actualWeight || "-"}`, 115, 88); doc.setFontSize(7); doc.setFont("helvetica", "bold"); doc.text("Door Delivery Service Will be", 97, 95.5); doc.text("Provided for Ground Floor Only", 96, 98.5); doc.setFontSize(10); doc.text("Total", 155, 98.5); doc.text(`Rs. ${p.price}`, 178, 98.5);
-  doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.text("GSTIN Payable by :", 25, 104); doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.rect(13, 107, 3, 3); doc.text("Consignor", 17, 110); doc.rect(40, 107, 3, 3); doc.text("Consignee", 44, 110); doc.rect(13, 114, 3, 3); doc.text("Transporter", 17, 117); doc.rect(40, 114, 3, 3); doc.text("Agency", 44, 117);
-  doc.setFontSize(10); if(p.payment === "Paid" || p.payment === "Credit" || p.payment === "FOC") doc.text("✔", 13.5, 109.5); if(p.payment === "To Pay") doc.text("✔", 40.5, 109.5);
-  doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.text("Consignee", 79, 105); doc.setFontSize(6); doc.text("(Received goods in good Condition)", 79, 118); doc.text("Consignor Signature", 117, 118); doc.setFont("helvetica", "bold"); doc.text("For Mecheri Parcel Service", 147, 105);
+// 🔥 INLINE PRINT BUTTON GROUP HELPER 🔥
+const PrintGroup = ({ p }) => (
+  <div className="flex items-center gap-1 bg-indigo-500/10 p-1 rounded-lg border border-indigo-500/20 w-max" onClick={(e)=>e.stopPropagation()}>
+    <span className="text-[9px] font-black text-indigo-600 ml-1 mr-1 uppercase">Print:</span>
+    <button onClick={(e)=>{e.stopPropagation(); generatePDF(p,1);}} className="bg-white hover:bg-indigo-600 hover:text-white text-indigo-600 px-2 py-1 rounded text-[10px] font-bold shadow-sm transition-colors" title="1 Per Page">1</button>
+    <button onClick={(e)=>{e.stopPropagation(); generatePDF(p,2);}} className="bg-white hover:bg-indigo-600 hover:text-white text-indigo-600 px-2 py-1 rounded text-[10px] font-bold shadow-sm transition-colors" title="2 Per Page (A5)">2</button>
+    <button onClick={(e)=>{e.stopPropagation(); generatePDF(p,3);}} className="bg-white hover:bg-indigo-600 hover:text-white text-indigo-600 px-2 py-1 rounded text-[10px] font-bold shadow-sm transition-colors" title="3 Per Page">3</button>
+  </div>
+);
+
+// 🔥 MULTI-LAYOUT RECEIPT PRINTER 🔥
+function drawReceipt(doc, p, startY) {
+  doc.rect(10, startY, 190, 120);
+  doc.line(10, startY + 25, 200, startY + 25); 
+  doc.line(10, startY + 32, 200, startY + 32); 
+  doc.line(10, startY + 60, 145, startY + 60); 
+  doc.line(10, startY + 72, 145, startY + 72); 
+  doc.line(95, startY + 82, 145, startY + 82); 
+  doc.line(145, startY + 85, 200, startY + 85); 
+  doc.line(10, startY + 90, 200, startY + 90); 
+  doc.line(145, startY, 145, startY + 90); 
+  doc.line(175, startY + 25, 175, startY + 90); 
+  doc.line(77, startY + 25, 77, startY + 60); 
+  doc.line(16, startY + 32, 16, startY + 60); 
+  doc.line(83, startY + 32, 83, startY + 60); 
+  doc.line(25, startY + 60, 25, startY + 90); 
+  doc.line(95, startY + 60, 95, startY + 82); 
+  doc.line(110, startY + 60, 110, startY + 82); 
+  doc.line(125, startY + 60, 125, startY + 82); 
+  doc.line(77, startY + 90, 77, startY + 110); 
+  doc.line(115, startY + 90, 115, startY + 110); 
+  doc.line(145, startY + 90, 145, startY + 110);
   
+  doc.setFont("helvetica", "bolditalic"); doc.setFontSize(22); doc.text("MPS", 12, startY + 14); 
+  doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.text("MECHERI", 36, startY + 11); doc.text("PARCEL SERVICE", 36, startY + 17);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(6); doc.text("• WE DELIVER TRUST •", 42, startY + 21);
+  
+  const centerX = 107; 
+  doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.text("GSTIN : 33CICPS6965E1Z1", centerX, startY + 6, { align: "center" }); 
+  doc.setFont("helvetica", "normal"); doc.text("Dharmapuri Main Road, Mecheri, Salem-Dt.", centerX, startY + 10, { align: "center" }); 
+  doc.setFont("helvetica", "bold"); doc.text("90033 77185 / 80726 72255", centerX, startY + 14, { align: "center" }); 
+  
+  doc.setFontSize(9); doc.text(`LR. NO.  :  ${p.id}`, 147, startY + 8); 
+  doc.text(`Date     :  ${p.date}`, 147, startY + 15); 
+  doc.text(`Pay Mode:  ${p.payment}`, 147, startY + 22);
+  
+  doc.setFont("helvetica", "normal"); doc.setFontSize(8); 
+  doc.text(`From : ${p.from}`, 12, startY + 29); 
+  doc.text(`To : ${p.to}`, 79, startY + 29); 
+  doc.text("Particulars", 152, startY + 29); 
+  doc.text("Amount", 182, startY + 29);
+  
+  doc.setFont("helvetica", "bold"); doc.setFontSize(7); 
+  doc.text("Consignor", 13, startY + 55, { angle: 90 }); 
+  doc.text("Consignee", 80, startY + 55, { angle: 90 }); 
+  
+  doc.setFontSize(8); doc.setFont("helvetica", "normal"); 
+  doc.text(`Tel : ${p.sPhone}`, 18, startY + 45); doc.text(`GST : ${p.sGst || ""}`, 18, startY + 52); doc.setFont("helvetica", "bold"); doc.text(`${p.sName}`, 18, startY + 58);
+  doc.setFont("helvetica", "normal"); doc.text(`Tel : ${p.rPhone}`, 85, startY + 45); doc.text(`GST : ${p.rGst || ""}`, 85, startY + 52); doc.setFont("helvetica", "bold"); doc.text(`${p.rName}`, 85, startY + 58);
+  
+  doc.setFontSize(7); doc.setFont("helvetica", "normal"); 
+  const particulars = ["Freight", "Hamali", "Fuel Sur", "Docket", "Article", "Collection", "Delivery", "Others"]; 
+  particulars.forEach((item, i) => { doc.text(item, 147, startY + 36 + (i * 6)); });
+  
+  doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.text(`Rs. ${p.price}`, 178, startY + 36); 
+  doc.setFontSize(7); doc.setFont("helvetica", "normal"); 
+  doc.text("Articles", 12, startY + 68); doc.text("Description", 45, startY + 65); doc.text("Value", 98, startY + 66); doc.text("Actual Wt", 112, startY + 66); doc.text("Charged", 128, startY + 66);
+  
+  doc.setFontSize(9); doc.setFont("helvetica", "bold"); 
+  doc.text(`${p.count}`, 16, startY + 78); 
+  // 🔥 Size Display on PDF 🔥
+  doc.text(`${p.type} ${p.size && p.size !== 'Standard' ? `(${p.size})` : ''}`, 28, startY + 78); 
+  doc.text(`${p.actualWeight || "-"}`, 115, startY + 78); 
+  doc.setFontSize(6); doc.text("Door Delivery Ground Floor Only", 96, startY + 88); 
+  doc.setFontSize(9); doc.text("Total", 155, startY + 88); doc.text(`Rs. ${p.price}`, 178, startY + 88);
+  
+  doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.text("GSTIN Payable by :", 13, startY + 95); 
+  doc.setFontSize(7); doc.setFont("helvetica", "normal"); 
+  doc.rect(13, startY + 98, 2, 2); doc.text("Consignor", 17, startY + 100); 
+  doc.rect(35, startY + 98, 2, 2); doc.text("Consignee", 39, startY + 100); 
+  if(p.payment === "Paid" || p.payment === "Credit" || p.payment === "FOC") doc.text("✔", 13.2, startY + 99.5); 
+  if(p.payment === "To Pay") doc.text("✔", 35.2, startY + 99.5);
+  
+  doc.setFontSize(7); doc.text("Consignee Signature", 79, startY + 95); doc.text("For Mecheri Parcel Service", 147, startY + 95);
+}
+
+function generatePDF(p, layout = 1) {
+  const doc = new jsPDF();
+  doc.setLineWidth(0.4);
+  if (layout === 1) {
+    drawReceipt(doc, p, 10);
+  } else if (layout === 2) {
+    drawReceipt(doc, p, 10);
+    drawReceipt(doc, p, 145);
+  } else if (layout === 3) {
+    drawReceipt(doc, p, 5);
+    drawReceipt(doc, p, 100);
+    drawReceipt(doc, p, 195);
+  }
   window.open(doc.output('bloburl'), '_blank');
 }
 
@@ -96,7 +185,6 @@ function generateEOD_PDF(dateStr, branch, parcelsList, pettyList) {
   window.open(doc.output('bloburl'), '_blank');
 }
 
-// 🔥 UPGRADED INVOICE PDF PRINTER (MANUAL INVOICE NUMBER & DATE) 🔥
 function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList, manualInvoiceNo, manualInvDate) {
   const doc = new jsPDF();
   doc.setFont("helvetica", "bold"); doc.setFontSize(18); 
@@ -107,10 +195,7 @@ function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList, ma
   doc.setFontSize(14); doc.setFont("helvetica", "bold");
   doc.text("INVOICE", 105, 34, { align: "center" });
   
-  // 🔥 MANUAL NUMBER 🔥
   const invoiceNo = manualInvoiceNo || "N/A"; 
-  
-  // 🔥 MANUAL DATE 🔥
   const printDate = manualInvDate ? new Date(manualInvDate).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN');
   
   doc.setFontSize(10); doc.setFont("helvetica", "bold");
@@ -158,20 +243,17 @@ function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList, ma
   window.open(doc.output('bloburl'), '_blank');
 }
 
-// 🔥 UNIVERSAL LIST PDF PRINTER (UPDATED WITH DATE & NO STATUS) 🔥
 function generateListPDF(title, branch, parcelsList) {
   const doc = new jsPDF();
   doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.text(`MPS - ${title}`, 105, 15, { align: "center" });
   doc.setFontSize(10); doc.setFont("helvetica", "normal");
   doc.text(`Branch: ${branch} | Print Date: ${new Date().toLocaleString('en-IN')}`, 105, 22, { align: "center" });
   
-  // 🔥 Status thookiyachu, Date column ulla erakkiyachu 🔥
   const tableColumn = ["S.No", "LR Number", "Date", "Route", "Customer (Sender -> Receiver)", "Cargo", "Amount"];
   const tableRows = [];
   let totalQty = 0, totalAmt = 0;
 
   parcelsList.forEach((p, index) => {
-      // 🔥 Values theliva Date format-ku yetha maathiri maathiyachu 🔥
       tableRows.push([ 
          index + 1, 
          p.id, 
@@ -185,21 +267,18 @@ function generateListPDF(title, branch, parcelsList) {
       totalAmt += Number(p.price) || 0;
   });
 
-  // 🔥 Total varisaiyai correct aana edathula ukanthu vachachu 🔥
   tableRows.push(["TOTAL", "", "", "", "", `${totalQty} Items`, `Rs.${totalAmt}`]);
 
   autoTable(doc, {
       startY: 28, head: [tableColumn], body: tableRows, theme: 'grid',
       headStyles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8, halign: 'center' },
       bodyStyles: { fontSize: 7, textColor: [0, 0, 0] },
-      // 🔥 Amount column 6th index-ku maariduchu, so alignment updated 🔥
       columnStyles: { 0: { halign: 'center' }, 2: { halign: 'center' }, 5: { halign: 'center' }, 6: { halign: 'right', fontStyle: 'bold' } },
       willDrawCell: function (data) { if (data.row.index === tableRows.length - 1) { data.cell.styles.fontStyle = 'bold'; data.cell.styles.fillColor = [240, 240, 240]; } }
   });
   window.open(doc.output('bloburl'), '_blank');
 }
 
-// 🔥 UNIVERSAL EXCEL (CSV) EXPORTER 🔥
 function exportToCSV(title, parcelsList) {
   if (parcelsList.length === 0) return alert("No data to export!");
   const headers = ["LR No", "Date", "Sender", "Receiver", "Origin", "Destination", "Payment Mode", "Amount", "Status", "Booked By"];
@@ -211,7 +290,6 @@ function exportToCSV(title, parcelsList) {
   document.body.appendChild(link); link.click(); link.remove();
 }
 
-// 🔥 EXACT WHATSAPP MESSAGE FORMAT 🔥
 function openWhatsApp(phone, isSender, p) {
   const text = `📦 *MPS PARCEL SERVICE*\n\nவணக்கம் / Hello *${isSender ? p.sName : p.rName}*,\nYour parcel is booked successfully! 🎉\n\n🧾 *LR No:* ${p.id}\n📤 *From:* ${p.sName}\n📥 *To:* ${p.rName}\n📍 *Route:* ${p.from} ➔ ${p.to}\n📦 *Items:* ${p.count} ${p.type}\n💰 *Mode:* ${p.payment} (₹${p.price})\n\n📞 *Support:* 90033 77185\n\nThank you for choosing MPS! ✨`;
   
@@ -458,7 +536,7 @@ function ParcelModal({item, creditAuthList, onClose, db, parcels, setParcels, us
           <div><p className="opacity-50">Date Logged</p><p className="font-bold">{item.date}</p></div>
           <div className="col-span-2"><p className="opacity-50">Consignor (Sender)</p><p className="font-bold">{item.sName} <span className="opacity-60 font-normal">({item.sPhone})</span></p></div>
           <div className="col-span-2"><p className="opacity-50">Consignee (Receiver)</p><p className="font-bold">{item.rName} <span className="opacity-60 font-normal">({item.rPhone})</span></p></div>
-          <div><p className="opacity-50">Cargo Details</p><p className="font-bold">{item.count} {item.type}</p></div>
+          <div><p className="opacity-50">Cargo Details</p><p className="font-bold">{item.count} {item.type} {item.size && item.size !== 'Standard' ? <span className="text-[10px] text-amber-500 font-black">({item.size})</span> : ''}</p></div>
           <div><p className="opacity-50">Financial Parameter</p><p className="font-bold text-emerald-500">₹{item.price} ({item.payment})</p></div>
           
           {item.status === 'Delivered' && (
@@ -516,9 +594,14 @@ function ParcelModal({item, creditAuthList, onClose, db, parcels, setParcels, us
           </div>
         )}
 
-        <div className="flex gap-2 mt-4 pt-4 border-t border-slate-500/20">
-          <button onClick={()=>generatePDF(item)} className="flex-1 bg-blue-500/10 text-blue-500 font-bold py-3 rounded-xl text-sm border border-blue-500/20 hover:bg-blue-500 hover:text-white transition-colors">🖨️ Print Receipt</button>
-          <button onClick={onClose} className="flex-1 bg-slate-600 text-white font-bold py-3 rounded-xl text-sm shadow-md hover:bg-slate-700">Dismiss</button>
+        <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-slate-500/20">
+          <p className="text-[10px] font-bold uppercase opacity-60">🖨️ Select Print Layout (Paper Saver):</p>
+          <div className="flex gap-2">
+            <button onClick={()=>generatePDF(item, 1)} className="flex-1 bg-blue-500/10 text-blue-500 font-bold py-2 rounded-xl text-xs border border-blue-500/20 hover:bg-blue-500 hover:text-white transition-colors">1 Per Page</button>
+            <button onClick={()=>generatePDF(item, 2)} className="flex-1 bg-indigo-500/10 text-indigo-500 font-bold py-2 rounded-xl text-xs border border-indigo-500/20 hover:bg-indigo-500 hover:text-white transition-colors">2 Per Page (A5)</button>
+            <button onClick={()=>generatePDF(item, 3)} className="flex-1 bg-emerald-500/10 text-emerald-500 font-bold py-2 rounded-xl text-xs border border-emerald-500/20 hover:bg-emerald-500 hover:text-white transition-colors">3 Per Page</button>
+          </div>
+          <button onClick={onClose} className="w-full bg-slate-600 text-white font-bold py-3 rounded-xl text-sm shadow-md hover:bg-slate-700 mt-2">Dismiss</button>
         </div>
       </div>
     </div>
@@ -701,7 +784,7 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
                                           <span className="text-[11px] font-bold">₹{p.price}</span>
                                           <span className="text-[9px] opacity-60 font-bold">{p.payment === 'To Pay' ? p.deliveryMode : p.payment}</span>
                                        </div>
-                                       <button onClick={(e) => { e.stopPropagation(); generatePDF(p); }} className="p-1.5 bg-blue-500/10 text-blue-500 hover:bg-blue-500 hover:text-white rounded-md transition-colors" title="Print Receipt">🖨️</button>
+                                       <PrintGroup p={p} />
                                     </div>
                                  </div>
                               ))}
@@ -730,7 +813,7 @@ function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalVie
   );
 }
 
-// 🔥 UPGRADED PENDING (WITH SUMMARY TOTALS AT BOTTOM) 🔥
+// 🔥 UPGRADED PENDING 🔥
 function Pending({parcels, isDark, user, setGlobalView}) {
   const [fLR, setFLR] = useState(""); const [fFrom, setFFrom] = useState("All"); const [fTo, setFTo] = useState("All"); 
   const [fFromDate, setFFromDate] = useState(""); const [fToDate, setFToDate] = useState("");
@@ -816,7 +899,7 @@ function Pending({parcels, isDark, user, setGlobalView}) {
                     <td className="p-4 font-black text-amber-500">{p.count} <span className="text-[10px] font-normal">{p.type}</span></td>
                     <td className="p-4"><span className="px-2 py-1 rounded-full text-[10px] font-bold" style={{backgroundColor: S_CLR[p.status]+'22', color: S_CLR[p.status]}}>{p.status}</span></td>
                     <td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold ${days > 2 ? 'bg-red-500/10 text-red-500' : 'bg-emerald-500/10 text-emerald-500'}`}>{days === 0 ? 'Today' : `${days} Days`}</span></td>
-                    <td className="p-4 text-center"><button onClick={(e) => { e.stopPropagation(); generatePDF(p); }} className="bg-blue-500/10 text-blue-500 hover:bg-blue-500 hover:text-white px-3 py-1.5 rounded-lg text-[10px] font-black transition-colors border border-blue-500/20">🖨️ PRINT</button></td>
+                    <td className="p-4 text-center"><PrintGroup p={p} /></td>
                   </tr>
                 )
               })}
@@ -842,9 +925,9 @@ function Pending({parcels, isDark, user, setGlobalView}) {
   );
 }
 
-// 🔥 UPGRADED BOOK COMPONENT (WITH AUTO UPPERCASE) 🔥
+// 🔥 UPGRADED BOOK COMPONENT (WITH SIZE MULTIPLIER) 🔥
 function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, user, creditAuthList}) {
-  const initF = {sName:"", sPhone:"", sGst:"", rName:"", rPhone:"", rGst:"", from: user.branch === 'All' ? "" : user.branch, to:"", rate:"", count:"1", actualWeight:"", type:"Box", payment:"Paid", creditCustomer:"", notes:""};
+  const initF = {sName:"", sPhone:"", sGst:"", rName:"", rPhone:"", rGst:"", from: user.branch === 'All' ? "" : user.branch, to:"", rate:"", count:"1", actualWeight:"", type:"Box", size:"Standard", payment:"Paid", creditCustomer:"", notes:""};
   const [f, setF] = useState(initF); const [done, setDone] = useState(null); const [eway, setEway] = useState(""); const [contacts, setContacts] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
@@ -858,10 +941,10 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
 
   useEffect(() => {
      if(!isManualLR) {
-        if(f.from && f.to) { setLrNo(generateLR(f.from, f.to, parcels)); } 
+        if(f.from && f.to) { setLrNo(generateLR(f.from, f.to)); } 
         else { setLrNo(""); }
      }
-  }, [f.from, f.to, parcels, isManualLR]);
+  }, [f.from, f.to, isManualLR]); // 🔥 REMOVED PARCELS DEPENDENCY TO AVOID 409 FLICKER 🔥
 
   const handleQRScan = (text) => {
     setShowScanner(false);
@@ -884,7 +967,9 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
   
   const handleEwayChange = (e) => { const val = e.target.value.replace(/\D/g, '').slice(0, 12); setEway(val); if (val.length === 12) { showMsg("Validating E-Way Bill Parameters...", "info"); setTimeout(() => { setF(p => ({...p, sName: "SRI MURUGAN TEXTILES", sPhone: "9876543210", sGst: "33AABCU1234F1Z1", from: user.branch === 'All' ? "Salem" : user.branch, rName: "CITY FASHIONS", rPhone: "9988776655", rGst: "29AAAAA0000A1Z5", to: "Bangalore", rate: "120", count: "15", type: "Bale", payment: "To Pay" })); showMsg("E-Way Bill Content Processed & Populated!", "success"); document.getElementById("pQty").focus(); }, 750); } };
 
-  const ep = calcPrice(f.from, f.to, f.rate, f.count, f.type, f.payment);
+  // 🔥 PRICING DYNAMIC ALLOCATION 🔥
+  const ep = calcPrice(f.from, f.to, f.rate, f.count, f.type, f.payment, f.size);
+  
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800";
   const uniqueCompanies = [...new Set(creditAuthList.map(c => c.company))];
 
@@ -909,26 +994,24 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
            if(freshParcels.some(p => p.id.toUpperCase() === finalLR)) {
               setIsSubmitting(false); return showMsg(`LR Number ${finalLR} already exists!`, "error");
            }
-           const parts = finalLR.split('/');
-           if(parts.length === 3) {
-               const fCode = parts[0], seq = parts[2];
-               const overlap = freshParcels.some(p => { const pParts = p.id.split('/'); return pParts.length === 3 && pParts[0] === fCode && pParts[2] === seq; });
-               if (overlap) { setIsSubmitting(false); return showMsg(`Sequence Number ${seq} is already used by another route in your branch!`, "error"); }
-           }
         } else {
-           finalLR = generateLR(f.from, f.to, freshParcels);
+           // Fresh generate panrom to avoid any millisecond overlap issue
+           finalLR = generateLR(f.from, f.to);
         }
 
         const p = {...f, sName: f.sName.toUpperCase(), rName: f.rName.toUpperCase(), notes: f.payment === 'Credit' ? `[A/c: ${f.creditCustomer}] ${f.notes}` : f.notes, creditSettled: false, id: finalLR, date: locDateStr, isoDate: isoDate, status: "Booked", price: ep, bookedBy: user.username, bookedBranch: user.branch, settledBranches: [], history: [{status: "Booked", loc: f.from, time: dObj.toLocaleString()}]};
         
         await db.insertParcel(p); 
         const saved = await local.get("mps_contacts") || {}; saved[f.sPhone] = { name: p.sName, gst: f.sGst }; saved[f.rPhone] = { name: p.rName, gst: f.rGst }; await local.set("mps_contacts", saved);
-        setParcels([p, ...freshParcels]); setDone(p); showMsg("LR Generated cleanly without duplicates!"); 
-    } catch(err) { showMsg("Network or Database Error! Please try again.", "error"); }
+        setParcels([p, ...freshParcels]); setDone(p); showMsg("Booking Successful!"); 
+    } catch(err) { 
+        console.error(err);
+        showMsg("Network or Database Error! Please try again.", "error"); 
+    }
     setIsSubmitting(false);
   };
 
-  if(done) return ( <div className={`${cardBg} p-6 md:p-10 rounded-3xl max-w-xl mx-auto text-center border-t-4 border-emerald-500`}><h2 className="text-xl md:text-2xl font-black mb-4">Parcel Registered Successfully</h2><div className="bg-indigo-600/10 text-indigo-500 text-xl md:text-2xl font-mono font-bold p-3 rounded-xl mb-6">{done.id}</div><button onClick={()=>{setDone(null); setF(initF); setEway(""); setLrNo(""); setIsManualLR(false);}} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl mb-3">New Registration</button><button onClick={()=>generatePDF(done)} className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl mb-3">Download Receipt</button><button onClick={() => openWhatsApp(done.sPhone, true, done)} className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl">📱 Send SMS / WhatsApp</button></div> );
+  if(done) return ( <div className={`${cardBg} p-6 md:p-10 rounded-3xl max-w-xl mx-auto text-center border-t-4 border-emerald-500`}><h2 className="text-xl md:text-2xl font-black mb-4">Parcel Registered Successfully</h2><div className="bg-indigo-600/10 text-indigo-500 text-xl md:text-2xl font-mono font-bold p-3 rounded-xl mb-6">{done.id}</div><button onClick={()=>{setDone(null); setF(initF); setEway(""); setLrNo(""); setIsManualLR(false);}} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl mb-3">New Registration</button><button onClick={()=>generatePDF(done, 1)} className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl mb-3">Download Receipt (Full Page)</button><button onClick={()=>generatePDF(done, 2)} className="w-full bg-indigo-500 text-white font-bold py-3 rounded-xl mb-3">Download Receipt (A5 - Paper Saver)</button><button onClick={() => openWhatsApp(done.sPhone, true, done)} className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl">📱 Send SMS / WhatsApp</button></div> );
 
   return (
     <div className="space-y-4 md:space-y-6">
@@ -968,8 +1051,25 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
         </div>
       </div>
       <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4 relative z-20`}>
-        <h3 className="font-bold">Cargo Details</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4"><input id="pQty" onKeyDown={e=>handleBoxTravel(e,{enter:'pType', down:'pPay', right:'pType', up:user.branch==='All'?'sFrom':'sGst'})} type="number" value={f.count} onChange={e=>setF({...f, count:e.target.value})} placeholder="Quantity *" className={`p-3 rounded-xl border outline-none [appearance:textfield] ${inputBg}`} /><select id="pType" onKeyDown={e=>handleBoxTravel(e,{enter:'pWgt', down:'pPay', left:'pQty', right:'pWgt', up:'rTo'})} value={f.type} onChange={e=>setF({...f, type:e.target.value})} className={`p-3 rounded-xl border outline-none ${inputBg}`}>{TYPES.map(t=><option key={t}>{t}</option>)}</select><input id="pWgt" onKeyDown={e=>handleBoxTravel(e,{enter:'pRate', down:'btnSubmit', left:'pType', right:'pRate', up:'rTo'})} type="number" value={f.actualWeight} onChange={e=>setF({...f, actualWeight:e.target.value})} placeholder="Weight (Kg)" className={`p-3 rounded-xl border outline-none [appearance:textfield] ${inputBg}`} /><input id="pRate" onKeyDown={e=>handleBoxTravel(e,{enter:'pPay', down:'btnSubmit', left:'pWgt', up:'rTo'})} type="number" value={f.rate} onChange={e=>setF({...f, rate:e.target.value})} placeholder="Rate Per Unit *" className={`p-3 rounded-xl border outline-none font-bold [appearance:textfield] ${inputBg}`} /></div>
+        <div className="flex justify-between items-center">
+            <h3 className="font-bold">Cargo Details</h3>
+            {f.size && f.size !== 'Standard' && <span className="bg-amber-500 text-white text-[10px] px-2 py-1 rounded font-black animate-pulse">SMART PRICING ACTIVE ({f.size})</span>}
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
+           <input id="pQty" onKeyDown={e=>handleBoxTravel(e,{enter:'pType', down:'pPay', right:'pType', up:user.branch==='All'?'sFrom':'sGst'})} type="number" value={f.count} onChange={e=>setF({...f, count:e.target.value})} placeholder="Quantity *" className={`p-3 rounded-xl border outline-none [appearance:textfield] ${inputBg}`} />
+           <select id="pType" onKeyDown={e=>handleBoxTravel(e,{enter:'pSize', down:'pPay', left:'pQty', right:'pSize', up:'rTo'})} value={f.type} onChange={e=>setF({...f, type:e.target.value})} className={`p-3 rounded-xl border outline-none ${inputBg}`}>{TYPES.map(t=><option key={t}>{t}</option>)}</select>
+           
+           {/* 🔥 PUDHUSU: PARCEL SIZE DYNAMIC PRICER 🔥 */}
+           <select id="pSize" onKeyDown={e=>handleBoxTravel(e,{enter:'pWgt', down:'pPay', left:'pType', right:'pWgt', up:'rTo'})} value={f.size} onChange={e=>setF({...f, size:e.target.value})} className={`p-3 rounded-xl border font-bold text-amber-600 outline-none ${inputBg}`}>
+              <option value="Standard">Normal Size (1x Rate)</option>
+              <option value="Medium">Medium Size (1.5x Rate)</option>
+              <option value="Large">Large Size (2x Rate)</option>
+              <option value="Jumbo">Jumbo / Heavy (3x Rate)</option>
+           </select>
+
+           <input id="pWgt" onKeyDown={e=>handleBoxTravel(e,{enter:'pRate', down:'btnSubmit', left:'pSize', right:'pRate', up:'rTo'})} type="number" value={f.actualWeight} onChange={e=>setF({...f, actualWeight:e.target.value})} placeholder="Weight (Kg)" className={`p-3 rounded-xl border outline-none [appearance:textfield] ${inputBg}`} />
+           <input id="pRate" onKeyDown={e=>handleBoxTravel(e,{enter:'pPay', down:'btnSubmit', left:'pWgt', up:'rTo'})} type="number" value={f.rate} onChange={e=>setF({...f, rate:e.target.value})} placeholder="Rate / Unit *" className={`p-3 rounded-xl border outline-none font-bold [appearance:textfield] ${inputBg}`} />
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mt-2">
           <div className="flex flex-col gap-3">
             <select id="pPay" onKeyDown={e=>handleBoxTravel(e,{enter:'btnSubmit', up:'pQty', down:'btnSubmit'})} value={f.payment} onChange={e=>setF({...f, payment:e.target.value})} className="p-3 border rounded-xl font-bold bg-indigo-600 text-white outline-none w-full">{PAY_MODES.map(p=><option key={p} value={p}>{p.toUpperCase()}</option>)}</select>
@@ -1062,10 +1162,11 @@ function Track({parcels, isDark, user, setGlobalView, initialStatus}) {
                 <th className="p-4">Cargo (Qty)</th>
                 <th className="p-4">Amount & Payment</th>
                 <th className="p-4">Status</th>
+                <th className="p-4 text-center">Receipt</th>
              </tr>
           </thead>
           <tbody>
-            {results.length === 0 ? <tr><td colSpan="6" className="p-8 text-center opacity-50 font-bold">No parcels match your search.</td></tr> : results.map(p => (
+            {results.length === 0 ? <tr><td colSpan="7" className="p-8 text-center opacity-50 font-bold">No parcels match your search.</td></tr> : results.map(p => (
               <tr key={p.id} className="border-t border-slate-500/10 hover:bg-black/5 cursor-pointer" onClick={() => setGlobalView(p)}>
                 <td className="p-4 font-black text-indigo-500 hover:underline">{p.id} <br/><span className="text-[10px] opacity-50 font-normal">{p.date}</span></td>
                 <td className="p-4 font-bold">{p.from} ➔ {p.to}</td>
@@ -1076,6 +1177,7 @@ function Track({parcels, isDark, user, setGlobalView, initialStatus}) {
                    <span className={`text-[10px] px-2 py-0.5 rounded-md ${p.payment==='Paid'?'bg-emerald-500/10 text-emerald-500':p.payment==='To Pay'?'bg-red-500/10 text-red-500':'bg-indigo-500/10 text-indigo-500'}`}>{p.payment}</span>
                 </td>
                 <td className="p-4"><span className="px-2 py-1 rounded-full text-[10px] font-bold uppercase" style={{backgroundColor: S_CLR[p.status]+'22', color: S_CLR[p.status]}}>{p.status}</span></td>
+                <td className="p-4 text-center"><PrintGroup p={p} /></td>
               </tr>
             ))}
           </tbody>
@@ -1084,7 +1186,7 @@ function Track({parcels, isDark, user, setGlobalView, initialStatus}) {
                <tr>
                   <td colSpan="3" className="p-4 text-right opacity-50 uppercase text-xs">Total Summary :</td>
                   <td className="p-4 text-amber-500 text-lg">{totalQty} <span className="text-xs">Items</span></td>
-                  <td colSpan="2" className="p-4">
+                  <td colSpan="3" className="p-4">
                      <div className="flex flex-col gap-1 text-xs">
                         <span className="text-lg">₹{totalAmt}</span>
                         <div className="flex gap-2">
@@ -1102,9 +1204,6 @@ function Track({parcels, isDark, user, setGlobalView, initialStatus}) {
     </div>
   );
 }
-
-// 🔥 REST OF THE COMPONENTS REMAIN THE SAME 🔥
-// Delivery, Accounts, DeletedParcelsLog, Admin, Login...
 
 function Delivery({parcels, setParcels, db, showMsg, isDark, user, creditAuthList, setGlobalView}) {
   const [id, setId] = useState(""); 
@@ -1223,7 +1322,6 @@ function DeletedParcelsLog({ parcels, isDark }) {
    );
 }
 
-// 🔥 UPGRADED ADMIN COMPONENT (WITH MANUAL DATE & INVOICE NUMBER) 🔥
 function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user, creditAuthList, setCreditAuthList, setGlobalView}) {
   const [tab, setTab] = useState('parcels'); const [editF, setEditF] = useState(null); 
   const [newUser, setNewUser] = useState(""); const [newPass, setNewPass] = useState(""); const [newRole, setNewRole] = useState("staff"); const [newBranch, setNewBranch] = useState(CITIES[0]);
@@ -1231,7 +1329,6 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
   const d = new Date(); const todayStr = d.toISOString().split('T')[0]; d.setDate(1); const firstDayStr = d.toISOString().split('T')[0];
   const [fromDate, setFromDate] = useState(firstDayStr); const [toDate, setToDate] = useState(todayStr); const [invCustomer, setInvCustomer] = useState("");
   
-  // 🔥 MANUAL DATE & INVOICE NO STATE 🔥
   const [manualInvNo, setManualInvNo] = useState("");
   const [manualInvDate, setManualInvDate] = useState(todayStr);
 
@@ -1284,7 +1381,6 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
     const sampleAuth = creditAuthList.find(c => c.company.toLowerCase() === invCustomer.toLowerCase());
     const displayPhone = sampleAuth ? sampleAuth.phone : "Multiple Acc Numbers";
     
-    // 🔥 PASSING MANUAL NUMBER AND DATE 🔥
     generateInvoicePDF(invCustomer, displayPhone, fromDate, toDate, invoiceParcels, manualInvNo.toUpperCase(), manualInvDate); 
     showMsg(`Invoice Generated for ${invCustomer}`); 
   };
@@ -1334,8 +1430,6 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
           <div className={`${cardBg} p-4 md:p-6 rounded-2xl border h-96 overflow-y-auto`}><h3 className="font-black text-sm md:text-base mb-4">Approved Credit Ledger</h3>{creditAuthList.length === 0 ? <p className="text-sm opacity-50">No credit accounts authorized.</p> : <div className="space-y-2">{creditAuthList.map((c, i) => ( <div key={i} className="flex justify-between items-center p-3 border border-slate-500/20 rounded-xl bg-black/5"><div><p className="font-bold text-sm text-amber-500">{c.company}</p><p className="text-[10px] opacity-80 font-mono">📱 {c.phone}</p></div><button onClick={()=>removeCredit(c.phone)} className="text-red-500 text-[10px] font-bold bg-red-500/10 px-2 py-1 rounded border border-red-500/20">Revoke</button></div> ))}</div> }</div>
           <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4 lg:col-span-2 border-indigo-500/30`}>
              <h3 className="font-black text-sm md:text-base text-indigo-500">📑 Generate Monthly Credit Invoice</h3>
-             
-             {/* 🔥 PUDHUSU: INVOICE BOX & DATE BOX ULLA VANTHACHU 🔥 */}
              <div className="grid grid-cols-1 sm:grid-cols-6 gap-4">
                 <select value={invCustomer} onChange={e=>setInvCustomer(e.target.value)} className={`sm:col-span-2 p-3 rounded-xl border font-bold text-sm ${inputBg}`}>
                   <option value="">Select Account...</option>
@@ -1402,10 +1496,10 @@ function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user,
                     <td className="p-3 md:p-4 text-xs md:text-sm font-bold">{p.from} ➔ {p.to}</td>
                     <td className="p-3 md:p-4 text-xs md:text-sm">₹{p.price} <b className="text-[10px] md:text-xs opacity-60">({p.payment})</b></td>
                     <td className="p-3 md:p-4"><span className="px-2 md:px-3 py-1 rounded-full text-[10px] md:text-xs font-bold uppercase" style={{backgroundColor: S_CLR[p.status]+'22', color: S_CLR[p.status]}}>{p.status}</span></td>
-                    <td className="p-3 md:p-4 space-x-1 md:space-x-2">
+                    <td className="p-3 md:p-4 space-x-1 md:space-x-2 flex items-center">
                       {(canEditDrop || isSuper) && p.status !== 'Deleted' && ( <><button onClick={()=>setEditF(p)} className="text-amber-500 text-[10px] md:text-xs font-bold border border-amber-500/20 px-2 py-1 rounded bg-amber-500/5">✏️ Edit</button><button onClick={()=>deleteRecord(p.id)} className="text-red-500 text-[10px] md:text-xs font-bold border border-red-500/20 px-2 py-1 rounded bg-red-500/5">🗑️ Drop</button></> )}
                       {!canEditDrop && !isSuper && p.status !== 'Deleted' && <span className="text-[10px] opacity-50 italic">🔒 Locked</span>}
-                      {p.status !== 'Deleted' && <button onClick={()=>generatePDF(p)} className="text-blue-500 text-[10px] md:text-xs font-bold border border-blue-500/20 px-2 py-1 rounded bg-blue-500/5">🖨️ Print</button>}
+                      {p.status !== 'Deleted' && <div className="ml-2"><PrintGroup p={p} /></div>}
                     </td>
                   </tr>
                 )})}
