@@ -1055,9 +1055,110 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
         const primaryType = cargoList.length > 1 ? "Mixed Items" : cargoList[0].type;
         const totalWeight = cargoList.reduce((sum, item) => sum + Number(item.weight||0), 0);
 
+// 🔥  BOOK COMPONENT (INSTANT UI UPDATE FIX) 🔥
+function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, user, creditAuthList}) {
+  const initCargo = { count: "1", type: "Box", size: "Standard", weight: "", rate: "" };
+  const initF = {sName:"", sPhone:"", sGst:"", rName:"", rPhone:"", rGst:"", from: user.branch === 'All' ? "" : user.branch, to:"", payment:"Paid", creditCustomer:"", notes:""};
+  
+  const [f, setF] = useState(initF); 
+  const [cargoList, setCargoList] = useState([{...initCargo}]);
+  
+  const [done, setDone] = useState(null); const [eway, setEway] = useState(""); const [contacts, setContacts] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
+  const [lrNo, setLrNo] = useState("");
+  const [isManualLR, setIsManualLR] = useState(false);
+
+  useEffect(() => { if(shortcutMode) setF(prev => ({...prev, payment: shortcutMode})); }, [shortcutMode]);
+  
+  useEffect(() => { async function load() { const cMap = {}; parcels.forEach(p => { if (p.sPhone && !cMap[p.sPhone]) cMap[p.sPhone] = { name: p.sName, gst: p.sGst || "" }; if (p.rPhone && !cMap[p.rPhone]) cMap[p.rPhone] = { name: p.rName, gst: p.rGst || "" }; }); const localC = await local.get("mps_contacts") || {}; Object.assign(cMap, localC); setContacts(Object.entries(cMap).map(([phone, data]) => ({ phone, ...data }))); } load(); }, [parcels]);
+
+  useEffect(() => {
+     if(!isManualLR) {
+        if(f.from && f.to) { setLrNo(generateLR(f.from, f.to, parcels)); } 
+        else { setLrNo(""); }
+     }
+  }, [f.from, f.to, isManualLR, parcels]); 
+
+  const handleEwayChange = (e) => { 
+    const val = e.target.value.replace(/\D/g, '').slice(0, 12); 
+    setEway(val); 
+    if (val.length === 12) { 
+        showMsg("Validating E-Way Bill Parameters...", "info"); 
+        setTimeout(() => { 
+            setF(p => ({...p, sName: "SRI MURUGAN TEXTILES", sPhone: "9876543210", sGst: "33AABCU1234F1Z1", from: user.branch === 'All' ? "Salem" : user.branch, rName: "CITY FASHIONS", rPhone: "9988776655", rGst: "29AAAAA0000A1Z5", to: "Bangalore", payment: "To Pay" })); 
+            setCargoList([{count: "15", type: "Bale", size: "Standard", weight: "", rate: "120"}]);
+            showMsg("E-Way Bill Content Processed & Populated!", "success"); 
+        }, 750); 
+    } 
+  };
+
+  const handleQRScan = (text) => {
+    setShowScanner(false);
+    const ewayMatch = text.match(/\b\d{12}\b/); 
+    if(ewayMatch) {
+        const val = ewayMatch[0];
+        setEway(val);
+        showMsg("QR Scanned! E-Way number extracted: " + val, "success");
+        setTimeout(() => { 
+            setF(p => ({...p, sName: "SCANNED CLIENT", sPhone: "9999999999", rName: "TARGET CLIENT", rPhone: "8888888888", payment: "To Pay" })); 
+            setCargoList([{count: "10", type: "Box", size: "Standard", weight: "", rate: "150"}]);
+            showMsg("E-Way Bill Content Auto-Filled!", "info"); 
+        }, 800);
+    } else { showMsg("Invalid QR Code! No E-Way Bill Number found.", "error"); }
+  };
+
+  const smartFocus = (d, isSender) => { setTimeout(() => { if (isSender) { if (!d.name) document.getElementById('sName')?.focus(); else if (!d.gst) document.getElementById('sGst')?.focus(); else if (user.branch !== 'All') document.getElementById('rPhone')?.focus(); else document.getElementById('sFrom')?.focus(); } else { if (!d.name) document.getElementById('rName')?.focus(); else if (!d.gst) document.getElementById('rGst')?.focus(); else document.getElementById('rTo')?.focus(); } }, 50); };
+  
+  const handlePhoneChange = async (isSender, value) => { const fieldPrefix = isSender ? 's' : 'r'; setF(prev => ({ ...prev, [`${fieldPrefix}Phone`]: value })); if (value.length === 10) { const found = contacts.find(c => c.phone === value); if (found) { setF(prev => ({...prev, [`${fieldPrefix}Name`]: (found.name || "").toUpperCase(), [`${fieldPrefix}Gst`]: found.gst || "" })); showMsg("Customer details loaded automatically!", "success"); smartFocus(found, isSender); } } };
+  const handleContactSelect = (isSender, d) => { const px = isSender ? 's' : 'r'; setF(p => ({ ...p, [`${px}Phone`]: d.phone, [`${px}Name`]: (d.name||'').toUpperCase(), [`${px}Gst`]: d.gst||'' })); smartFocus(d, isSender); };
+  
+  const updateCargo = (index, field, value) => {
+      const newList = [...cargoList];
+      newList[index][field] = value;
+      setCargoList(newList);
+  };
+  
+  const addCargoRow = () => { setCargoList([...cargoList, {...initCargo}]); };
+  const removeCargoRow = (index) => { const newList = [...cargoList]; newList.splice(index, 1); setCargoList(newList); };
+
+  const ep = cargoList.reduce((total, item) => total + calcPrice(f.from, f.to, item.rate, item.count, item.type, f.payment, item.size), 0);
+  
+  const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800";
+  const uniqueCompanies = [...new Set(creditAuthList.map(c => c.company))];
+
+  const submit = async () => {
+    if(isSubmitting) return; 
+    if(isManualLR && (!lrNo || lrNo.trim() === "")) return showMsg("LR Number is mandatory in Manual Mode!", "error");
+    if(!f.sName || !f.sPhone || !f.from || !f.rName || !f.rPhone || !f.to) return showMsg("Please fill all profile fields marked with (*)", "error");
+    
+    const invalidCargo = cargoList.find(c => !c.count || !c.rate || !c.type);
+    if(invalidCargo) return showMsg("Please enter Quantity, Type, and Rate for all cargo items!", "error");
+
+    if(f.payment === "Credit" && !f.creditCustomer) return showMsg("Search and Select a Credit Account!", "error");
+    
+    setIsSubmitting(true); 
+    const dObj = new Date(); const isoDate = dObj.toISOString(); const locDateStr = dObj.toLocaleDateString('en-IN'); 
+    
+    try {
+        const freshParcels = await db.getParcels();
+        let finalLR = "";
+
+        if (isManualLR) {
+           finalLR = lrNo.trim().toUpperCase();
+           if(freshParcels.some(p => p.id.toUpperCase() === finalLR)) {
+              setIsSubmitting(false); return showMsg(`LR Number ${finalLR} already exists!`, "error");
+           }
+        } else {
+           finalLR = generateLR(f.from, f.to, freshParcels);
+        }
+
+        const totalQty = cargoList.reduce((sum, item) => sum + Number(item.count), 0);
+        const primaryType = cargoList.length > 1 ? "Mixed Items" : cargoList[0].type;
+        const totalWeight = cargoList.reduce((sum, item) => sum + Number(item.weight||0), 0);
+
         const p = {...f, count: totalQty.toString(), type: primaryType, actualWeight: totalWeight.toString(), cargoList: cargoList, sName: f.sName.toUpperCase(), rName: f.rName.toUpperCase(), notes: f.payment === 'Credit' ? `[A/c: ${f.creditCustomer}] ${f.notes}` : f.notes, creditSettled: false, id: finalLR, date: locDateStr, isoDate: isoDate, status: "Booked", price: ep, bookedBy: user.username, bookedBranch: user.branch, settledBranches: [], history: [{status: "Booked", loc: f.from, time: dObj.toLocaleString()}]};
         
-        // 🔥 TERMINATOR LOOP: 5 times instant retry with manual +1 increment 🔥
         let success = false;
         let retryLimit = 5;
         let currentLR = finalLR;
@@ -1073,7 +1174,7 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
                     console.log(`409 Conflict hit for ${currentLR}. Bypassing database limit & Auto-incrementing...`);
                     const parts = currentLR.split('/');
                     if(parts.length === 3) {
-                        const nextNum = parseInt(parts[2], 10) + 1; // Direct +1
+                        const nextNum = parseInt(parts[2], 10) + 1;
                         currentLR = `${parts[0]}/${parts[1]}/${String(nextNum).padStart(4, '0')}`;
                     } else {
                         throw insertError;
@@ -1085,13 +1186,179 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
         }
 
         if(!success) {
-            throw new Error("Duplicate ID or Network Issue"); // Fail only if 5 retries fail
+            throw new Error("Duplicate ID or Network Issue");
         }
 
         const saved = await local.get("mps_contacts") || {}; saved[f.sPhone] = { name: p.sName, gst: f.sGst }; saved[f.rPhone] = { name: p.rName, gst: f.rGst }; await local.set("mps_contacts", saved);
         
-        const finalParcels = await db.getParcels();
-        setParcels(finalParcels.length > 0 ? finalParcels : [p, ...parcels]); 
+        // 🔥 FIX: Database la irunthu udane list ah update pannama, namma code laye instantly add pandrom! 🔥
+        setParcels([p, ...parcels]); 
+        
+        setDone(p); showMsg("Booking Successful!"); 
+    } catch(err) { 
+        console.error(err);
+        showMsg("Network or Database Error! Please try again.", "error"); 
+    }
+    setIsSubmitting(false);
+  };
+
+  if(done) return ( 
+     <div className={`${cardBg} p-6 md:p-10 rounded-3xl max-w-xl mx-auto text-center border-t-4 border-emerald-500 animate-bounce-in`}>
+        <h2 className="text-xl md:text-2xl font-black mb-4">Parcel Registered Successfully</h2>
+        <div className="bg-indigo-600/10 text-indigo-500 text-xl md:text-2xl font-mono font-bold p-3 rounded-xl mb-6">{done.id}</div>
+        
+        <p className="text-[10px] font-bold uppercase opacity-50 mb-2">Print Receipt Layouts:</p>
+        <div className="flex justify-center gap-2 mb-4">
+            <button onClick={()=>generatePDF(done, 1)} className="flex-1 bg-slate-800 text-white font-bold py-3 rounded-xl text-sm shadow-md">🖨️ Full Page</button>
+            <button onClick={()=>generatePDF(done, 2)} className="flex-1 bg-indigo-500 text-white font-bold py-3 rounded-xl text-sm shadow-md">🖨️ 2 Per Page</button>
+            <button onClick={()=>generatePDF(done, 3)} className="flex-1 bg-emerald-500 text-white font-bold py-3 rounded-xl text-sm shadow-md">🖨️ 3 Per Page</button>
+        </div>
+
+        <button onClick={()=>{setDone(null); setF(initF); setCargoList([{...initCargo}]); setEway(""); setLrNo(""); setIsManualLR(false);}} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl mb-3 mt-4 border border-indigo-500">New Registration</button>
+        <button onClick={() => openWhatsApp(done.sPhone, true, done)} className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl border border-emerald-500">📱 Send SMS / WhatsApp</button>
+     </div> 
+  );
+
+  return (
+    <div className="space-y-4 md:space-y-6">
+// 🔥 UPGRADED BOOK COMPONENT (INSTANT UI UPDATE FIX) 🔥
+function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, user, creditAuthList}) {
+  const initCargo = { count: "1", type: "Box", size: "Standard", weight: "", rate: "" };
+  const initF = {sName:"", sPhone:"", sGst:"", rName:"", rPhone:"", rGst:"", from: user.branch === 'All' ? "" : user.branch, to:"", payment:"Paid", creditCustomer:"", notes:""};
+  
+  const [f, setF] = useState(initF); 
+  const [cargoList, setCargoList] = useState([{...initCargo}]);
+  
+  const [done, setDone] = useState(null); const [eway, setEway] = useState(""); const [contacts, setContacts] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
+  const [lrNo, setLrNo] = useState("");
+  const [isManualLR, setIsManualLR] = useState(false);
+
+  useEffect(() => { if(shortcutMode) setF(prev => ({...prev, payment: shortcutMode})); }, [shortcutMode]);
+  
+  useEffect(() => { async function load() { const cMap = {}; parcels.forEach(p => { if (p.sPhone && !cMap[p.sPhone]) cMap[p.sPhone] = { name: p.sName, gst: p.sGst || "" }; if (p.rPhone && !cMap[p.rPhone]) cMap[p.rPhone] = { name: p.rName, gst: p.rGst || "" }; }); const localC = await local.get("mps_contacts") || {}; Object.assign(cMap, localC); setContacts(Object.entries(cMap).map(([phone, data]) => ({ phone, ...data }))); } load(); }, [parcels]);
+
+  useEffect(() => {
+     if(!isManualLR) {
+        if(f.from && f.to) { setLrNo(generateLR(f.from, f.to, parcels)); } 
+        else { setLrNo(""); }
+     }
+  }, [f.from, f.to, isManualLR, parcels]); 
+
+  const handleEwayChange = (e) => { 
+    const val = e.target.value.replace(/\D/g, '').slice(0, 12); 
+    setEway(val); 
+    if (val.length === 12) { 
+        showMsg("Validating E-Way Bill Parameters...", "info"); 
+        setTimeout(() => { 
+            setF(p => ({...p, sName: "SRI MURUGAN TEXTILES", sPhone: "9876543210", sGst: "33AABCU1234F1Z1", from: user.branch === 'All' ? "Salem" : user.branch, rName: "CITY FASHIONS", rPhone: "9988776655", rGst: "29AAAAA0000A1Z5", to: "Bangalore", payment: "To Pay" })); 
+            setCargoList([{count: "15", type: "Bale", size: "Standard", weight: "", rate: "120"}]);
+            showMsg("E-Way Bill Content Processed & Populated!", "success"); 
+        }, 750); 
+    } 
+  };
+
+  const handleQRScan = (text) => {
+    setShowScanner(false);
+    const ewayMatch = text.match(/\b\d{12}\b/); 
+    if(ewayMatch) {
+        const val = ewayMatch[0];
+        setEway(val);
+        showMsg("QR Scanned! E-Way number extracted: " + val, "success");
+        setTimeout(() => { 
+            setF(p => ({...p, sName: "SCANNED CLIENT", sPhone: "9999999999", rName: "TARGET CLIENT", rPhone: "8888888888", payment: "To Pay" })); 
+            setCargoList([{count: "10", type: "Box", size: "Standard", weight: "", rate: "150"}]);
+            showMsg("E-Way Bill Content Auto-Filled!", "info"); 
+        }, 800);
+    } else { showMsg("Invalid QR Code! No E-Way Bill Number found.", "error"); }
+  };
+
+  const smartFocus = (d, isSender) => { setTimeout(() => { if (isSender) { if (!d.name) document.getElementById('sName')?.focus(); else if (!d.gst) document.getElementById('sGst')?.focus(); else if (user.branch !== 'All') document.getElementById('rPhone')?.focus(); else document.getElementById('sFrom')?.focus(); } else { if (!d.name) document.getElementById('rName')?.focus(); else if (!d.gst) document.getElementById('rGst')?.focus(); else document.getElementById('rTo')?.focus(); } }, 50); };
+  
+  const handlePhoneChange = async (isSender, value) => { const fieldPrefix = isSender ? 's' : 'r'; setF(prev => ({ ...prev, [`${fieldPrefix}Phone`]: value })); if (value.length === 10) { const found = contacts.find(c => c.phone === value); if (found) { setF(prev => ({...prev, [`${fieldPrefix}Name`]: (found.name || "").toUpperCase(), [`${fieldPrefix}Gst`]: found.gst || "" })); showMsg("Customer details loaded automatically!", "success"); smartFocus(found, isSender); } } };
+  const handleContactSelect = (isSender, d) => { const px = isSender ? 's' : 'r'; setF(p => ({ ...p, [`${px}Phone`]: d.phone, [`${px}Name`]: (d.name||'').toUpperCase(), [`${px}Gst`]: d.gst||'' })); smartFocus(d, isSender); };
+  
+  const updateCargo = (index, field, value) => {
+      const newList = [...cargoList];
+      newList[index][field] = value;
+      setCargoList(newList);
+  };
+  
+  const addCargoRow = () => { setCargoList([...cargoList, {...initCargo}]); };
+  const removeCargoRow = (index) => { const newList = [...cargoList]; newList.splice(index, 1); setCargoList(newList); };
+
+  const ep = cargoList.reduce((total, item) => total + calcPrice(f.from, f.to, item.rate, item.count, item.type, f.payment, item.size), 0);
+  
+  const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800";
+  const uniqueCompanies = [...new Set(creditAuthList.map(c => c.company))];
+
+  const submit = async () => {
+    if(isSubmitting) return; 
+    if(isManualLR && (!lrNo || lrNo.trim() === "")) return showMsg("LR Number is mandatory in Manual Mode!", "error");
+    if(!f.sName || !f.sPhone || !f.from || !f.rName || !f.rPhone || !f.to) return showMsg("Please fill all profile fields marked with (*)", "error");
+    
+    const invalidCargo = cargoList.find(c => !c.count || !c.rate || !c.type);
+    if(invalidCargo) return showMsg("Please enter Quantity, Type, and Rate for all cargo items!", "error");
+
+    if(f.payment === "Credit" && !f.creditCustomer) return showMsg("Search and Select a Credit Account!", "error");
+    
+    setIsSubmitting(true); 
+    const dObj = new Date(); const isoDate = dObj.toISOString(); const locDateStr = dObj.toLocaleDateString('en-IN'); 
+    
+    try {
+        const freshParcels = await db.getParcels();
+        let finalLR = "";
+
+        if (isManualLR) {
+           finalLR = lrNo.trim().toUpperCase();
+           if(freshParcels.some(p => p.id.toUpperCase() === finalLR)) {
+              setIsSubmitting(false); return showMsg(`LR Number ${finalLR} already exists!`, "error");
+           }
+        } else {
+           finalLR = generateLR(f.from, f.to, freshParcels);
+        }
+
+        const totalQty = cargoList.reduce((sum, item) => sum + Number(item.count), 0);
+        const primaryType = cargoList.length > 1 ? "Mixed Items" : cargoList[0].type;
+        const totalWeight = cargoList.reduce((sum, item) => sum + Number(item.weight||0), 0);
+
+        const p = {...f, count: totalQty.toString(), type: primaryType, actualWeight: totalWeight.toString(), cargoList: cargoList, sName: f.sName.toUpperCase(), rName: f.rName.toUpperCase(), notes: f.payment === 'Credit' ? `[A/c: ${f.creditCustomer}] ${f.notes}` : f.notes, creditSettled: false, id: finalLR, date: locDateStr, isoDate: isoDate, status: "Booked", price: ep, bookedBy: user.username, bookedBranch: user.branch, settledBranches: [], history: [{status: "Booked", loc: f.from, time: dObj.toLocaleString()}]};
+        
+        let success = false;
+        let retryLimit = 5;
+        let currentLR = finalLR;
+
+        while (!success && retryLimit > 0) {
+            try {
+                p.id = currentLR;
+                await db.insertParcel(p); 
+                success = true;
+            } catch(insertError) {
+                if(!isManualLR) {
+                    retryLimit--;
+                    console.log(`409 Conflict hit for ${currentLR}. Bypassing database limit & Auto-incrementing...`);
+                    const parts = currentLR.split('/');
+                    if(parts.length === 3) {
+                        const nextNum = parseInt(parts[2], 10) + 1;
+                        currentLR = `${parts[0]}/${parts[1]}/${String(nextNum).padStart(4, '0')}`;
+                    } else {
+                        throw insertError;
+                    }
+                } else {
+                    throw insertError;
+                }
+            }
+        }
+
+        if(!success) {
+            throw new Error("Duplicate ID or Network Issue");
+        }
+
+        const saved = await local.get("mps_contacts") || {}; saved[f.sPhone] = { name: p.sName, gst: f.sGst }; saved[f.rPhone] = { name: p.rName, gst: f.rGst }; await local.set("mps_contacts", saved);
+        
+        // 🔥 FIX: Database la irunthu udane list ah update pannama, namma code laye instantly add pandrom! 🔥
+        setParcels([p, ...parcels]); 
         
         setDone(p); showMsg("Booking Successful!"); 
     } catch(err) { 
@@ -1195,6 +1462,8 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
     </div>
   );
 }
+
+
 
 function Track({parcels, isDark, user, setGlobalView, initialStatus}) {
   const [fLR, setFLR] = useState(""); const [fFrom, setFFrom] = useState("All"); const [fTo, setFTo] = useState("All"); 
