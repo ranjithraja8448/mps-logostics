@@ -1,9 +1,12 @@
-import React, { useState, useEffect, Fragment } from "react";
+import React, { useState, useEffect } from "react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { Html5QrcodeScanner } from "html5-qrcode";
 
+/* ══════════════════════════════════════════
+  CONSTANTS & CONFIG
+══════════════════════════════════════════ */
 const ENV_URL = import.meta.env.VITE_SUPABASE_URL || "";
 const ENV_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 
@@ -17,6 +20,7 @@ const PAY_MODES = ["Paid", "To Pay", "Credit", "FOC"];
 
 const genUserId = () => `USR-${Math.floor(Math.random()*10000)}`;
 
+// 🔥 PERMANENT FUTURE-PROOF LR GENERATOR 🔥
 const generateLR = (fromCity, toCity, allParcels) => {
   if (!fromCity || !toCity) return `MPS${String(Math.floor(Math.random()*1000)).padStart(6,'0')}`; 
   const fCode = BRANCH_CONFIG[fromCity] || "00"; 
@@ -45,10 +49,12 @@ function calcPrice(from, to, ratePerUnit, count = 1, type = "Box", paymentMode =
   if(paymentMode === "FOC") return 0; 
   if(!ratePerUnit || ratePerUnit<=0) return 0; 
   let rate = parseFloat(ratePerUnit); 
+  
   let sizeMultiplier = 1;
   if(size === "Medium") sizeMultiplier = 1.5;
   if(size === "Large") sizeMultiplier = 2.0;
   if(size === "Jumbo") sizeMultiplier = 3.0;
+
   let tc = 0;
   if(type==="Electronics") tc = 60; if(type==="Furniture") tc = 150; if(type==="Medical") tc = 40; if(type==="Machinery") tc = 120;
   return Math.round((rate * sizeMultiplier * (parseInt(count) || 1)) + tc);
@@ -78,15 +84,29 @@ const PrintGroup = ({ p }) => (
 );
 
 function drawReceipt(doc, p, startY) {
-  doc.setDrawColor(0); doc.setLineWidth(0.3); doc.rect(10, startY, 190, 93); 
-  doc.line(10, startY + 20, 200, startY + 20); doc.line(10, startY + 26, 200, startY + 26); 
-  doc.line(10, startY + 50, 145, startY + 50); doc.line(10, startY + 56, 145, startY + 56); 
-  doc.line(145, startY + 68, 200, startY + 68); doc.line(10, startY + 76, 200, startY + 76); 
-  doc.line(145, startY, 145, startY + 76); doc.line(175, startY + 20, 175, startY + 76); 
-  doc.line(77, startY + 20, 77, startY + 50); doc.line(16, startY + 26, 16, startY + 50); 
-  doc.line(83, startY + 26, 83, startY + 50); doc.line(22, startY + 50, 22, startY + 76); 
-  doc.line(95, startY + 50, 95, startY + 76); doc.line(110, startY + 50, 110, startY + 76); 
-  doc.line(125, startY + 50, 125, startY + 76); doc.line(77, startY + 76, 77, startY + 93);
+  doc.setDrawColor(0);
+  doc.setLineWidth(0.3);
+  doc.rect(10, startY, 190, 93); 
+
+  doc.line(10, startY + 20, 200, startY + 20); 
+  doc.line(10, startY + 26, 200, startY + 26); 
+  doc.line(10, startY + 50, 145, startY + 50); 
+  doc.line(10, startY + 56, 145, startY + 56); 
+  doc.line(145, startY + 68, 200, startY + 68); 
+  doc.line(10, startY + 76, 200, startY + 76); 
+
+  doc.line(145, startY, 145, startY + 76); 
+  doc.line(175, startY + 20, 175, startY + 76); 
+  doc.line(77, startY + 20, 77, startY + 50); 
+  doc.line(16, startY + 26, 16, startY + 50); 
+  doc.line(83, startY + 26, 83, startY + 50); 
+  
+  doc.line(22, startY + 50, 22, startY + 76); 
+  doc.line(95, startY + 50, 95, startY + 76); 
+  doc.line(110, startY + 50, 110, startY + 76); 
+  doc.line(125, startY + 50, 125, startY + 76); 
+
+  doc.line(77, startY + 76, 77, startY + 93);
   doc.line(145, startY + 76, 145, startY + 93);
 
   doc.setFont("helvetica", "bolditalic"); doc.setFontSize(22); doc.text("MPS", 12, startY + 14); 
@@ -103,11 +123,14 @@ function drawReceipt(doc, p, startY) {
   doc.text(`Pay Mode:  ${p.payment}`, 147, startY + 18);
 
   doc.setFont("helvetica", "normal"); doc.setFontSize(8); 
-  doc.text(`From : ${p.from}`, 12, startY + 24); doc.text(`To : ${p.to}`, 79, startY + 24); 
-  doc.text("Particulars", 152, startY + 24); doc.text("Amount", 182, startY + 24);
+  doc.text(`From : ${p.from}`, 12, startY + 24); 
+  doc.text(`To : ${p.to}`, 79, startY + 24); 
+  doc.text("Particulars", 152, startY + 24); 
+  doc.text("Amount", 182, startY + 24);
 
   doc.setFont("helvetica", "bold"); doc.setFontSize(7); 
-  doc.text("Consignor", 14, startY + 45, { angle: 90 }); doc.text("Consignee", 81, startY + 45, { angle: 90 }); 
+  doc.text("Consignor", 14, startY + 45, { angle: 90 }); 
+  doc.text("Consignee", 81, startY + 45, { angle: 90 }); 
 
   doc.setFontSize(8); doc.setFont("helvetica", "normal"); 
   doc.text(`Tel : ${p.sPhone}`, 18, startY + 32); doc.text(`GST : ${p.sGst || ""}`, 18, startY + 38); doc.setFont("helvetica", "bold"); doc.text(`${p.sName}`, 18, startY + 46);
@@ -140,26 +163,129 @@ function drawReceipt(doc, p, startY) {
   doc.rect(35, startY + 84, 2, 2); doc.text("Consignee", 39, startY + 86); 
   if(p.payment === "Paid" || p.payment === "Credit" || p.payment === "FOC") doc.text("X", 13.2, startY + 85.8); 
   if(p.payment === "To Pay") doc.text("X", 35.2, startY + 85.8);
+  
   doc.setFontSize(7); doc.text("Consignee Signature", 85, startY + 81); doc.text("For Mecheri Parcel Service", 152, startY + 81);
 }
 
 function generatePDF(p, layout = 1) {
   const doc = new jsPDF();
-  if (layout === 1) { drawReceipt(doc, p, 10); } else if (layout === 2) { drawReceipt(doc, p, 10); drawReceipt(doc, p, 110); } else if (layout === 3) { drawReceipt(doc, p, 10); drawReceipt(doc, p, 105); drawReceipt(doc, p, 200); }
+  if (layout === 1) {
+    drawReceipt(doc, p, 10);
+  } else if (layout === 2) {
+    drawReceipt(doc, p, 10);
+    drawReceipt(doc, p, 110);
+  } else if (layout === 3) {
+    drawReceipt(doc, p, 10);
+    drawReceipt(doc, p, 105);
+    drawReceipt(doc, p, 200);
+  }
+  window.open(doc.output('bloburl'), '_blank');
+}
+
+function generateEOD_PDF(dateStr, branch, parcelsList, pettyList) {
+  const doc = new jsPDF();
+  doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.text("END OF DAY (EOD) SETTLEMENT", 105, 15, { align: "center" });
+  doc.setFontSize(10); doc.text(`Branch: ${branch} | Date: ${dateStr}`, 105, 22, { align: "center" }); doc.line(10, 25, 200, 25);
+  let y = 32; doc.setFontSize(10); doc.text("Cash Collections (Paid Booking & Delivered To-Pay):", 10, y); y+=6; doc.setFont("helvetica", "normal");
+  let totalCash = 0;
+  parcelsList.forEach(p => {
+     const pDate = p.isoDate ? p.isoDate.split('T')[0] : ""; 
+     if((p.from === branch && p.payment === 'Paid' && pDate === dateStr) || (p.to === branch && p.payment === 'To Pay' && p.deliveryMode === 'Cash' && p.status==='Delivered' && pDate === dateStr)){
+        doc.text(`LR: ${p.id} | Rs. ${p.price} | Mode: ${p.payment}`, 10, y); totalCash += p.price; y+=6;
+        if(y>280){ doc.addPage(); y=20; }
+     }
+  });
+  y+=4; doc.setFont("helvetica", "bold"); doc.text(`Total Cash Collected: Rs. ${totalCash}`, 10, y); y+=10; doc.line(10, y-4, 200, y-4);
+  doc.text("Petty Cash Expenses Today:", 10, y); y+=6; doc.setFont("helvetica", "normal"); let totalExp = 0;
+  pettyList.forEach(pt => { if(pt.date === dateStr) { doc.text(`${pt.desc} - Rs. ${pt.amt}`, 10, y); totalExp += pt.amt; y+=6; } });
+  y+=4; doc.setFont("helvetica", "bold"); doc.text(`Total Expenses: Rs. ${totalExp}`, 10, y); y+=12;
+  doc.setFontSize(12); doc.text(`NET CASH TO HANDOVER: Rs. ${totalCash - totalExp}`, 10, y); doc.line(10, y+4, 200, y+4);
+  
+  window.open(doc.output('bloburl'), '_blank');
+}
+
+function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList, manualInvoiceNo, manualInvDate) {
+  const doc = new jsPDF();
+  doc.setFont("helvetica", "bold"); doc.setFontSize(18); 
+  doc.text("MPS Parcel Service", 105, 15, { align: "center" });
+  doc.setFontSize(9); doc.setFont("helvetica", "normal");
+  doc.text("Address : Dharmapuri Main Road, Mecheri, Salem-Dt. 636 451. GST : 33CICPS6965E1Z1", 105, 20, { align: "center" });
+  doc.text("Phone Number : 90033 77185 / 80726 72255", 105, 24, { align: "center" });
+  doc.setFontSize(14); doc.setFont("helvetica", "bold");
+  doc.text("INVOICE", 105, 34, { align: "center" });
+  
+  const invoiceNo = manualInvoiceNo || "N/A"; 
+  const printDate = manualInvDate ? new Date(manualInvDate).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN');
+  
+  doc.setFontSize(10); doc.setFont("helvetica", "bold");
+  
+  let partyName = customer;
+  let gstText = "";
+  let addressText = "";
+  if (customer.toUpperCase().includes("SAI SILKS")) { partyName = "SAI SILKS KALAMANDIR LIMITED"; gstText = "GSTIN : 33AMCS1175P1ZU"; }
+
+  doc.text(`Party Name : ${partyName}`, 14, 45);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Phone No : ${customerPhone}`, 14, 50);
+  
+  if(gstText) {
+      doc.setFont("helvetica", "bold"); doc.text(gstText, 14, 55); doc.setFontSize(8);
+      doc.setFont("helvetica", "normal"); doc.text(addressText, 14, 60, { maxWidth: 100 }); doc.setFontSize(10);
+  }
+  
+  let yOffset = gstText ? 65 : 55;
+  doc.text(`Billing Period : ${fromD} to ${toD}`, 14, yOffset);
+  doc.setFont("helvetica", "bold"); doc.text(`Invoice no.: ${invoiceNo}`, 150, 45);
+  doc.setFont("helvetica", "normal"); doc.text(`Invoice Date: ${printDate}`, 150, 50);
+  
+  const tableColumn = ["S.No", "LR Number", "Booking Date", "Consignor", "Consignee", "Packages", "Amount"];
+  const tableRows = []; let totalAmount = 0; let totalPackages = 0;
+  
+  const sortedParcels = [...parcelsList].sort((a, b) => new Date(a.isoDate) - new Date(b.isoDate));
+  sortedParcels.forEach((p, index) => { const parcelData = [index + 1, p.id, p.date, p.sName, p.rName, `${p.count} ${p.type}`, p.price]; tableRows.push(parcelData); totalAmount += Number(p.price) || 0; totalPackages += Number(p.count) || 0; });
+  tableRows.push(["Total", "", "", "", "", totalPackages.toString(), totalAmount.toString()]);
+  
+  autoTable(doc, {
+      startY: yOffset + 5, head: [tableColumn], body: tableRows, theme: 'grid',
+      headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 9, halign: 'center' },
+      bodyStyles: { fontSize: 8, textColor: [0, 0, 0] },
+      columnStyles: { 0: { halign: 'center' }, 1: { fontStyle: 'bold' }, 5: { halign: 'center' }, 6: { halign: 'right', fontStyle: 'bold' } },
+      willDrawCell: function (data) { if (data.row.index === tableRows.length - 1) { data.cell.styles.fontStyle = 'bold'; data.cell.styles.fillColor = [245, 245, 245]; } }
+  });
+  
+  const finalY = doc.lastAutoTable.finalY || (yOffset + 5);
+  doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.text(`Net Payable Amount : RUPEES ${numberToWords(totalAmount)}`, 14, finalY + 8);
+  doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.text(`Print DateTime : ${new Date().toLocaleString('en-IN')}`, 14, finalY + 16);
+  doc.setFont("helvetica", "bold"); doc.text("Remark : Respected and Dear Valued Customer, Kindly ensure to make the payment earliest.", 14, finalY + 22);
+  doc.text("Bank Details for Payment:", 14, finalY + 32); doc.setFont("helvetica", "normal"); doc.text("Bank Name : Tamilnad Mercantile Bank (TMB) ", 14, finalY + 38);
+  doc.text("A/C Name  : MECHERI PARCEL SERVICE", 14, finalY + 43); doc.text("A/C No    : 287150050800853", 14, finalY + 48); doc.text("IFSC Code : TMBL0000287", 14, finalY + 53);
   window.open(doc.output('bloburl'), '_blank');
 }
 
 function generateListPDF(title, branch, parcelsList) {
   const doc = new jsPDF();
   doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.text(`MPS - ${title}`, 105, 15, { align: "center" });
-  doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.text(`Branch: ${branch} | Print Date: ${new Date().toLocaleString('en-IN')}`, 105, 22, { align: "center" });
+  doc.setFontSize(10); doc.setFont("helvetica", "normal");
+  doc.text(`Branch: ${branch} | Print Date: ${new Date().toLocaleString('en-IN')}`, 105, 22, { align: "center" });
   
   const tableColumn = ["S.No", "LR Number", "Date", "Route", "Customer (Sender -> Receiver)", "Cargo", "Amount"];
-  const tableRows = []; let totalQty = 0, totalAmt = 0;
+  const tableRows = [];
+  let totalQty = 0, totalAmt = 0;
+
   parcelsList.forEach((p, index) => {
-      tableRows.push([ index + 1, p.id, p.date, `${p.from} -> ${p.to}`, `${p.sName} -> ${p.rName}`, `${p.count} ${p.type}`, `Rs.${p.price} (${p.payment})` ]);
-      totalQty += Number(p.count) || 0; totalAmt += Number(p.price) || 0;
+      tableRows.push([ 
+         index + 1, 
+         p.id, 
+         p.date, 
+         `${p.from} -> ${p.to}`, 
+         `${p.sName} -> ${p.rName}`, 
+         `${p.count} ${p.type}`, 
+         `Rs.${p.price} (${p.payment})` 
+      ]);
+      totalQty += Number(p.count) || 0;
+      totalAmt += Number(p.price) || 0;
   });
+
   tableRows.push(["TOTAL", "", "", "", "", `${totalQty} Items`, `Rs.${totalAmt}`]);
 
   autoTable(doc, {
@@ -177,53 +303,196 @@ function exportToCSV(title, parcelsList) {
   const headers = ["LR No", "Date", "Sender", "Receiver", "Origin", "Destination", "Payment Mode", "Amount", "Status", "Booked By"];
   const rows = parcelsList.map(p => [p.id, p.date, p.sName, p.rName, p.from, p.to, p.payment, p.price, p.status, p.bookedBy].join(','));
   const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join('\n');
-  const encodedUri = encodeURI(csvContent); const link = document.createElement("a"); link.setAttribute("href", encodedUri); link.setAttribute("download", `MPS_${title}.csv`);
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri); link.setAttribute("download", `MPS_${title}.csv`);
   document.body.appendChild(link); link.click(); link.remove();
+}
+
+function openWhatsApp(phone, isSender, p) {
+  const text = `📦 *MPS PARCEL SERVICE*\n\nவணக்கம் / Hello *${isSender ? p.sName : p.rName}*,\nYour parcel is booked successfully! 🎉\n\n🧾 *LR No:* ${p.id}\n📤 *From:* ${p.sName}\n📥 *To:* ${p.rName}\n📍 *Route:* ${p.from} ➔ ${p.to}\n📦 *Items:* ${p.count} ${p.type}\n💰 *Mode:* ${p.payment} (₹${p.price})\n\n📞 *Support:* 90033 77185\n\nThank you for choosing MPS! ✨`;
+  window.open(`https://api.whatsapp.com/send?phone=91${phone}&text=${encodeURIComponent(text)}`, '_blank');
+}
+
+function SuggestInput({ id, label, value, onChange, onSelect, dataList, isPhone, theme, onKeyDown }) {
+  const [open, setOpen] = useState(false); const [activeIndex, setActiveIndex] = useState(-1);
+  const matches = dataList.filter(c => isPhone ? c.phone.includes(value) : (c.name||"").toLowerCase().includes(value.toLowerCase())).filter(()=>value.length>=2);
+  useEffect(() => { setActiveIndex(-1); }, [value]);
+  const handleKeyDown = (e) => {
+    if (open && matches.length > 0) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIndex(prev => (prev + 1) % matches.length); return; } else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIndex(prev => (prev - 1 + matches.length) % matches.length); return; } else if (e.key === 'Enter') { if (matches.length === 1 || activeIndex >= 0) { e.preventDefault(); const selectedMatch = activeIndex >= 0 ? matches[activeIndex] : matches[0]; onSelect(selectedMatch); setOpen(false); return; } }
+    }
+    if (onKeyDown) onKeyDown(e);
+  };
+  const inputBg = theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800';
+  return (
+    <div className={`relative w-full ${open ? 'z-50' : 'z-10'}`}>
+      <input id={id} onKeyDown={handleKeyDown} value={value} onChange={(e) => { onChange(e.target.value); setOpen(true); if (isPhone && e.target.value.length === 10) { const exact = dataList.find(d=>d.phone===e.target.value); if(exact) { onSelect(exact); setOpen(false); } } }} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 200)} placeholder={label} maxLength={isPhone ? "10" : "100"} className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-20 ${inputBg}`} />
+      {open && matches.length > 0 && (
+        <div className={`absolute top-full left-0 right-0 mt-2 rounded-xl shadow-2xl border overflow-hidden max-h-48 overflow-y-auto z-[60] ${theme==='dark'?'bg-slate-800 border-slate-600':'bg-white border-slate-200'}`}>
+          {matches.map((c, i) => ( <div key={i} className={`p-3 cursor-pointer text-sm transition-colors ${activeIndex === i ? (theme==='dark'?'bg-indigo-600 text-white':'bg-indigo-100 text-indigo-900') : (theme==='dark'?'hover:bg-indigo-600 text-white':'hover:bg-indigo-50 text-slate-800')}`} onMouseDown={() => { onSelect(c); setOpen(false); }}><b>{isPhone ? c.phone : c.name}</b> <span className="opacity-60">- {isPhone ? c.name : c.phone}</span></div> ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CreditSearchDropdown({ value, onChange, uniqueCompanies, isDark }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState(value);
+  useEffect(() => { setSearch(value); }, [value]);
+
+  const matches = uniqueCompanies.filter(c => c.toLowerCase().includes(search.toLowerCase()));
+  const inputBg = isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800';
+  const dropdownBg = isDark ? 'bg-slate-800 border-slate-600' : 'bg-white border-slate-200';
+
+  return (
+    <div className="relative w-full">
+       <input value={search} onChange={e => { setSearch(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 200)} placeholder="🔍 Type Company Name to Search..." className={`w-full p-3 rounded-xl border outline-none font-bold text-sm ${inputBg}`} />
+       {open && matches.length > 0 && (
+         <div className={`absolute bottom-full mb-1 left-0 right-0 max-h-48 overflow-y-auto z-[100] border shadow-2xl rounded-xl ${dropdownBg}`}>
+            {matches.map((c, i) => (
+              <div key={i} className={`p-3 cursor-pointer border-b border-slate-500/10 text-sm font-bold transition-colors ${isDark ? 'hover:bg-indigo-600 hover:text-white' : 'hover:bg-indigo-100 hover:text-indigo-900'}`} onMouseDown={() => { onChange(c); setSearch(c); setOpen(false); }}>{c}</div>
+            ))}
+         </div>
+       )}
+    </div>
+  )
 }
 
 const local={ async get(k){try{const r=window.localStorage.getItem(k);return r?JSON.parse(r):null;}catch{return null;}}, async set(k,v){try{window.localStorage.setItem(k,JSON.stringify(v));}catch{}}, async remove(k){try{window.localStorage.removeItem(k);}catch{}} };
 
+// 🔥 CACHE BUSTER ADDED TO DB CLASS 🔥
 class DB {
   constructor(url, key) {
      this.isLive = Boolean(url && key);
      if (this.isLive) {
          this.base = url.replace(/\/+$/, "") + "/rest/v1";
-         this.h = { "apikey": key, "Authorization": `Bearer ${key}`, "Content-Type": "application/json" };
+         this.h = {
+             "apikey": key,
+             "Authorization": `Bearer ${key}`,
+             "Content-Type": "application/json"
+         };
      }
   }
   async getParcels() {
-     if (this.isLive) { try { const r = await fetch(`${this.base}/parcels?select=*&_=${Date.now()}`, { headers: this.h, cache: "no-store" }); if (r.ok) return await r.json(); } catch (e) { console.error(e); } }
+     if (this.isLive) {
+         try {
+             // Cache Buster Trick to force fetch latest data ALWAYS 
+             const r = await fetch(`${this.base}/parcels?select=*&_=${Date.now()}`, { headers: this.h, cache: "no-store" });
+             if (r.ok) return await r.json();
+         } catch (e) { console.error("Fetch parcels error:", e); }
+     }
      return await local.get("mps_parcels") || [];
   }
   async insertParcel(p) {
-     if (this.isLive) { const r = await fetch(`${this.base}/parcels`, { method: "POST", headers: this.h, body: JSON.stringify(p) }); if (!r.ok) { const errData = await r.text(); throw new Error(`DB Insert Failed: ${r.status} - ${errData}`); } }
+     if (this.isLive) {
+         const r = await fetch(`${this.base}/parcels`, { method: "POST", headers: this.h, body: JSON.stringify(p) });
+         if (!r.ok) {
+             const errData = await r.text();
+             throw new Error(`DB Insert Failed: ${r.status} - ${errData}`);
+         }
+     }
      await local.set("mps_parcels", [p, ...(await local.get("mps_parcels") || [])]);
   }
   async updateParcel(id, data) {
-     if (this.isLive) { try { await fetch(`${this.base}/parcels?id=eq.${encodeURIComponent(id)}`, { method: "PATCH", headers: this.h, body: JSON.stringify(data) }); } catch (e) {} }
+     if (this.isLive) {
+         try { await fetch(`${this.base}/parcels?id=eq.${encodeURIComponent(id)}`, { method: "PATCH", headers: this.h, body: JSON.stringify(data) }); } catch (e) {}
+     }
      await local.set("mps_parcels", (await local.get("mps_parcels") || []).map(x => x.id === id ? { ...x, ...data } : x));
   }
+  async deleteParcel(id) {
+     if (this.isLive) {
+         try { await fetch(`${this.base}/parcels?id=eq.${encodeURIComponent(id)}`, { method: "DELETE", headers: this.h }); } catch (e) {}
+     }
+     await local.set("mps_parcels", (await local.get("mps_parcels") || []).filter(x => x.id !== id));
+  }
   async getUsers() {
-     if (this.isLive) { try { const r = await fetch(`${this.base}/app_users?select=*&_=${Date.now()}`, { headers: this.h, cache: "no-store" }); if (r.ok) return await r.json(); } catch (e) {} }
+     if (this.isLive) {
+         try {
+             const r = await fetch(`${this.base}/app_users?select=*&_=${Date.now()}`, { headers: this.h, cache: "no-store" });
+             if (r.ok) return await r.json();
+         } catch (e) {}
+     }
      let usrs = await local.get("mps_users");
-     if (!usrs || usrs.length === 0) { usrs = [{ id: 'super-1', username: 'superadmin', password: '123', role: 'superadmin', branch: 'All' }]; await local.set("mps_users", usrs); }
+     if (!usrs || usrs.length === 0) {
+         usrs = [{ id: 'super-1', username: 'superadmin', password: '123', role: 'superadmin', branch: 'All' }, { id: 'admin-1', username: 'admin', password: '123', role: 'admin', branch: CITIES[0] }, { id: 'staff-1', username: 'staff', password: '123', role: 'staff', branch: CITIES[0] }];
+         await local.set("mps_users", usrs);
+     } else if (!usrs.find(u => u.username === 'superadmin')) {
+         usrs.push({ id: 'super-1', username: 'superadmin', password: '123', role: 'superadmin', branch: 'All' });
+         await local.set("mps_users", usrs);
+     }
      return usrs;
   }
+  async insertUser(u) {
+     if (this.isLive) { try { await fetch(`${this.base}/app_users`, { method: "POST", headers: this.h, body: JSON.stringify(u) }); } catch (e) {} }
+     await local.set("mps_users", [u, ...(await this.getUsers())]);
+  }
+  async deleteUser(id) {
+     if (this.isLive) { try { await fetch(`${this.base}/app_users?id=eq.${id}`, { method: "DELETE", headers: this.h }); } catch (e) {} }
+     await local.set("mps_users", (await this.getUsers()).filter(u => u.id !== id));
+  }
+  async updateUser(id, data) {
+     if (this.isLive) { try { await fetch(`${this.base}/app_users?id=eq.${id}`, { method: "PATCH", headers: this.h, body: JSON.stringify(data) }); } catch (e) {} }
+     await local.set("mps_users", (await this.getUsers()).map(u => u.id === id ? { ...u, ...data } : u));
+  }
   async getCreditAuth() {
-     if (this.isLive) { try { const r = await fetch(`${this.base}/credit_auth?select=*&_=${Date.now()}`, { headers: this.h, cache: "no-store" }); if (r.ok) return await r.json(); } catch (e) {} }
+     if (this.isLive) {
+         try {
+             const r = await fetch(`${this.base}/credit_auth?select=*&_=${Date.now()}`, { headers: this.h, cache: "no-store" });
+             if (r.ok) return await r.json();
+         } catch (e) {}
+     }
      return await local.get("mps_credit_auth") || [];
+  }
+  async insertCreditAuth(data) {
+     if (this.isLive) { try { await fetch(`${this.base}/credit_auth`, { method: "POST", headers: this.h, body: JSON.stringify(data) }); } catch (e) {} }
+     await local.set("mps_credit_auth", [data, ...(await local.get("mps_credit_auth") || [])]);
+  }
+  async deleteCreditAuth(phone) {
+     if (this.isLive) { try { await fetch(`${this.base}/credit_auth?phone=eq.${phone}`, { method: "DELETE", headers: this.h }); } catch (e) {} }
+     await local.set("mps_credit_auth", (await local.get("mps_credit_auth") || []).filter(c => c.phone !== phone));
   }
 }
 
+function EwayScannerModal({ onScan, onClose }) {
+  useEffect(() => {
+    const config = { fps: 10, qrbox: { width: 250, height: 250 }, videoConstraints: { facingMode: "environment" } };
+    const scanner = new Html5QrcodeScanner("qr-reader", config, false);
+    scanner.render((decodedText) => { scanner.clear(); onScan(decodedText); }, (error) => {});
+    return () => { scanner.clear().catch(e=>console.log(e)); };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 bg-black/90 flex flex-col items-center justify-center z-[200] p-4">
+      <div className="bg-white p-4 rounded-3xl w-full max-w-sm shadow-2xl">
+         <div className="flex justify-between items-center mb-4">
+           <h3 className="font-black text-slate-800 text-lg">📷 Scan E-Way QR</h3>
+           <button onClick={onClose} className="bg-red-100 text-red-500 px-4 py-2 rounded-xl font-bold">Close</button>
+         </div>
+         <div id="qr-reader" className="w-full overflow-hidden rounded-2xl border-2 border-indigo-100"></div>
+         <p className="text-center text-xs font-bold opacity-60 mt-4 text-slate-800">Point back camera at E-Way Bill document</p>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
-  const [page, setPage] = useState("dashboard"); const [parcels, setParcels] = useState([]); const [users, setUsers] = useState([]); const [user, setUser] = useState(null); const [toast, setToast] = useState(null); const [theme, setTheme] = useState("light"); const [sidebarExpanded, setSidebarExpanded] = useState(false); const [creditAuthList, setCreditAuthList] = useState([]); 
-  const [db] = useState(new DB(ENV_URL, ENV_KEY));
+  const [page, setPage] = useState("dashboard"); const [parcels, setParcels] = useState([]); const [users, setUsers] = useState([]); const [user, setUser] = useState(null); const [toast, setToast] = useState(null); const [shortcutMode, setShortcutMode] = useState(""); const [theme, setTheme] = useState("light"); const [sidebarExpanded, setSidebarExpanded] = useState(false); const [creditAuthList, setCreditAuthList] = useState([]); 
+  const [globalViewItem, setGlobalViewItem] = useState(null);
   
+  const [trackFilter, setTrackFilter] = useState("All");
+
+  const [db] = useState(new DB(ENV_URL, ENV_KEY));
   const showMsg = (msg, type='success') => { setToast({msg, type}); setTimeout(() => setToast(null), 3000); };
 
-  const syncData = async () => { showMsg("Syncing Latest Data...", "info"); const ps = await db.getParcels(); setParcels(ps); showMsg("Data Synced!"); };
+  const syncData = async () => {
+     showMsg("Syncing Latest Data...", "info");
+     const ps = await db.getParcels(); setParcels(ps);
+     showMsg("Data Synced!");
+  };
 
-  // 🔥 100% ERROR-FREE EMERGENCY RECOVERY CODE 🔥
+  // 🔥 EMERGENCY RECOVERY CODE 🔥
   const emergencySync = async () => {
       if(!window.confirm("EMERGENCY RECOVERY: Do you want to sync local device data to the live database? RUN THIS ONLY ON THE STAFF PHONE!")) return;
       showMsg("Checking local phone memory...", "info");
@@ -237,7 +506,9 @@ export default function App() {
           
           const missingParcels = localData.filter(p => !liveIds.has(p.id));
           
-          if (missingParcels.length === 0) { return showMsg("All data from this phone is already in the live database!", "success"); }
+          if (missingParcels.length === 0) {
+              return showMsg("All data from this phone is already in the live database!", "success");
+          }
           
           showMsg(`Found ${missingParcels.length} missing parcels! Uploading to server...`, "info");
           
@@ -252,6 +523,7 @@ export default function App() {
           }
           
           showMsg(`Success! ${count} missing parcels uploaded completely!`, "success");
+          
           const freshData = await db.getParcels();
           setParcels(freshData);
       } catch(err) {
@@ -270,46 +542,1186 @@ export default function App() {
       init(); 
   }, []);
   
-  if(!user) return <div className="flex h-screen items-center justify-center p-4 bg-slate-900"><div className="bg-slate-800 p-10 rounded-3xl w-full max-w-sm text-center border text-white"><h2 className="text-2xl font-black mb-6 tracking-widest">MPS TERMINAL</h2><button onClick={async()=>{const u=users.find(x=>x.username==='superadmin');setUser(u);await local.set("mps_session",u);}} className="w-full bg-indigo-600 text-white font-black py-3 rounded-xl">Bypass Login (Fix Mode)</button></div></div>;
+  const toggleTheme = () => { const nt = theme === "dark" ? "light" : "dark"; setTheme(nt); local.set("mps_theme", nt); };
+
+  useEffect(() => {
+    const handleKey = (e) => { 
+      if(!user || globalViewItem) return; let mode = ""; 
+      if (e.key === 'F7') mode = 'Paid'; else if (e.key === 'F8') mode = 'To Pay'; else if (e.key === 'F9') mode = 'Credit'; else if (e.key === 'F10') mode = 'FOC'; 
+      else if (e.key === 'F6') { e.preventDefault(); setPage('delivery'); showMsg("Delivery Scanner Activated!", "info"); }
+      if(mode) { e.preventDefault(); setPage('book'); setShortcutMode(mode); showMsg(`${mode} Mode Activated!`, "info"); } 
+    };
+    window.addEventListener('keydown', handleKey); return () => window.removeEventListener('keydown', handleKey);
+  }, [user, globalViewItem]);
+
+  if(!user) return <Login onLogin={async (u,p) => { const valid = users.find(x=>x.username===u && x.password===p); if(valid){ setUser(valid); await local.set("mps_session", valid); showMsg("Welcome!"); return true; } else { return false; } }} theme={theme} />;
   const isDark = theme === "dark"; const bgClass = isDark ? "bg-slate-900 text-slate-100" : "bg-slate-50 text-slate-800"; const headerBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200";
 
   return (
-    <div className={`flex h-screen font-sans ${bgClass}`}>
-      <aside className={`${sidebarExpanded ? "w-64" : "w-16 md:w-20"} bg-slate-950 text-slate-300 flex flex-col shadow-2xl z-20 shrink-0`}>
-        <div className="h-16 flex items-center justify-center border-b border-slate-800 bg-black/10 text-xl cursor-pointer" onClick={() => setSidebarExpanded(!sidebarExpanded)}> {sidebarExpanded ? "◀ Collapse" : "▶"} </div>
-        <nav className="flex-1 px-2 py-4 space-y-2 overflow-y-auto">
-          <button onClick={() => setPage('dashboard')} className={`w-full flex items-center py-3 rounded-xl font-medium justify-center ${page === 'dashboard' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800'}`}>📊</button>
-          <button onClick={() => setPage('pending')} className={`w-full flex items-center py-3 rounded-xl font-medium justify-center ${page === 'pending' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800'}`}>⏳</button>
+    <div className={`flex h-screen font-sans ${bgClass} transition-colors duration-300`}>
+      <aside className={`${sidebarExpanded ? "w-64" : "w-16 md:w-20"} bg-slate-950 text-slate-300 flex flex-col shadow-2xl z-20 shrink-0 transition-all duration-300`}>
+        <div className="h-16 md:h-20 flex items-center justify-between px-2 md:px-4 border-b border-slate-800 bg-black/10">
+          {sidebarExpanded ? ( <div className="flex items-center animate-fade-in pl-2"><MpsLogo /><div><h1 className="text-xl font-black text-white tracking-widest">MPS</h1><p className="text-[10px] uppercase text-indigo-400 font-bold">{user.branch} Branch</p></div></div> ) : ( <div className="mx-auto"><MpsLogo /></div> )}
+          <button onClick={() => setSidebarExpanded(!sidebarExpanded)} className="text-slate-400 hover:text-white text-md p-1 focus:outline-none transition-colors">{sidebarExpanded ? "◀" : "▶"}</button>
+        </div>
+        <nav className="flex-1 px-2 py-4 md:px-3 md:py-6 space-y-2 overflow-y-auto">
+          {[
+            { id: 'dashboard', icon: '📊', label: 'Analysis', role: 'staff' },
+            { id: 'book', icon: '📦', label: 'Book Parcel', role: 'staff' },
+            { id: 'pending', icon: '⏳', label: 'Pending', role: 'staff' },
+            { id: 'track', icon: '🔍', label: 'Track', role: 'staff' },
+            { id: 'delivery', icon: '🤝', label: 'Delivery [F6]', role: 'staff' },
+            { id: 'accounts', icon: '💰', label: 'Accounts', role: 'admin' },
+            { id: 'admin', icon: '⚙️', label: 'System', role: 'admin' }
+          ].map(item => {
+            if (!(item.role === 'staff' || user.role === 'admin' || user.role === 'superadmin')) return null;
+            return ( <button key={item.id} title={item.label} onClick={() => setPage(item.id)} className={`w-full flex items-center py-3 rounded-xl font-medium transition-all ${sidebarExpanded ? "px-4" : "justify-center px-0"} ${page === item.id ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800'}`}><span className="text-lg">{item.icon}</span>{sidebarExpanded && <span className="ml-3 animate-fade-in text-sm">{item.label}</span>}</button> );
+          })}
         </nav>
+        <div className="p-4 border-t border-slate-800 flex justify-center"><button onClick={async ()=>{setUser(null); await local.remove("mps_session");}} className="text-slate-400 hover:text-white transition-colors flex items-center justify-center font-bold text-sm"><span>🚪</span> {sidebarExpanded && <span className="ml-2">Logout</span>}</button></div>
       </aside>
-      <main className="flex-1 flex flex-col h-screen overflow-hidden">
-        <header className={`${headerBg} shadow-sm h-16 py-2 flex items-center justify-between px-4 md:px-8 z-10 shrink-0`}>
-          <div className="font-black text-indigo-500">MPS SYSTEM VERIFIED MODE</div>
-          <div className="flex items-center gap-4">
-             {/* 🔥 RECOVERY BUTTON IS HERE 🔥 */}
-             <button onClick={emergencySync} className="text-xs font-black bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-red-700 transition-colors animate-pulse">🚑 RECOVER DATA</button>
-             <button onClick={syncData} className="text-xs font-black bg-indigo-500/10 text-indigo-500 px-4 py-2 rounded-lg border border-indigo-500/20 shadow-sm">🔄 SYNC</button>
+      <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
+        <header className={`${headerBg} shadow-sm h-auto min-h-[4rem] py-2 flex flex-col md:flex-row items-center justify-between px-4 md:px-8 z-10 shrink-0 gap-2`}>
+          <div className="flex flex-wrap justify-center gap-2 text-[10px] md:text-sm font-bold bg-black/5 px-4 py-2 rounded-full"><span onClick={()=>{setPage('book'); setShortcutMode('Paid');}} className="cursor-pointer text-blue-500 hover:text-blue-600">F7: PAID</span><span className="opacity-25 hidden md:inline">|</span><span onClick={()=>{setPage('book'); setShortcutMode('To Pay');}} className="cursor-pointer text-red-500 hover:text-red-600">F8: TO PAY</span><span className="opacity-25 hidden md:inline">|</span><span onClick={()=>{setPage('book'); setShortcutMode('Credit');}} className="cursor-pointer text-amber-500 hover:text-amber-600">F9: CREDIT</span><span className="opacity-25 hidden md:inline">|</span><span onClick={()=>{setPage('book'); setShortcutMode('FOC');}} className="cursor-pointer text-emerald-500 hover:text-emerald-600">F10: FOC</span></div>
+          
+          <div className="flex items-center gap-2 md:gap-4">
+             {/* 🔥 RECOVERY AND SYNC BUTTONS 🔥 */}
+             <button onClick={syncData} className="text-[10px] md:text-xs font-black bg-indigo-500/10 text-indigo-500 px-3 py-1.5 rounded-lg border border-indigo-500/20 hover:bg-indigo-500 hover:text-white transition-colors shadow-sm">🔄 SYNC</button>
+             <button onClick={emergencySync} className="text-[10px] md:text-xs font-black bg-red-600 text-white px-3 py-1.5 rounded-lg shadow-lg hover:bg-red-700 transition-colors animate-pulse">🚑 RECOVER DATA</button>
+             <span className={`text-[10px] md:text-xs font-black uppercase px-2 py-1 md:px-3 rounded-full border ${user.role === 'superadmin' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20'}`}>{user.role} | {user.branch}</span>
+             <button onClick={toggleTheme} className="text-lg md:text-xl">{(isDark)?'☀️':'🌙'}</button>
           </div>
         </header>
-        <div className="flex-1 overflow-y-auto p-4 md:p-8">
-          <div className="max-w-4xl mx-auto space-y-6">
-            <div className="p-6 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-amber-600 font-bold">
-               <h3>⚠️ Emergency Recovery Dashboard</h3>
-               <p className="text-sm opacity-80 mt-2">1. Refresh this page on the <b>STAFF PHONE</b>.<br/>2. Click the red <b>🚑 RECOVER DATA</b> button above.<br/>3. Wait for the success message.</p>
-            </div>
-            {page === 'dashboard' && ( <div className="p-6 bg-slate-800 rounded-2xl text-white text-xl font-black">Total Local Parcels Found: {parcels.length}</div> )}
-            {page === 'pending' && (
-               <div className="bg-slate-800 rounded-2xl p-4 text-white">
-                  <h3 className="font-bold mb-4">Latest Offline Parcels on this Device</h3>
-                  {parcels.slice(0,10).map((p, i) => (
-                     <div key={i} className="flex justify-between p-2 border-b border-slate-700"><span>📦 {p.id}</span><span>{p.sName} ➔ {p.rName}</span><span className="text-emerald-500 font-bold">₹{p.price}</span></div>
-                  ))}
-               </div>
-            )}
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 relative">
+          <div className="max-w-6xl mx-auto animate-fade-in">
+            {page === 'dashboard' && <Dashboard parcels={parcels} isDark={isDark} user={user} setGlobalView={setGlobalViewItem} setPage={setPage} setTrackFilter={setTrackFilter}/>}
+            {page === 'pending' && <Pending parcels={parcels} isDark={isDark} user={user} setGlobalView={setGlobalViewItem}/>}
+            {page === 'book' && <Book shortcutMode={shortcutMode} parcels={parcels} setParcels={setParcels} db={db} showMsg={showMsg} isDark={isDark} theme={theme} user={user} creditAuthList={creditAuthList} />}
+            {page === 'track' && <Track parcels={parcels} isDark={isDark} user={user} setGlobalView={setGlobalViewItem} initialStatus={trackFilter}/>}
+            {page === 'delivery' && <Delivery parcels={parcels} setParcels={setParcels} db={db} showMsg={showMsg} isDark={isDark} user={user} creditAuthList={creditAuthList} setGlobalView={setGlobalViewItem}/>}
+            {page === 'accounts' && (user.role === 'admin' || user.role === 'superadmin') && <Accounts parcels={parcels} setParcels={setParcels} db={db} showMsg={showMsg} isDark={isDark} user={user} />}
+            {page === 'admin' && (user.role === 'admin' || user.role === 'superadmin') && <Admin parcels={parcels} users={users} setUsers={setUsers} setParcels={setParcels} db={db} showMsg={showMsg} isDark={isDark} user={user} creditAuthList={creditAuthList} setCreditAuthList={setCreditAuthList} setGlobalView={setGlobalViewItem}/>}
           </div>
         </div>
       </main>
-      {toast && ( <div className={`fixed bottom-8 right-8 px-6 py-3 rounded-xl shadow-2xl font-bold text-white z-50 animate-bounce-in ${toast.type==='error'?'bg-red-500':'bg-emerald-500'}`}>{toast.msg}</div> )}
+      {toast && ( <div className={`fixed bottom-4 right-4 md:bottom-8 md:right-8 px-4 md:px-6 py-2 md:py-3 rounded-xl shadow-2xl font-bold text-white z-50 animate-bounce-in text-sm md:text-base ${toast.type==='error'?'bg-red-500':'bg-emerald-500'}`}>{toast.msg}</div> )}
+      {globalViewItem && <ParcelModal item={globalViewItem} creditAuthList={creditAuthList} onClose={()=>setGlobalViewItem(null)} db={db} parcels={parcels} setParcels={setParcels} user={user} showMsg={showMsg} isDark={isDark} />}
+    </div>
+  );
+}
+
+function ParcelModal({item, creditAuthList, onClose, db, parcels, setParcels, user, showMsg, isDark}) {
+  const [payMethod, setPayMethod] = useState("");
+  const [delCreditCustomer, setDelCreditCustomer] = useState(""); 
+  const cardBg = isDark ? "bg-slate-800 border-slate-700 text-white" : "bg-white border-slate-200 text-slate-900";
+  
+  const deliverParcel = async () => {
+    if(item.payment === "To Pay" && !payMethod) return showMsg("Please specify payment mode!", "error");
+    
+    let finalCreditCustomer = item.creditCustomer || "";
+    
+    if (item.payment === "To Pay" && payMethod === "Credit") {
+        if (!delCreditCustomer) return showMsg("Search and Select a Credit Account!", "error");
+        finalCreditCustomer = delCreditCustomer; 
+        showMsg(`Bill assigned to ${finalCreditCustomer}'s Account!`, "info");
+    }
+
+    const dMode = item.payment === "To Pay" ? `[Mode: ${payMethod}]` : "";
+    const updatedHistory = [...item.history, {status: "Delivered", loc: item.to, time: new Date().toLocaleString()}];
+    
+    const modifiedItem = {
+        ...item, status: "Delivered", history: updatedHistory, deliveryMode: payMethod, 
+        deliveredBy: user.username, deliveredBranch: user.branch, 
+        creditCustomer: finalCreditCustomer, creditSettled: item.creditSettled || false,
+        notes: `${item.notes || ""} Delivered ${dMode}`
+    };
+    
+    await db.updateParcel(modifiedItem.id, modifiedItem);
+    setParcels(parcels.map(p => p.id === modifiedItem.id ? modifiedItem : p));
+    showMsg("Parcel Delivered Successfully!");
+    onClose();
+  };
+
+  const isPending = item.status === "Booked" || item.status === "In Transit";
+  const uniqueCompanies = [...new Set(creditAuthList.map(c => c.company))];
+
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[100] overflow-y-auto">
+      <div className={`${cardBg} p-6 rounded-3xl max-w-md w-full space-y-4 border shadow-2xl animate-bounce-in my-auto`}>
+        <div className="flex justify-between items-center border-b border-slate-500/20 pb-2">
+          <h3 className="font-black text-lg text-indigo-500">Manifest: {item.id}</h3>
+          <span className="px-2 py-1 text-[10px] font-bold rounded-full uppercase" style={{backgroundColor: S_CLR[item.status]+'22', color: S_CLR[item.status]}}>{item.status}</span>
+        </div>
+        <div className="grid grid-cols-2 gap-3 text-xs md:text-sm">
+          <div><p className="opacity-50">Origin ➔ Target</p><p className="font-bold">{item.from} ➔ {item.to}</p></div>
+          <div><p className="opacity-50">Date Logged</p><p className="font-bold">{item.date}</p></div>
+          <div className="col-span-2"><p className="opacity-50">Consignor (Sender)</p><p className="font-bold">{item.sName} <span className="opacity-60 font-normal">({item.sPhone})</span></p></div>
+          <div className="col-span-2"><p className="opacity-50">Consignee (Receiver)</p><p className="font-bold">{item.rName} <span className="opacity-60 font-normal">({item.rPhone})</span></p></div>
+          
+          <div className="col-span-2 bg-black/5 p-2 rounded-xl">
+             <p className="opacity-50 mb-1">Cargo Details ({item.count} Items Total)</p>
+             {item.cargoList ? item.cargoList.map((c, idx) => (
+                <p key={idx} className="font-bold text-xs">{c.count} x {c.type} {c.size && c.size !== 'Standard' ? <span className="text-amber-500">({c.size})</span> : ''} <span className="opacity-50 text-[10px] ml-1">{c.weight ? `${c.weight}kg` : ''}</span></p>
+             )) : (
+                <p className="font-bold text-xs">{item.count} {item.type} {item.size && item.size !== 'Standard' ? <span className="text-[10px] text-amber-500 font-black">({item.size})</span> : ''}</p>
+             )}
+          </div>
+          
+          <div className="col-span-2"><p className="opacity-50">Financial Parameter</p><p className="font-bold text-emerald-500 text-lg">₹{item.price} ({item.payment})</p></div>
+          
+          {item.status === 'Delivered' && (
+             <div className="col-span-2 mt-2 p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+               <p className="text-[10px] uppercase font-bold text-emerald-600 mb-1">✅ Delivery & Payment Info</p>
+               <div className="font-bold">
+                  {item.payment === 'To Pay' ? (
+                     <p>Collected via: <span className="text-emerald-500 px-2 py-0.5 bg-emerald-500/10 rounded-md">{item.deliveryMode || 'Cash'}</span></p>
+                  ) : (
+                     <p>Booking Mode: <span className="text-indigo-500 px-2 py-0.5 bg-indigo-500/10 rounded-md">{item.payment}</span></p>
+                  )}
+                  <p className="text-[10px] opacity-60 mt-1">Delivered By: {item.deliveredBy || 'System'}</p>
+               </div>
+             </div>
+          )}
+        </div>
+
+        <div className={`mt-4 p-4 rounded-2xl border ${isDark ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+           <h4 className="text-[10px] font-bold uppercase opacity-60 mb-3 tracking-widest text-indigo-500">📍 Live Tracking Timeline</h4>
+           <div className="relative border-l-2 border-indigo-500/30 ml-2 space-y-4">
+             {item.history && item.history.map((h, i) => (
+                <div key={i} className="relative pl-4 animate-fade-in">
+                  <div className={`absolute -left-[5px] top-1.5 w-2 h-2 rounded-full ${i === item.history.length-1 ? 'bg-emerald-500 ring-4 ring-emerald-500/20' : 'bg-indigo-500'}`}></div>
+                  <p className="text-xs font-bold">{h.status} <span className="opacity-50 font-normal ml-1">@ {h.loc}</span></p>
+                  <p className="text-[9px] opacity-50 mt-0.5">{h.time}</p>
+                  {h.reason && <p className="text-[10px] text-red-500 mt-1 font-bold bg-red-500/10 px-2 py-1 rounded inline-block">Reason: {h.reason}</p>}
+                </div>
+             ))}
+           </div>
+        </div>
+        
+        {(isPending && (user.branch === item.to || user.role === 'superadmin')) && (
+          <div className="mt-4 p-4 border border-indigo-500/30 bg-indigo-500/5 rounded-2xl space-y-3">
+             <h4 className="text-xs font-bold text-indigo-500 uppercase">⚡ Quick Delivery Check</h4>
+             {item.payment === "To Pay" && (
+                <div className="space-y-3">
+                  <select value={payMethod} onChange={e=>setPayMethod(e.target.value)} className="w-full p-2 rounded-xl border outline-none text-sm bg-transparent font-bold">
+                    <option value="" className="text-slate-900">Select Payment Collected...</option>
+                    <option value="Cash" className="text-slate-900">💵 Physical Cash</option>
+                    <option value="GPay" className="text-slate-900">📱 UPI / GPay</option>
+                    <option value="Credit" className="text-slate-900">💳 Credit A/C</option>
+                  </select>
+                  
+                  {payMethod === 'Credit' && (
+                     <CreditSearchDropdown 
+                        value={delCreditCustomer} 
+                        onChange={setDelCreditCustomer} 
+                        uniqueCompanies={uniqueCompanies} 
+                        isDark={isDark} 
+                     />
+                  )}
+                </div>
+             )}
+             <button onClick={deliverParcel} className="w-full bg-emerald-600 text-white font-bold py-2 rounded-xl hover:bg-emerald-700 shadow-md">Confirm Delivery</button>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-slate-500/20">
+          <div className="flex justify-center"><PrintGroup p={item} /></div>
+          <button onClick={onClose} className="w-full bg-slate-600 text-white font-bold py-3 rounded-xl text-sm shadow-md hover:bg-slate-700 mt-2">Dismiss</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalView}) {
+  const [selectedBranch, setSelectedBranch] = useState(user.branch === 'All' ? 'All' : user.branch);
+  const [expandedStaff, setExpandedStaff] = useState(null); 
+  const [deliveryDate, setDeliveryDate] = useState(new Date().toISOString().split('T')[0]);
+  
+  const activeParcels = parcels.filter(p => p.status !== 'Deleted');
+  const branchParcels = activeParcels.filter(p => selectedBranch === 'All' ? true : (p.bookedBranch === selectedBranch || p.from === selectedBranch || p.to === selectedBranch));
+  const rev = branchParcels.reduce((a,b)=>a+(Number(b.price)||0),0);
+  const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-100";
+  const chartData = STATUSES.filter(s=>s!=='Deleted').map(s => ({ name: s, count: branchParcels.filter(p=>p.status===s).length, fill: S_CLR[s] }));
+
+  const pendingCount = branchParcels.filter(p => p.status === 'Booked' || p.status === 'In Transit').length;
+
+  const goToTrack = (status) => {
+     setTrackFilter(status);
+     setPage('track');
+  };
+
+  const [selY, selM, selD] = deliveryDate.split('-');
+  const targetDate = new Date(selY, selM - 1, selD);
+  const targetDateString = targetDate.toDateString();
+  const t1 = targetDate.toLocaleDateString();
+  const t2 = targetDate.toLocaleDateString('en-IN');
+  const t3 = targetDate.toLocaleDateString('en-US');
+  const t4 = `${String(selD).padStart(2, '0')}/${String(selM).padStart(2, '0')}/${selY}`;
+  const t5 = `${Number(selD)}/${Number(selM)}/${selY}`;
+  const t6 = `${String(selM).padStart(2, '0')}/${String(selD).padStart(2, '0')}/${selY}`;
+
+  const filteredDelParcels = branchParcels.filter(p => {
+     if(p.status !== 'Delivered' || !p.history) return false;
+     return p.history.some(h => {
+        if(h.status !== 'Delivered') return false;
+        const hTimeStr = h.time || "";
+        let isMatch = false;
+        try {
+            const parsedDate = new Date(hTimeStr);
+            if (!isNaN(parsedDate)) { isMatch = (parsedDate.toDateString() === targetDateString); }
+        } catch(e) {}
+        if (!isMatch) {
+            isMatch = hTimeStr.includes(t1) || hTimeStr.includes(t2) || hTimeStr.includes(t3) || 
+                      hTimeStr.includes(t4) || hTimeStr.includes(t5) || hTimeStr.includes(t6);
+        }
+        return isMatch;
+     });
+  });
+
+  const staffStats = {};
+  let tPaid = 0, tToPay = 0, tCredit = 0, tCollected = 0, tTotalValue = 0;
+
+  filteredDelParcels.forEach(p => {
+     const staffName = p.deliveredBy || "System";
+     if (!staffStats[staffName]) {
+         staffStats[staffName] = { count: 0, totalValue: 0, collected: 0, paid: 0, toPay: 0, credit: 0, parcels: [] };
+     }
+     
+     const amt = Number(p.price) || 0;
+     staffStats[staffName].count += 1;
+     staffStats[staffName].totalValue += amt;
+     tTotalValue += amt;
+     staffStats[staffName].parcels.push(p);
+     
+     if (p.payment === 'Paid') {
+         staffStats[staffName].paid += amt;
+         tPaid += amt;
+     } else if (p.payment === 'Credit' || (p.payment === 'To Pay' && p.deliveryMode === 'Credit')) {
+         staffStats[staffName].credit += amt;
+         tCredit += amt;
+     } else if (p.payment === 'To Pay') {
+         staffStats[staffName].toPay += amt;
+         tToPay += amt;
+         if (p.deliveryMode === 'Cash' || p.deliveryMode === 'GPay' || !p.deliveryMode) {
+             staffStats[staffName].collected += amt;
+             tCollected += amt;
+         }
+     }
+  });
+
+  return (
+    <div className="space-y-6">
+      {(user.role === 'superadmin' || user.branch === 'All') && (
+        <div className="flex justify-end mb-2">
+          <select value={selectedBranch} onChange={e=>setSelectedBranch(e.target.value)} className={`p-2 px-4 rounded-xl font-bold border outline-none shadow-sm cursor-pointer ${isDark?'bg-slate-900 border-slate-700':'bg-white border-slate-200'}`}>
+            <option value="All">🌍 Global Network (All Branches)</option>
+            {CITIES.map(c => <option key={c} value={c}>🏢 Branch: {c}</option>)}
+          </select>
+        </div>
+      )}
+      
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
+          <div onClick={() => goToTrack('All')} className={`${cardBg} p-4 rounded-2xl shadow-sm border flex flex-col justify-center cursor-pointer hover:ring-2 hover:scale-105 ring-blue-500 transition-all duration-300`}>
+             <span className="text-[10px] font-bold opacity-60 uppercase mb-1">Total Bookings</span>
+             <span className={`text-xl md:text-3xl font-black text-blue-500`}>{branchParcels.length}</span>
+          </div>
+          <div onClick={() => goToTrack('In Transit')} className={`${cardBg} p-4 rounded-2xl shadow-sm border flex flex-col justify-center cursor-pointer hover:ring-2 hover:scale-105 ring-amber-500 transition-all duration-300`}>
+             <span className="text-[10px] font-bold opacity-60 uppercase mb-1">In Transit</span>
+             <span className={`text-xl md:text-3xl font-black text-amber-500`}>{branchParcels.filter(p=>p.status==="In Transit").length}</span>
+          </div>
+          <div onClick={() => setPage('pending')} className={`${cardBg} p-4 rounded-2xl shadow-sm border flex flex-col justify-center cursor-pointer hover:ring-2 hover:scale-105 ring-rose-500 transition-all duration-300`}>
+             <span className="text-[10px] font-bold opacity-60 uppercase mb-1">Pending Stock</span>
+             <span className={`text-xl md:text-3xl font-black text-rose-500`}>{pendingCount}</span>
+          </div>
+          <div onClick={() => goToTrack('Delivered')} className={`${cardBg} p-4 rounded-2xl shadow-sm border flex flex-col justify-center cursor-pointer hover:ring-2 hover:scale-105 ring-emerald-500 transition-all duration-300`}>
+             <span className="text-[10px] font-bold opacity-60 uppercase mb-1">Total Delivered</span>
+             <span className={`text-xl md:text-3xl font-black text-emerald-500`}>{branchParcels.filter(p=>p.status==="Delivered").length}</span>
+          </div>
+          <div className={`${cardBg} p-4 rounded-2xl shadow-sm border flex flex-col justify-center`}>
+             <span className="text-[10px] font-bold opacity-60 uppercase mb-1">Branch Revenue</span>
+             <span className={`text-xl md:text-3xl font-black text-indigo-500`}>₹{rev}</span>
+          </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+         <div className={`${cardBg} p-4 md:p-6 rounded-2xl border shadow-sm md:col-span-2 h-auto md:h-[400px]`}>
+           <h3 className="font-black text-sm text-slate-400 uppercase mb-4">Branch Status Analysis</h3>
+           <ResponsiveContainer width="100%" height={280}>
+             <BarChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 20 }}>
+               <XAxis dataKey="name" tick={{fontSize: 10}} axisLine={false} tickLine={false} />
+               <Tooltip cursor={{fill: 'rgba(0,0,0,0.05)'}} contentStyle={{background: '#1e293b', border:'none', color:'#fff', borderRadius:'8px', fontSize:'12px'}} />
+               <Bar dataKey="count" radius={[4, 4, 0, 0]}>{chartData.map((e, i) => (<Cell key={i} fill={e.fill} />))}</Bar>
+             </BarChart>
+           </ResponsiveContainer>
+         </div>
+
+         <div className={`${cardBg} p-4 md:p-6 rounded-2xl border shadow-sm flex flex-col h-auto md:h-[400px]`}>
+            <div className="flex justify-between items-center mb-4 border-b border-slate-500/20 pb-2">
+               <div className="flex items-center gap-2">
+                  <h3 className="font-black text-sm text-emerald-500 uppercase hidden sm:block">🏆 Deliveries</h3>
+                  <input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} className={`px-2 py-0.5 text-[10px] md:text-xs font-bold rounded outline-none border cursor-pointer ${isDark ? 'bg-slate-900 border-emerald-500/30 text-emerald-400' : 'bg-emerald-50 border-emerald-300 text-emerald-700'}`} />
+               </div>
+               <div className="flex gap-2">
+                  <button onClick={() => generateListPDF(`Deliveries - ${deliveryDate}`, selectedBranch, filteredDelParcels)} className="bg-blue-500 text-white text-[10px] px-2 py-1 rounded-md font-bold shadow hover:bg-blue-600 transition-colors">🖨️ PRINT</button>
+                  <span className="bg-emerald-500 text-white text-[10px] px-2 py-1 rounded-md font-bold shadow">{filteredDelParcels.length} Items</span>
+               </div>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
+               {Object.keys(staffStats).length === 0 ? (
+                  <p className="text-xs opacity-50 text-center mt-10 font-bold">No deliveries on {deliveryDate}.</p>
+               ) : (
+                  Object.entries(staffStats).sort((a,b)=>b[1].count-a[1].count).map(([staff, stats], i) => (
+                     <div key={i} className={`flex flex-col rounded-xl border overflow-hidden ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                        <div onClick={() => setExpandedStaff(expandedStaff === staff ? null : staff)} className="flex justify-between items-center p-3 cursor-pointer hover:bg-black/5 transition-colors">
+                           <div className="flex flex-col">
+                              <div className="flex items-center gap-2">
+                                 <span className="text-lg">{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '👤'}</span>
+                                 <span className="font-bold text-sm">{staff}</span>
+                              </div>
+                              <span className="text-[10px] font-bold text-indigo-500 ml-7 mt-0.5">₹{stats.totalValue} Total Value</span>
+                           </div>
+                           <div className="flex items-center gap-2">
+                              <span className="text-emerald-500 font-black text-lg">{stats.count}</span>
+                              <span className="text-[10px] opacity-50">{expandedStaff === staff ? '▲' : '▼'}</span>
+                           </div>
+                        </div>
+
+                        {expandedStaff === staff && (
+                           <div className={`p-2 space-y-2 border-t ${isDark ? 'border-slate-700 bg-slate-950/50' : 'border-slate-200 bg-white'}`}>
+                              <div className="flex justify-between text-[9px] uppercase font-bold opacity-70 px-1 pt-1">
+                                 <span>Paid: ₹{stats.paid}</span>
+                                 <span>ToPay: ₹{stats.toPay}</span>
+                                 <span>Credit: ₹{stats.credit}</span>
+                              </div>
+                              <div className="text-[10px] font-black text-emerald-500 px-1 pb-1 border-b border-slate-500/20 mb-1">
+                                 👉 Cash to Collect: ₹{stats.collected}
+                              </div>
+                              {stats.parcels.map(p => (
+                                 <div key={p.id} onClick={() => setGlobalView(p)} className="flex justify-between items-center p-2 rounded-lg cursor-pointer hover:bg-indigo-500/10 transition-colors">
+                                    <div className="flex flex-col">
+                                       <span className="text-[11px] font-black text-indigo-500 hover:underline">📦 {p.id}</span>
+                                       <span className="text-[10px] opacity-70 font-bold truncate w-32 md:w-40" title={p.rName}>{p.rName}</span>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                       <div className="flex flex-col text-right">
+                                          <span className="text-[11px] font-bold">₹{p.price}</span>
+                                          <span className="text-[9px] opacity-60 font-bold">{p.payment === 'To Pay' ? p.deliveryMode : p.payment}</span>
+                                       </div>
+                                       <PrintGroup p={p} />
+                                    </div>
+                                 </div>
+                              ))}
+                           </div>
+                        )}
+                     </div>
+                  ))
+               )}
+            </div>
+
+            {Object.keys(staffStats).length > 0 && (
+               <div className={`mt-3 p-3 rounded-xl border-t-2 border-dashed flex justify-between items-center font-black text-xs shrink-0 ${isDark ? 'border-slate-700 text-white bg-slate-950' : 'border-slate-200 text-slate-900 bg-slate-100'}`}>
+                  <div className="flex flex-col">
+                     <span className="uppercase tracking-wider opacity-60 text-[9px]">Total on {deliveryDate}</span>
+                     <span className="text-indigo-500 font-black text-sm mt-0.5">₹{tTotalValue} Value</span>
+                  </div>
+                  <div className="text-right flex flex-col">
+                     <span className="text-emerald-500 text-sm">₹{tCollected} Cash In-Hand</span>
+                     <span className="text-[9px] opacity-70 font-bold mt-0.5">P: ₹{tPaid} | TP: ₹{tToPay} | C: ₹{tCredit}</span>
+                  </div>
+               </div>
+            )}
+         </div>
+      </div>
+    </div>
+  );
+}
+
+function Pending({parcels, isDark, user, setGlobalView}) {
+  const [fLR, setFLR] = useState(""); const [fFrom, setFFrom] = useState("All"); const [fTo, setFTo] = useState("All"); 
+  const [fFromDate, setFFromDate] = useState(""); const [fToDate, setFToDate] = useState("");
+  const [sortOrder, setSortOrder] = useState("lr_asc");
+
+  const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-100"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800"; const tblBg = isDark ? "bg-slate-800/40" : "bg-slate-50";
+  const getDays = (iso) => { if(!iso) return 0; const diff = new Date() - new Date(iso); return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24))); };
+  
+  let pendingParcels = parcels.filter(p => {
+    if (p.status !== 'Booked' && p.status !== 'In Transit') return false;
+    if (user.role !== 'superadmin' && p.from !== user.branch && p.to !== user.branch) return false;
+    const sTerm = fLR.toLowerCase();
+    if (fLR && !p.id.toLowerCase().includes(sTerm) && !p.sPhone.includes(sTerm) && !(p.sName && p.sName.toLowerCase().includes(sTerm)) && !(p.rName && p.rName.toLowerCase().includes(sTerm))) return false;
+    if (fFrom !== "All" && p.from !== fFrom) return false;
+    if (fTo !== "All" && p.to !== fTo) return false;
+    
+    const pDate = p.isoDate ? p.isoDate.split('T')[0] : "";
+    if (fFromDate && pDate < fFromDate) return false;
+    if (fToDate && pDate > fToDate) return false;
+    return true;
+  });
+
+  pendingParcels.sort((a, b) => {
+    if (sortOrder === "lr_asc") return a.id.localeCompare(b.id);
+    if (sortOrder === "lr_desc") return b.id.localeCompare(a.id);
+    if (sortOrder === "date_desc") return new Date(b.isoDate) - new Date(a.isoDate);
+    if (sortOrder === "date_asc") return new Date(a.isoDate) - new Date(b.isoDate);
+    return 0;
+  });
+
+  const pendingQty = pendingParcels.reduce((sum, p) => sum + (Number(p.count)||0), 0);
+  const pendingPaid = pendingParcels.filter(p=>p.payment==='Paid').reduce((sum, p) => sum + (Number(p.price)||0), 0);
+  const pendingToPay = pendingParcels.filter(p=>p.payment==='To Pay').reduce((sum, p) => sum + (Number(p.price)||0), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${cardBg} p-4 rounded-2xl border space-y-3`}>
+        <h3 className="font-bold text-sm text-amber-500">Filter Pending Stock</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2">
+          <input value={fLR} onChange={e=>setFLR(e.target.value)} placeholder="LR / Phone / Name" className={`p-2 rounded-xl border text-sm ${inputBg}`} />
+          <select value={fFrom} onChange={e=>setFFrom(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`}><option value="All">Any Origin</option>{CITIES.map(c => <option key={c}>{c}</option>)}</select>
+          <select value={fTo} onChange={e=>setFTo(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`}><option value="All">Any Destination</option>{CITIES.map(c => <option key={c}>{c}</option>)}</select>
+          <input type="date" title="From Date" value={fFromDate} onChange={e=>setFFromDate(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`} />
+          <input type="date" title="To Date" value={fToDate} onChange={e=>setFToDate(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`} />
+          <select value={sortOrder} onChange={e=>setSortOrder(e.target.value)} className={`p-2 rounded-xl border text-sm font-black text-amber-600 ${inputBg}`}>
+            <option value="lr_asc">Sort: LR (A ➔ Z)</option>
+            <option value="lr_desc">Sort: LR (Z ➔ A)</option>
+            <option value="date_desc">Sort: Newest First</option>
+            <option value="date_asc">Sort: Oldest First</option>
+          </select>
+        </div>
+      </div>
+      <div className={`${cardBg} rounded-2xl shadow-sm border overflow-hidden`}>
+        <div className="bg-amber-500/10 text-amber-600 p-4 font-bold md:text-lg flex justify-between items-center border-b border-amber-500/20">
+            <span>⏳ Global Pending Parcels</span>
+            <div className="flex gap-2">
+               <button onClick={() => exportToCSV("Pending_List", pendingParcels)} className="bg-amber-600 hover:bg-amber-700 text-white text-xs px-3 py-1.5 rounded-lg shadow-md transition-colors">📥 Excel</button>
+               <button onClick={() => generateListPDF("Pending Manifest", user.branch, pendingParcels)} className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded-lg shadow-md transition-colors">🖨️ Print List</button>
+               <span className="bg-amber-500 text-white px-3 py-1.5 rounded-lg text-xs md:text-sm">{pendingParcels.length} Items</span>
+            </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm whitespace-nowrap">
+            <thead className={`${tblBg} opacity-70 text-[10px] uppercase font-bold`}>
+               <tr>
+                  <th className="p-4">LR No</th>
+                  <th className="p-4">Route</th>
+                  <th className="p-4">Customer Details</th>
+                  <th className="p-4">Qty</th>
+                  <th className="p-4">Status</th>
+                  <th className="p-4">Age</th>
+                  <th className="p-4 text-center">Action</th>
+               </tr>
+            </thead>
+            <tbody>
+              {pendingParcels.length === 0 ? <tr><td colSpan="7" className="p-8 text-center opacity-50 font-bold">No pending parcels! All cleared.</td></tr> : pendingParcels.map(p => {
+                const days = getDays(p.isoDate);
+                return (
+                  <tr key={p.id} className="border-t border-slate-500/10 hover:bg-black/5 cursor-pointer" onClick={() => setGlobalView(p)}>
+                    <td className="p-4 font-black text-indigo-500 hover:underline">{p.id}</td>
+                    <td className="p-4 font-bold">{p.from} ➔ {p.to}</td>
+                    <td className="p-4 text-xs"><p className="font-bold text-slate-400">{p.sName || "Unknown"} ➔ {p.rName || "Unknown"}</p><p className="opacity-50 text-[11px]">{p.sPhone} | {p.rPhone}</p></td>
+                    <td className="p-4 font-black text-amber-500">{p.count} <span className="text-[10px] font-normal">{p.type}</span></td>
+                    <td className="p-4"><span className="px-2 py-1 rounded-full text-[10px] font-bold" style={{backgroundColor: S_CLR[p.status]+'22', color: S_CLR[p.status]}}>{p.status}</span></td>
+                    <td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold ${days > 2 ? 'bg-red-500/10 text-red-500' : 'bg-emerald-500/10 text-emerald-500'}`}>{days === 0 ? 'Today' : `${days} Days`}</span></td>
+                    <td className="p-4 text-center"><PrintGroup p={p} /></td>
+                  </tr>
+                )
+              })}
+            </tbody>
+            {pendingParcels.length > 0 && (
+              <tfoot className={`${isDark?'bg-slate-900 border-slate-700':'bg-slate-100 border-slate-200'} border-t-2 font-black`}>
+                 <tr>
+                    <td colSpan="3" className="p-4 text-right opacity-50 uppercase text-xs">Pending Summary :</td>
+                    <td className="p-4 text-amber-500 text-lg">{pendingQty} <span className="text-xs">Items</span></td>
+                    <td colSpan="3" className="p-4">
+                       <div className="flex gap-4 text-xs bg-black/5 p-2 rounded-xl inline-flex border border-slate-500/10">
+                          {pendingPaid > 0 && <span className="text-emerald-500">Paid: ₹{pendingPaid}</span>}
+                          {pendingToPay > 0 && <span className="text-rose-500">ToPay: ₹{pendingToPay}</span>}
+                       </div>
+                    </td>
+                 </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, user, creditAuthList}) {
+  const initCargo = { count: "1", type: "Box", size: "Standard", weight: "", rate: "" };
+  const initF = {sName:"", sPhone:"", sGst:"", rName:"", rPhone:"", rGst:"", from: user.branch === 'All' ? "" : user.branch, to:"", payment:"Paid", creditCustomer:"", notes:""};
+  
+  const [f, setF] = useState(initF); 
+  const [cargoList, setCargoList] = useState([{...initCargo}]);
+  
+  const [done, setDone] = useState(null); const [eway, setEway] = useState(""); const [contacts, setContacts] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
+  const [lrNo, setLrNo] = useState("");
+  const [isManualLR, setIsManualLR] = useState(false);
+
+  useEffect(() => { if(shortcutMode) setF(prev => ({...prev, payment: shortcutMode})); }, [shortcutMode]);
+  
+  useEffect(() => { async function load() { const cMap = {}; parcels.forEach(p => { if (p.sPhone && !cMap[p.sPhone]) cMap[p.sPhone] = { name: p.sName, gst: p.sGst || "" }; if (p.rPhone && !cMap[p.rPhone]) cMap[p.rPhone] = { name: p.rName, gst: p.rGst || "" }; }); const localC = await local.get("mps_contacts") || {}; Object.assign(cMap, localC); setContacts(Object.entries(cMap).map(([phone, data]) => ({ phone, ...data }))); } load(); }, [parcels]);
+
+  useEffect(() => {
+     if(!isManualLR) {
+        if(f.from && f.to) { setLrNo(generateLR(f.from, f.to, parcels)); } 
+        else { setLrNo(""); }
+     }
+  }, [f.from, f.to, isManualLR, parcels]); 
+
+  const handleEwayChange = (e) => { 
+    const val = e.target.value.replace(/\D/g, '').slice(0, 12); 
+    setEway(val); 
+    if (val.length === 12) { 
+        showMsg("Validating E-Way Bill Parameters...", "info"); 
+        setTimeout(() => { 
+            setF(p => ({...p, sName: "SRI MURUGAN TEXTILES", sPhone: "9876543210", sGst: "33AABCU1234F1Z1", from: user.branch === 'All' ? "Salem" : user.branch, rName: "CITY FASHIONS", rPhone: "9988776655", rGst: "29AAAAA0000A1Z5", to: "Bangalore", payment: "To Pay" })); 
+            setCargoList([{count: "15", type: "Bale", size: "Standard", weight: "", rate: "120"}]);
+            showMsg("E-Way Bill Content Processed & Populated!", "success"); 
+        }, 750); 
+    } 
+  };
+
+  const handleQRScan = (text) => {
+    setShowScanner(false);
+    const ewayMatch = text.match(/\b\d{12}\b/); 
+    if(ewayMatch) {
+        const val = ewayMatch[0];
+        setEway(val);
+        showMsg("QR Scanned! E-Way number extracted: " + val, "success");
+        setTimeout(() => { 
+            setF(p => ({...p, sName: "SCANNED CLIENT", sPhone: "9999999999", rName: "TARGET CLIENT", rPhone: "8888888888", payment: "To Pay" })); 
+            setCargoList([{count: "10", type: "Box", size: "Standard", weight: "", rate: "150"}]);
+            showMsg("E-Way Bill Content Auto-Filled!", "info"); 
+        }, 800);
+    } else { showMsg("Invalid QR Code! No E-Way Bill Number found.", "error"); }
+  };
+
+  const smartFocus = (d, isSender) => { setTimeout(() => { if (isSender) { if (!d.name) document.getElementById('sName')?.focus(); else if (!d.gst) document.getElementById('sGst')?.focus(); else if (user.branch !== 'All') document.getElementById('rPhone')?.focus(); else document.getElementById('sFrom')?.focus(); } else { if (!d.name) document.getElementById('rName')?.focus(); else if (!d.gst) document.getElementById('rGst')?.focus(); else document.getElementById('rTo')?.focus(); } }, 50); };
+  
+  const handlePhoneChange = async (isSender, value) => { const fieldPrefix = isSender ? 's' : 'r'; setF(prev => ({ ...prev, [`${fieldPrefix}Phone`]: value })); if (value.length === 10) { const found = contacts.find(c => c.phone === value); if (found) { setF(prev => ({...prev, [`${fieldPrefix}Name`]: (found.name || "").toUpperCase(), [`${fieldPrefix}Gst`]: found.gst || "" })); showMsg("Customer details loaded automatically!", "success"); smartFocus(found, isSender); } } };
+  const handleContactSelect = (isSender, d) => { const px = isSender ? 's' : 'r'; setF(p => ({ ...p, [`${px}Phone`]: d.phone, [`${px}Name`]: (d.name||'').toUpperCase(), [`${px}Gst`]: d.gst||'' })); smartFocus(d, isSender); };
+  
+  const updateCargo = (index, field, value) => {
+      const newList = [...cargoList];
+      newList[index][field] = value;
+      setCargoList(newList);
+  };
+  
+  const addCargoRow = () => { setCargoList([...cargoList, {...initCargo}]); };
+  const removeCargoRow = (index) => { const newList = [...cargoList]; newList.splice(index, 1); setCargoList(newList); };
+
+  const ep = cargoList.reduce((total, item) => total + calcPrice(f.from, f.to, item.rate, item.count, item.type, f.payment, item.size), 0);
+  
+  const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800";
+  const uniqueCompanies = [...new Set(creditAuthList.map(c => c.company))];
+
+  const submit = async () => {
+    if(isSubmitting) return; 
+    if(isManualLR && (!lrNo || lrNo.trim() === "")) return showMsg("LR Number is mandatory in Manual Mode!", "error");
+    if(!f.sName || !f.sPhone || !f.from || !f.rName || !f.rPhone || !f.to) return showMsg("Please fill all profile fields marked with (*)", "error");
+    
+    const invalidCargo = cargoList.find(c => !c.count || !c.rate || !c.type);
+    if(invalidCargo) return showMsg("Please enter Quantity, Type, and Rate for all cargo items!", "error");
+
+    if(f.payment === "Credit" && !f.creditCustomer) return showMsg("Search and Select a Credit Account!", "error");
+    
+    setIsSubmitting(true); 
+    const dObj = new Date(); const isoDate = dObj.toISOString(); const locDateStr = dObj.toLocaleDateString('en-IN'); 
+    
+    try {
+        let freshParcels = await db.getParcels();
+        let finalLR = "";
+
+        if (isManualLR) {
+           finalLR = lrNo.trim().toUpperCase();
+           if(freshParcels.some(p => p.id.toUpperCase() === finalLR)) {
+              setIsSubmitting(false); return showMsg(`LR Number ${finalLR} already exists!`, "error");
+           }
+        } else {
+           finalLR = generateLR(f.from, f.to, freshParcels);
+        }
+
+        const totalQty = cargoList.reduce((sum, item) => sum + Number(item.count), 0);
+        const primaryType = cargoList.length > 1 ? "Mixed Items" : cargoList[0].type;
+        const totalWeight = cargoList.reduce((sum, item) => sum + Number(item.weight||0), 0);
+
+        const p = {...f, count: totalQty.toString(), type: primaryType, actualWeight: totalWeight.toString(), cargoList: cargoList, sName: f.sName.toUpperCase(), rName: f.rName.toUpperCase(), notes: f.payment === 'Credit' ? `[A/c: ${f.creditCustomer}] ${f.notes}` : f.notes, creditSettled: false, id: finalLR, date: locDateStr, isoDate: isoDate, status: "Booked", price: ep, bookedBy: user.username, bookedBranch: user.branch, settledBranches: [], history: [{status: "Booked", loc: f.from, time: dObj.toLocaleString()}]};
+        
+        let success = false;
+        let retryLimit = 5;
+        let currentLR = finalLR;
+
+        while (!success && retryLimit > 0) {
+            try {
+                p.id = currentLR;
+                await db.insertParcel(p); 
+                success = true;
+            } catch(insertError) {
+                if(!isManualLR) {
+                    retryLimit--;
+                    console.log(`409 Conflict hit for ${currentLR}. Auto-incrementing...`);
+                    const parts = currentLR.split('/');
+                    if(parts.length === 3) {
+                        const nextNum = parseInt(parts[2], 10) + 1;
+                        currentLR = `${parts[0]}/${parts[1]}/${String(nextNum).padStart(4, '0')}`;
+                    } else { throw insertError; }
+                } else { throw insertError; }
+            }
+        }
+
+        if(!success) { throw new Error("Duplicate ID or Network Issue"); }
+
+        const saved = await local.get("mps_contacts") || {}; saved[f.sPhone] = { name: p.sName, gst: f.sGst }; saved[f.rPhone] = { name: p.rName, gst: f.rGst }; await local.set("mps_contacts", saved);
+        
+        // INSTANT UI UPDATE WITHOUT WAITING FOR DB CACHE
+        setParcels([p, ...parcels]); 
+        
+        setDone(p); showMsg("Booking Successful!"); 
+    } catch(err) { 
+        console.error(err);
+        showMsg("Network or Database Error! Please try again.", "error"); 
+    }
+    setIsSubmitting(false);
+  };
+
+  if(done) return ( 
+     <div className={`${cardBg} p-6 md:p-10 rounded-3xl max-w-xl mx-auto text-center border-t-4 border-emerald-500 animate-bounce-in`}>
+        <h2 className="text-xl md:text-2xl font-black mb-4">Parcel Registered Successfully</h2>
+        <div className="bg-indigo-600/10 text-indigo-500 text-xl md:text-2xl font-mono font-bold p-3 rounded-xl mb-6">{done.id}</div>
+        
+        <p className="text-[10px] font-bold uppercase opacity-50 mb-2">Print Receipt Layouts:</p>
+        <div className="flex justify-center gap-2 mb-4">
+            <button onClick={()=>generatePDF(done, 1)} className="flex-1 bg-slate-800 text-white font-bold py-3 rounded-xl text-sm shadow-md">🖨️ Full Page</button>
+            <button onClick={()=>generatePDF(done, 2)} className="flex-1 bg-indigo-500 text-white font-bold py-3 rounded-xl text-sm shadow-md">🖨️ 2 Per Page</button>
+            <button onClick={()=>generatePDF(done, 3)} className="flex-1 bg-emerald-500 text-white font-bold py-3 rounded-xl text-sm shadow-md">🖨️ 3 Per Page</button>
+        </div>
+
+        <button onClick={()=>{setDone(null); setF(initF); setCargoList([{...initCargo}]); setEway(""); setLrNo(""); setIsManualLR(false);}} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl mb-3 mt-4 border border-indigo-500">New Registration</button>
+        <button onClick={() => openWhatsApp(done.sPhone, true, done)} className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl border border-emerald-500">📱 Send SMS / WhatsApp</button>
+     </div> 
+  );
+
+  return (
+    <div className="space-y-4 md:space-y-6">
+      <div className={`${cardBg} p-4 rounded-2xl border mb-2 flex flex-col lg:flex-row gap-4 relative z-10`}>
+         <div className="flex-1">
+            <div className="flex justify-between items-center mb-1 ml-1">
+               <label className="text-[10px] uppercase font-bold opacity-80 text-indigo-500">📑 LR Number Booking</label>
+               <button onClick={() => setIsManualLR(!isManualLR)} className={`text-[9px] font-black px-3 py-1 rounded-md shadow-sm transition-all ${isManualLR ? 'bg-amber-500 text-white ring-2 ring-amber-500/50' : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}`}>{isManualLR ? '🔓 MANUAL MODE' : '🔒 AUTO MODE'}</button>
+            </div>
+            <input value={lrNo} onChange={e=>setLrNo(e.target.value.toUpperCase())} readOnly={!isManualLR} placeholder={isManualLR ? "Type Manual LR Code..." : "Auto Generated..."} className={`w-full px-4 py-3 rounded-xl outline-none font-black tracking-widest uppercase border focus:ring-2 focus:ring-indigo-500 shadow-inner ${inputBg} ${isManualLR ? 'text-amber-500 border-amber-500/50' : 'text-indigo-500 opacity-80 bg-black/5 cursor-not-allowed'}`} />
+         </div>
+         <div className="flex-1">
+            <label className="text-[10px] uppercase font-bold opacity-60 ml-1 mb-1 block">⚡ Quick Fill (E-Way Bill)</label>
+            <div className="flex gap-2">
+               <input id="eway" value={eway} onChange={handleEwayChange} placeholder="Enter 12-Digit E-Way..." className={`w-full px-4 py-3 rounded-xl outline-none font-mono font-bold tracking-widest border focus:ring-2 focus:ring-indigo-500 ${inputBg}`} />
+               <button onClick={() => setShowScanner(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl shadow-md whitespace-nowrap flex items-center justify-center gap-2">📷 Scan</button>
+            </div>
+         </div>
+      </div>
+      
+      {showScanner && <EwayScannerModal onScan={handleQRScan} onClose={() => setShowScanner(false)} />}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 relative z-30">
+        <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}>
+            <h3 className="font-bold text-indigo-500">Sender Profile</h3>
+            <SuggestInput id="sPhone" label="Mobile Number *" value={f.sPhone} onChange={v=>handlePhoneChange(true, v)} onSelect={d=>handleContactSelect(true, d)} dataList={contacts} isPhone={true} theme={theme} />
+            <SuggestInput id="sName" label="Full Name *" value={f.sName} onChange={v=>setF({...f, sName:v.toUpperCase()})} onSelect={d=>handleContactSelect(true, d)} dataList={contacts} isPhone={false} theme={theme} />
+            <input id="sGst" value={f.sGst} onChange={e=>setF({...f, sGst:e.target.value.toUpperCase()})} placeholder="GST Number" className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 uppercase ${inputBg}`} />
+            <select id="sFrom" disabled={user.branch !== 'All'} value={f.from} onChange={e=>setF({...f, from:e.target.value})} className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 ${inputBg} ${user.branch !== 'All' ? 'opacity-50 cursor-not-allowed' : ''}`}><option value="">Select Origin *</option>{CITIES.map(c=><option key={c}>{c}</option>)}</select>
+        </div>
+        <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}>
+            <h3 className="font-bold text-emerald-500">Receiver Profile</h3>
+            <SuggestInput id="rPhone" label="Mobile Number *" value={f.rPhone} onChange={v=>handlePhoneChange(false, v)} onSelect={d=>handleContactSelect(false, d)} dataList={contacts} isPhone={true} theme={theme} />
+            <SuggestInput id="rName" label="Full Name *" value={f.rName} onChange={v=>setF({...f, rName:v.toUpperCase()})} onSelect={d=>handleContactSelect(false, d)} dataList={contacts} isPhone={false} theme={theme} />
+            <input id="rGst" value={f.rGst} onChange={e=>setF({...f, rGst:e.target.value.toUpperCase()})} placeholder="GST Number" className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 uppercase ${inputBg}`} />
+            <select id="rTo" value={f.to} onChange={e=>setF({...f, to:e.target.value})} className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 ${inputBg}`}><option value="">Select Destination *</option>{CITIES.map(c=><option key={c}>{c}</option>)}</select>
+        </div>
+      </div>
+      
+      <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4 relative z-20`}>
+        <div className="flex justify-between items-center mb-2">
+            <h3 className="font-bold">Dynamic Cargo Details</h3>
+            <button onClick={addCargoRow} className="bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500 hover:text-white px-4 py-1.5 rounded-lg text-xs font-black transition-colors shadow-sm border border-indigo-500/20">+ Add Cargo Item</button>
+        </div>
+        
+        <div className="space-y-3">
+           {cargoList.map((c, index) => (
+               <div key={index} className="grid grid-cols-2 md:grid-cols-12 gap-3 md:gap-2 items-center bg-black/5 p-3 rounded-xl border border-slate-500/10 animate-fade-in relative">
+                  {cargoList.length > 1 && (
+                     <button onClick={()=>removeCargoRow(index)} className="absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full text-[10px] font-black shadow-md border-2 border-white hover:scale-110">X</button>
+                  )}
+                  <div className="md:col-span-1 hidden md:block text-center font-black text-slate-400">#{index+1}</div>
+                  <input type="number" value={c.count} onChange={e=>updateCargo(index, 'count', e.target.value)} placeholder="Qty *" className={`md:col-span-2 p-3 rounded-xl border outline-none [appearance:textfield] ${inputBg}`} />
+                  <select value={c.type} onChange={e=>updateCargo(index, 'type', e.target.value)} className={`md:col-span-3 p-3 rounded-xl border outline-none ${inputBg}`}>{TYPES.map(t=><option key={t}>{t}</option>)}</select>
+                  <select value={c.size} onChange={e=>updateCargo(index, 'size', e.target.value)} className={`md:col-span-2 p-3 rounded-xl border font-bold text-amber-600 outline-none ${inputBg}`}>
+                     <option value="Standard">Normal (1x)</option>
+                     <option value="Medium">Medium (1.5x)</option>
+                     <option value="Large">Large (2x)</option>
+                     <option value="Jumbo">Jumbo (3x)</option>
+                  </select>
+                  <input type="number" value={c.weight} onChange={e=>updateCargo(index, 'weight', e.target.value)} placeholder="Wgt (Kg)" className={`md:col-span-2 p-3 rounded-xl border outline-none [appearance:textfield] ${inputBg}`} />
+                  <input type="number" value={c.rate} onChange={e=>updateCargo(index, 'rate', e.target.value)} placeholder="Rate/Unit*" className={`md:col-span-2 p-3 rounded-xl border outline-none font-bold [appearance:textfield] ${inputBg}`} />
+               </div>
+           ))}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mt-4 pt-4 border-t border-slate-500/20">
+          <div className="flex flex-col gap-3">
+            <select value={f.payment} onChange={e=>setF({...f, payment:e.target.value})} className="p-3 border rounded-xl font-bold bg-indigo-600 text-white outline-none w-full">{PAY_MODES.map(p=><option key={p} value={p}>{p.toUpperCase()}</option>)}</select>
+            {f.payment === 'Credit' && ( <CreditSearchDropdown value={f.creditCustomer} onChange={val => setF({...f, creditCustomer: val})} uniqueCompanies={uniqueCompanies} isDark={isDark} /> )}
+          </div>
+          <div className="bg-slate-950 p-4 rounded-xl flex justify-between items-center text-white h-full shadow-inner border border-slate-800"><span className="text-sm opacity-50">Total Income Allocation</span><span className="text-xl md:text-3xl font-black text-emerald-400">₹{ep}</span></div>
+        </div>
+      </div>
+      <button id="btnSubmit" onClick={submit} disabled={isSubmitting} className={`w-full text-white font-bold py-4 rounded-xl shadow-lg transition-transform transform hover:-translate-y-1 relative z-10 ${isSubmitting ? 'bg-slate-500 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}>{isSubmitting ? "Generating Booking..." : "Confirm Booking"}</button>
+    </div>
+  );
+}
+
+function Track({parcels, isDark, user, setGlobalView, initialStatus}) {
+  const [fLR, setFLR] = useState(""); const [fFrom, setFFrom] = useState("All"); const [fTo, setFTo] = useState("All"); 
+  const [fStatus, setFStatus] = useState(initialStatus || "All"); 
+  const [fFromDate, setFFromDate] = useState(""); const [fToDate, setFToDate] = useState("");
+  const [sortOrder, setSortOrder] = useState("date_desc"); 
+
+  const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-100"; 
+  const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800"; 
+  const tblBg = isDark ? "bg-slate-800/40" : "bg-slate-50";
+
+  useEffect(() => { if (initialStatus) setFStatus(initialStatus); }, [initialStatus]);
+
+  let results = parcels.filter(p => {
+    const sTerm = fLR.toLowerCase();
+    
+    if (fStatus === "All" && p.status === 'Deleted') return false; 
+    if (fStatus !== "All" && p.status !== fStatus) return false;
+
+    if (fLR && !p.id.toLowerCase().includes(sTerm) && !p.sPhone.includes(sTerm) && !p.rPhone.includes(sTerm) && !(p.sName && p.sName.toLowerCase().includes(sTerm)) && !(p.rName && p.rName.toLowerCase().includes(sTerm))) return false;
+    if (fFrom !== "All" && p.from !== fFrom) return false;
+    if (fTo !== "All" && p.to !== fTo) return false;
+    
+    if (user.role === 'staff' && p.from !== user.branch && p.to !== user.branch) return false;
+    
+    const pDate = p.isoDate ? p.isoDate.split('T')[0] : "";
+    if (fFromDate && pDate < fFromDate) return false;
+    if (fToDate && pDate > fToDate) return false;
+    return true;
+  });
+
+  results.sort((a, b) => {
+    if (sortOrder === "lr_asc") return a.id.localeCompare(b.id);
+    if (sortOrder === "lr_desc") return b.id.localeCompare(a.id);
+    if (sortOrder === "date_desc") return new Date(b.isoDate) - new Date(a.isoDate);
+    if (sortOrder === "date_asc") return new Date(a.isoDate) - new Date(b.isoDate);
+    return 0;
+  });
+
+  const totalQty = results.reduce((sum, p) => sum + (Number(p.count) || 0), 0);
+  const totalAmt = results.reduce((sum, p) => sum + (Number(p.price) || 0), 0);
+  const totalPaid = results.filter(p => p.payment === 'Paid').reduce((sum, p) => sum + (Number(p.price) || 0), 0);
+  const totalToPay = results.filter(p => p.payment === 'To Pay').reduce((sum, p) => sum + (Number(p.price) || 0), 0);
+  const totalCredit = results.filter(p => p.payment === 'Credit').reduce((sum, p) => sum + (Number(p.price) || 0), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className={`${cardBg} p-4 rounded-2xl border space-y-3`}>
+        <div className="flex justify-between items-center">
+           <h3 className="font-bold text-sm text-indigo-500">Advanced Search Filter</h3>
+           <div className="flex gap-2">
+              <button onClick={() => exportToCSV("Track_List", results)} className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded-lg shadow-md transition-colors">📥 Excel</button>
+              <button onClick={() => generateListPDF("Tracked Parcels List", user.branch, results)} className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded-lg shadow-md transition-colors">🖨️ Print List</button>
+           </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2">
+          <input value={fLR} onChange={e=>setFLR(e.target.value)} placeholder="LR / Phone / Name" className={`p-2 rounded-xl border text-sm ${inputBg}`} />
+          <select value={fFrom} onChange={e=>setFFrom(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`}><option value="All">Any Origin</option>{CITIES.map(c => <option key={c}>{c}</option>)}</select>
+          <select value={fTo} onChange={e=>setFTo(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`}><option value="All">Any Destination</option>{CITIES.map(c => <option key={c}>{c}</option>)}</select>
+          <select value={fStatus} onChange={e=>setFStatus(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`}><option value="All">Any Status</option>{STATUSES.map(s => <option key={s}>{s}</option>)}</select>
+          <input type="date" title="From Date" value={fFromDate} onChange={e=>setFFromDate(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`} />
+          <input type="date" title="To Date" value={fToDate} onChange={e=>setFToDate(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`} />
+          <select value={sortOrder} onChange={e=>setSortOrder(e.target.value)} className={`p-2 rounded-xl border text-sm font-black text-indigo-500 ${inputBg}`}>
+            <option value="date_desc">Sort: Newest First</option>
+            <option value="date_asc">Sort: Oldest First</option>
+            <option value="lr_asc">Sort: LR (A ➔ Z)</option>
+            <option value="lr_desc">Sort: LR (Z ➔ A)</option>
+          </select>
+        </div>
+      </div>
+      <div className={`${cardBg} rounded-2xl border overflow-x-auto`}>
+        <table className="min-w-[900px] w-full text-left whitespace-nowrap text-sm">
+          <thead className={`${tblBg} text-[10px] font-bold uppercase opacity-80`}>
+             <tr>
+                <th className="p-4">LR Code & Date</th>
+                <th className="p-4">Route Info</th>
+                <th className="p-4">Customer Details</th>
+                <th className="p-4">Cargo (Qty)</th>
+                <th className="p-4">Amount & Payment</th>
+                <th className="p-4">Status</th>
+                <th className="p-4 text-center">Receipt</th>
+             </tr>
+          </thead>
+          <tbody>
+            {results.length === 0 ? <tr><td colSpan="7" className="p-8 text-center opacity-50 font-bold">No parcels match your search.</td></tr> : results.map(p => (
+              <tr key={p.id} className="border-t border-slate-500/10 hover:bg-black/5 cursor-pointer" onClick={() => setGlobalView(p)}>
+                <td className="p-4 font-black text-indigo-500 hover:underline">{p.id} <br/><span className="text-[10px] opacity-50 font-normal">{p.date}</span></td>
+                <td className="p-4 font-bold">{p.from} ➔ {p.to}</td>
+                <td className="p-4 text-xs"><p>{p.sName} ➔ {p.rName}</p><p className="opacity-50">{p.sPhone} | {p.rPhone}</p></td>
+                <td className="p-4 font-black text-amber-500">{p.count} <span className="text-xs font-normal opacity-70">{p.type}</span></td>
+                <td className="p-4 font-bold">
+                   ₹{p.price} <br/>
+                   <span className={`text-[10px] px-2 py-0.5 rounded-md ${p.payment==='Paid'?'bg-emerald-500/10 text-emerald-500':p.payment==='To Pay'?'bg-red-500/10 text-red-500':'bg-indigo-500/10 text-indigo-500'}`}>{p.payment}</span>
+                </td>
+                <td className="p-4"><span className="px-2 py-1 rounded-full text-[10px] font-bold uppercase" style={{backgroundColor: S_CLR[p.status]+'22', color: S_CLR[p.status]}}>{p.status}</span></td>
+                <td className="p-4 text-center"><PrintGroup p={p} /></td>
+              </tr>
+            ))}
+          </tbody>
+          {results.length > 0 && (
+            <tfoot className={`${isDark?'bg-slate-900 border-slate-700':'bg-slate-100 border-slate-200'} border-t-2 font-black`}>
+               <tr>
+                  <td colSpan="3" className="p-4 text-right opacity-50 uppercase text-xs">Total Summary :</td>
+                  <td className="p-4 text-amber-500 text-lg">{totalQty} <span className="text-xs">Items</span></td>
+                  <td colSpan="3" className="p-4">
+                     <div className="flex flex-col gap-1 text-xs">
+                        <span className="text-lg">₹{totalAmt}</span>
+                        <div className="flex gap-2">
+                           {totalPaid > 0 && <span className="text-emerald-500">Paid: ₹{totalPaid}</span>}
+                           {totalToPay > 0 && <span className="text-red-500">ToPay: ₹{totalToPay}</span>}
+                           {totalCredit > 0 && <span className="text-indigo-500">Credit: ₹{totalCredit}</span>}
+                        </div>
+                     </div>
+                  </td>
+               </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function Delivery({parcels, setParcels, db, showMsg, isDark, user, creditAuthList, setGlobalView}) {
+  const [id, setId] = useState(""); 
+  const searchLR = () => { const item = parcels.find(p=>p.id === id.toUpperCase()); if(item) { if(item.status === 'Deleted') return showMsg("Consignment deleted by admin.", "error"); setGlobalView(item); setId(""); } else showMsg("No consignment found", "error"); };
+  const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200";
+  return (
+    <div className="max-w-xl mx-auto space-y-4 md:space-y-6">
+      <div className={`${cardBg} p-6 rounded-2xl text-center space-y-4`}>
+         <h2 className="text-xl font-black text-indigo-500">Fast Delivery Scanner [F6]</h2>
+         <p className="text-sm opacity-60">Scan barcode or type LR Code to quick-deliver.</p>
+         <div className="flex gap-2 flex-col sm:flex-row"><input id="delScan" autoFocus onKeyDown={e=> e.key==='Enter'?searchLR():null} value={id} onChange={e=>setId(e.target.value)} placeholder="Enter LR Code" className={`flex-1 p-4 text-center text-lg md:text-xl font-bold border rounded-xl outline-none ${isDark?'bg-slate-900 border-slate-700':'bg-slate-50'}`} /><button id="delFetch" onClick={searchLR} className="bg-indigo-600 text-white py-3 px-6 rounded-xl font-bold">Open Manifest</button></div>
+      </div>
+    </div>
+  );
+}
+
+function Accounts({parcels, setParcels, db, showMsg, isDark, user}) {
+  const dObj = new Date(); const todayStr = dObj.toISOString().split('T')[0]; dObj.setDate(1); const firstDayStr = dObj.toISOString().split('T')[0];
+  
+  const [acc, setAcc] = useState({ emi: 25000, diesel: 30000, other: 15000 }); 
+  const [payoutRate, setPayoutRate] = useState(10); const [partnerCount, setPartnerCount] = useState(5); 
+  const [pettyDesc, setPettyDesc] = useState(""); const [pettyAmt, setPettyAmt] = useState(""); const [pettyLedger, setPettyLedger] = useState([]);
+  
+  const [eodDate, setEodDate] = useState(todayStr);
+  const [eodBranch, setEodBranch] = useState(user.branch === 'All' ? CITIES[0] : user.branch);
+
+  const [selectedBranch, setSelectedBranch] = useState(user.branch === 'All' ? CITIES[0] : user.branch);
+  const [reconFrom, setReconFrom] = useState(firstDayStr);
+  const [reconTo, setReconTo] = useState(todayStr);
+
+  useEffect(() => { local.get("mps_petty_cash").then(d => { if(d) setPettyLedger(d); }); }, []);
+  const addPetty = async () => { if(!pettyDesc || !pettyAmt) return; const item = { desc: pettyDesc, amt: Number(pettyAmt), date: todayStr }; const newList = [item, ...pettyLedger]; setPettyLedger(newList); await local.set("mps_petty_cash", newList); setPettyDesc(""); setPettyAmt(""); };
+
+  const activeParcels = parcels.filter(p => p.status !== 'Deleted');
+  
+  const unsettledBranchParcels = activeParcels.filter(p => { 
+    const pDate = p.isoDate ? p.isoDate.split('T')[0] : "";
+    const inRange = (!reconFrom || pDate >= reconFrom) && (!reconTo || pDate <= reconTo);
+    const isRelated = p.from === selectedBranch || p.to === selectedBranch; 
+    const isSettled = p.settledBranches && p.settledBranches.includes(selectedBranch); 
+    return isRelated && !isSettled && inRange; 
+  });
+
+  const totalSystemRevenue = activeParcels.reduce((a,b)=>a+(Number(b.price)||0), 0); const totalPetty = pettyLedger.reduce((a,b)=>a+(Number(b.amt)||0), 0); const exp = Number(acc.emi) + Number(acc.diesel) + Number(acc.other); const net = totalSystemRevenue - exp - totalPetty; 
+  const cashCollected = unsettledBranchParcels.filter(p => (p.from === selectedBranch && p.payment === 'Paid') || (p.to === selectedBranch && p.payment === 'To Pay' && p.deliveryMode === 'Cash')).reduce((a,b) => a + (Number(b.price) || 0), 0);
+  const bookedCount = unsettledBranchParcels.filter(p => p.from === selectedBranch).reduce((total, p) => total + (Number(p.count) || 0), 0);
+  const deliveredCount = unsettledBranchParcels.filter(p => p.to === selectedBranch && p.status === 'Delivered').reduce((total, p) => total + (Number(p.count) || 0), 0);
+  const branchCommission = (bookedCount + deliveredCount) * Number(payoutRate); const netRemittance = cashCollected - branchCommission;
+
+  const markLedgerSettled = async () => { if(unsettledBranchParcels.length === 0) return showMsg("No transactions to settle in this date range!", "error"); if(!window.confirm(`Settle ledger for ${selectedBranch} from ${reconFrom} to ${reconTo}?`)) return; let updatedParcelsList = [...parcels]; for (let p of unsettledBranchParcels) { const updated = {...p, settledBranches: [...(p.settledBranches || []), selectedBranch]}; await db.updateParcel(updated.id, updated); updatedParcelsList = updatedParcelsList.map(x => x.id === updated.id ? updated : x); } setParcels(updatedParcelsList); showMsg(`Ledger Settled for ${selectedBranch}.`, "success"); };
+  const triggerEOD = () => { generateEOD_PDF(eodDate, eodBranch, activeParcels, pettyLedger); showMsg(`${eodBranch} Day-Book Report Generated!`); };
+
+  const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-900";
+
+  return (
+    <div className="space-y-6 md:space-y-8">
+      <div className={`${cardBg} p-6 rounded-3xl border border-indigo-500/30 flex flex-col md:flex-row items-center justify-between gap-4`}>
+        <div><h3 className="font-black text-lg text-indigo-500">💵 Daily EOD Settlement (Day-Book)</h3><p className="text-xs opacity-60">Generate complete collection & expense report for any date.</p></div>
+        <div className="flex gap-2 w-full md:w-auto overflow-x-auto">
+          {user.role === 'superadmin' ? (
+             <select value={eodBranch} onChange={e=>setEodBranch(e.target.value)} className={`p-3 rounded-xl border font-bold text-sm ${inputBg} outline-none`}>{CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
+          ) : ( <div className="p-3 bg-indigo-500/10 text-indigo-500 font-bold rounded-xl text-sm">{eodBranch}</div> )}
+          <input type="date" value={eodDate} onChange={e=>setEodDate(e.target.value)} className={`p-3 rounded-xl border font-bold text-sm ${inputBg}`} />
+          <button onClick={triggerEOD} className="bg-indigo-600 text-white font-bold py-3 px-6 rounded-xl shadow-md whitespace-nowrap">Print EOD Report</button>
+        </div>
+      </div>
+      <div className={`${cardBg} p-6 rounded-3xl border shadow-xl`}>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-500/20 pb-4 mb-4 gap-4">
+          <div><h3 className="font-black text-xl text-indigo-500">Franchise Reconciliation & Payout</h3><p className="text-xs opacity-60">Active Settlement View (Filtered)</p></div>
+          <div className="flex flex-wrap gap-2 items-center">
+            <span className="text-[10px] font-bold opacity-50 uppercase">Filter:</span>
+            {user.role === 'superadmin' ? ( <select value={selectedBranch} onChange={e=>setSelectedBranch(e.target.value)} className={`p-2 rounded-xl font-bold border ${inputBg} outline-none`}><option value="All">Select Branch</option>{CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select> ) : ( <div className="font-black text-sm bg-indigo-500/10 text-indigo-500 px-4 py-2 rounded-xl">{selectedBranch}</div> )}
+            <input type="date" title="From Date" value={reconFrom} onChange={e=>setReconFrom(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`} />
+            <span className="opacity-50">to</span>
+            <input type="date" title="To Date" value={reconTo} onChange={e=>setReconTo(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`} />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6"><div className={`p-4 rounded-2xl border border-dashed border-slate-500/30 text-center`}><p className="text-[10px] uppercase font-bold opacity-60 mb-1">Unsettled Box Count</p><p className="text-2xl font-black">{bookedCount} <span className="text-sm opacity-50 font-normal">Bk</span> + {deliveredCount} <span className="text-sm opacity-50 font-normal">Dl</span></p></div><div className={`p-4 rounded-2xl border border-dashed border-emerald-500/30 text-center bg-emerald-500/5`}><p className="text-[10px] uppercase font-bold text-emerald-600 mb-1">Branch Cash in Hand</p><p className="text-2xl font-black text-emerald-600">₹{cashCollected.toLocaleString()}</p><p className="text-[8px] opacity-60 mt-1">From Paid & Cash To-Pay</p></div><div className={`p-4 rounded-2xl border border-dashed border-amber-500/30 text-center bg-amber-500/5`}><p className="text-[10px] uppercase font-bold text-amber-600 mb-1">Commission Earned</p><div className="flex justify-center items-center gap-2"><p className="text-2xl font-black text-amber-600">₹{branchCommission.toLocaleString()}</p><input type="number" title="Rate" value={payoutRate} onChange={e=>setPayoutRate(Number(e.target.value))} className={`w-10 p-1 text-xs text-center border rounded ${inputBg}`} /></div><p className="text-[8px] opacity-60 mt-1">Total Parcels × Rate</p></div><div className={`p-4 rounded-2xl border text-center text-white shadow-inner ${netRemittance >= 0 ? 'bg-indigo-600 border-indigo-700' : 'bg-red-500 border-red-600'}`}><p className="text-[10px] uppercase font-bold opacity-80 mb-1">{netRemittance >= 0 ? 'Branch Remit to HQ' : 'HQ Pays Branch'}</p><p className="text-2xl font-black">₹{Math.abs(netRemittance).toLocaleString()}</p><p className="text-[8px] opacity-80 mt-1">Net Balance Transfer</p></div></div><div className="flex gap-4"><button className="flex-1 border border-indigo-500 text-indigo-500 font-bold py-3 rounded-xl hover:bg-indigo-500/10">📥 Download Statement PDF</button><button onClick={markLedgerSettled} className="flex-1 bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700 shadow-md">🔒 Mark Ledger as Settled</button></div></div>
+      <div className={`${cardBg} p-4 md:p-6 rounded-3xl border border-dashed border-indigo-500/40 grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6`}><div className="md:col-span-3"><h3 className="text-base md:text-lg font-black text-indigo-500">⚡ Master Global Sheet</h3></div><div className="bg-slate-950 p-4 rounded-xl text-white"><p className="text-[10px] md:text-xs text-slate-400 font-bold uppercase">📊 Gross Network Revenue</p><p className="text-2xl md:text-3xl font-black text-blue-400 mt-1">₹{totalSystemRevenue.toLocaleString()}</p></div><div className="bg-slate-950 p-4 rounded-xl text-white"><p className="text-[10px] md:text-xs text-slate-400 font-bold uppercase">📉 Total Fixed Expense</p><p className="text-2xl md:text-3xl font-black text-red-400 mt-1">₹{exp.toLocaleString()}</p></div><div className="bg-slate-950 p-4 rounded-xl text-white"><p className="text-[10px] md:text-xs text-slate-400 font-bold uppercase">☕ Total Petty Cash</p><p className="text-2xl md:text-3xl font-black text-orange-400 mt-1">₹{totalPetty.toLocaleString()}</p></div></div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8"><div className={`${cardBg} p-4 md:p-6 rounded-3xl border space-y-4`}><h3 className="font-bold text-sm md:text-md text-indigo-500">Fixed Operational Expenses</h3><div className="space-y-4"><div><label className="text-[10px] md:text-xs font-bold opacity-60 uppercase">Monthly Vehicle EMI (₹)</label><input type="number" value={acc.emi} onChange={e=>setAcc({...acc, emi:Number(e.target.value)})} className={`w-full p-2 md:p-3 mt-1 rounded-xl border outline-none font-bold [appearance:textfield] ${inputBg}`} /></div><div><label className="text-[10px] md:text-xs font-bold opacity-60 uppercase">Diesel & Highway Toll Log (₹)</label><input type="number" value={acc.diesel} onChange={e=>setAcc({...acc, diesel:Number(e.target.value)})} className={`w-full p-2 md:p-3 mt-1 rounded-xl border outline-none font-bold [appearance:textfield] ${inputBg}`} /></div><div><label className="text-[10px] md:text-xs font-bold opacity-60 uppercase">Misc Office Rent & Utilities (₹)</label><input type="number" value={acc.other} onChange={e=>setAcc({...acc, other:Number(e.target.value)})} className={`w-full p-2 md:p-3 mt-1 rounded-xl border outline-none font-bold [appearance:textfield] ${inputBg}`} /></div></div></div><div className="bg-slate-950 p-6 md:p-8 rounded-3xl text-white flex flex-col justify-center shadow-xl"><div className="flex justify-between items-center mb-2 md:mb-4"><h3 className="text-lg md:text-xl font-black tracking-wider text-indigo-400">PARTNERSHIP SETTLEMENT</h3><div className="flex items-center gap-2"><span className="text-xs opacity-60 uppercase">Partners:</span><input type="number" value={partnerCount} onChange={e=>setPartnerCount(Number(e.target.value))} className="w-16 bg-slate-800 text-white font-bold p-1 rounded text-center border border-slate-700 outline-none" /></div></div><p className="text-xs md:text-sm opacity-60">Global Base Profit Yield: ₹{net.toLocaleString()}</p><div className="mt-4 md:mt-6 bg-white/5 p-4 md:p-6 rounded-2xl text-center border border-white/10"><p className="text-[10px] md:text-xs opacity-50 uppercase tracking-widest mb-1">Per Partner Yield</p><p className="text-3xl md:text-4xl font-black text-emerald-400">₹{((net / (partnerCount||1)) || 0).toLocaleString()}</p></div></div></div>
+      <div className={`${cardBg} p-4 md:p-6 rounded-3xl border flex flex-col h-full`}><h3 className="font-black text-sm md:text-md text-indigo-500 border-b pb-4 border-slate-500/20 mb-4">Petty Cash Ledger (Daily/Branch)</h3><div className="flex gap-2 mb-4"><input value={pettyDesc} onChange={e=>setPettyDesc(e.target.value)} placeholder="Detail (Tea, Coolie)" className={`flex-1 p-2 border rounded-lg text-sm outline-none ${inputBg}`} /><input value={pettyAmt} onChange={e=>setPettyAmt(e.target.value)} placeholder="Amt ₹" type="number" className={`w-24 p-2 border rounded-lg text-sm outline-none font-bold ${inputBg}`} /><button onClick={addPetty} className="bg-orange-500 text-white px-4 rounded-lg font-bold text-sm">+</button></div><div className={`flex-1 overflow-y-auto max-h-40 border rounded-lg ${inputBg}`}>{pettyLedger.map((l, i) => ( <div key={i} className="flex justify-between p-3 border-b border-slate-500/20 text-xs md:text-sm"><span>{l.desc} <span className="text-[10px] opacity-50 ml-2">{l.date}</span></span><span className="font-bold text-orange-500">₹{l.amt}</span></div> ))}</div></div>
+    </div>
+  );
+}
+
+function DeletedParcelsLog({ parcels, isDark }) {
+   const deletedList = parcels.filter(p => p.status === 'Deleted');
+   const cardBg = isDark ? "bg-slate-800 border-slate-700 text-white" : "bg-white border-slate-200 text-slate-900";
+   const tblBg = isDark ? "bg-slate-900" : "bg-slate-50";
+
+   return (
+      <div className={`${cardBg} p-4 md:p-6 rounded-2xl border shadow-sm mt-6`}>
+         <div className="flex items-center gap-2 mb-4 border-b border-slate-500/20 pb-2">
+            <span className="text-xl">🗑️</span>
+            <h3 className="font-black text-red-500 uppercase">Deleted Parcels Audit Log</h3>
+            <span className="ml-auto bg-red-500 text-white text-[10px] px-2 py-1 rounded-full font-bold">{deletedList.length} Items</span>
+         </div>
+         <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left whitespace-nowrap text-sm">
+               <thead className={`${tblBg} opacity-70 text-[10px] uppercase font-bold`}>
+                  <tr><th className="p-3">LR No</th><th className="p-3">Route & Customer</th><th className="p-3">Deleted By (Staff)</th><th className="p-3">Deleted Time</th></tr>
+               </thead>
+               <tbody>
+                  {deletedList.length === 0 ? <tr><td colSpan="4" className="p-6 text-center opacity-50 font-bold">No deleted parcels found. Safe!</td></tr> : deletedList.map(p => (
+                     <tr key={p.id} className="border-t border-slate-500/10 hover:bg-red-500/5">
+                        <td className="p-3 font-black text-red-400 line-through">📦 {p.id}</td>
+                        <td className="p-3"><p className="font-bold">{p.from} ➔ {p.to}</p><p className="text-[10px] opacity-70">{p.sName} ➔ {p.rName}</p></td>
+                        <td className="p-3 font-black text-indigo-500">👤 {p.deletedBy || p.history?.slice(-1)[0]?.user || "System/Unknown"} <br/><span className="text-[9px] opacity-60">Reason: {p.deleteReason || "N/A"}</span></td>
+                        <td className="p-3 text-xs font-bold opacity-70">{p.history?.slice(-1)[0]?.time || p.date}</td>
+                     </tr>
+                  ))}
+               </tbody>
+            </table>
+         </div>
+      </div>
+   );
+}
+
+function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user, creditAuthList, setCreditAuthList, setGlobalView}) {
+  const [tab, setTab] = useState('parcels'); const [editF, setEditF] = useState(null); 
+  const [newUser, setNewUser] = useState(""); const [newPass, setNewPass] = useState(""); const [newRole, setNewRole] = useState("staff"); const [newBranch, setNewBranch] = useState(CITIES[0]);
+  const [newCPhone, setNewCPhone] = useState(""); const [newCName, setNewCName] = useState(""); const [paymentFilter, setPaymentFilter] = useState("All"); const [branchFilter, setBranchFilter] = useState(user.branch); const [searchQuery, setSearchQuery] = useState("");
+  const d = new Date(); const todayStr = d.toISOString().split('T')[0]; d.setDate(1); const firstDayStr = d.toISOString().split('T')[0];
+  const [fromDate, setFromDate] = useState(firstDayStr); const [toDate, setToDate] = useState(todayStr); const [invCustomer, setInvCustomer] = useState("");
+  
+  const [manualInvNo, setManualInvNo] = useState("");
+  const [manualInvDate, setManualInvDate] = useState(todayStr);
+
+  const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800"; const tblBg = isDark ? "bg-slate-800/40" : "bg-slate-50"; const isSuper = user.role === 'superadmin';
+
+  useEffect(() => { if (newRole === 'superadmin') setNewBranch('All'); else if (newRole === 'staff' && newBranch === 'All') setNewBranch(CITIES[0]); }, [newRole]);
+
+  const handleAddUser = async () => { if(!newUser || !newPass) return showMsg("Fill administrative requirements", "error"); const assignedRole = isSuper ? newRole : "staff"; const assignedBranch = assignedRole === 'superadmin' ? 'All' : newBranch; const u = {id: genUserId(), username: newUser, password: newPass, role: assignedRole, branch: assignedBranch}; await db.insertUser(u); setUsers([u, ...users]); setNewUser(""); setNewPass(""); showMsg(`${assignedRole.toUpperCase()} Created!`); };
+  
+  const addCreditAuth = async () => { 
+    if(newCPhone.length !== 10 || !newCName) return showMsg("Invalid Credit details", "error"); 
+    const newData = {phone: newCPhone, company: newCName.toUpperCase()}; 
+    const newList = [...creditAuthList, newData]; 
+    setCreditAuthList(newList); await db.insertCreditAuth(newData); setNewCPhone(""); setNewCName(""); showMsg("Credit Account Authorized!"); 
+  };
+  
+  const removeCredit = async (phone) => { 
+    const newList = creditAuthList.filter(c => c.phone !== phone); 
+    setCreditAuthList(newList); await db.deleteCreditAuth(phone); showMsg("Credit Auth Revoked", "error"); 
+  };
+
+  const deleteRecord = async (id) => { const reason = window.prompt(`Exact reason for deleting ${id}:`); if (!reason || reason.trim() === "") return showMsg("Deletion reason mandatory.", "error"); const target = parcels.find(p => p.id === id); const updatedHistory = [...target.history, {status: "Deleted", loc: user.branch, time: new Date().toLocaleString(), reason: reason}]; const updatedParcel = { ...target, status: 'Deleted', deletedBy: user.username, deleteReason: reason, history: updatedHistory }; await db.updateParcel(id, updatedParcel); setParcels(parcels.map(p => p.id === id ? updatedParcel : p)); showMsg("Consignment dropped.", "error"); };
+  const saveOverrides = async () => { await db.updateParcel(editF.id, editF); setParcels(parcels.map(p => p.id === editF.id ? editF : p)); setEditF(null); showMsg("Consignment updated"); };
+
+  const sortedTableData = [...parcels].reverse().filter(p => {
+    if (p.status === 'Deleted' && !isSuper) return false;
+    if (fromDate && toDate && p.isoDate) { const pDate = p.isoDate.split('T')[0]; if (pDate < fromDate || pDate > toDate) return false; }
+    if (paymentFilter !== "All" && p.payment !== paymentFilter) return false;
+    if (branchFilter !== "All") { if (p.bookedBranch !== branchFilter && p.deliveredBranch !== branchFilter && p.from !== branchFilter && p.to !== branchFilter) return false; }
+    if (searchQuery) { const matchTerm = searchQuery.toLowerCase(); return p.id.toLowerCase().includes(matchTerm) || p.sPhone.includes(matchTerm) || p.sName.toLowerCase().includes(matchTerm); }
+    return true;
+  });
+
+  const exportData = () => { if (sortedTableData.length === 0) return showMsg("No data to export", "error"); const headers = ["LR No", "Date", "Sender", "Receiver", "Origin", "Destination", "Payment Mode", "Amount", "Status", "Booked By"]; const rows = sortedTableData.map(p => [p.id, p.date, p.sName, p.rName, p.from, p.to, p.payment, p.price, p.status, p.bookedBy].join(',')); const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join('\n'); const encodedUri = encodeURI(csvContent); const link = document.createElement("a"); link.setAttribute("href", encodedUri); link.setAttribute("download", `MPS_Report.csv`); document.body.appendChild(link); link.click(); link.remove(); showMsg("Report Downloaded!"); };
+  
+  const triggerInvoice = () => { 
+    if(!invCustomer) return showMsg("Select a Customer Account!", "error"); 
+    if(!manualInvNo || manualInvNo.trim() === "") return showMsg("Please enter an Invoice Number!", "error");
+
+    const invoiceParcels = parcels.filter(p => {
+        if (p.status === 'Deleted') return false;
+        const isCreditLedger = p.payment === "Credit" || p.deliveryMode === "Credit" || (p.notes && p.notes.includes("Mode: Credit"));
+        const matchCustomer = p.creditCustomer && p.creditCustomer.trim().toLowerCase() === invCustomer.trim().toLowerCase();
+        const pDateStr = p.isoDate ? p.isoDate.split('T')[0] : "";
+        const matchDate = (!fromDate || pDateStr >= fromDate) && (!toDate || pDateStr <= toDate);
+        return isCreditLedger && matchCustomer && matchDate;
+    });
+
+    if(invoiceParcels.length === 0) return showMsg("No credit bills found for this period.", "error"); 
+    const sampleAuth = creditAuthList.find(c => c.company.toLowerCase() === invCustomer.toLowerCase());
+    const displayPhone = sampleAuth ? sampleAuth.phone : "Multiple Acc Numbers";
+    
+    generateInvoicePDF(invCustomer, displayPhone, fromDate, toDate, invoiceParcels, manualInvNo.toUpperCase(), manualInvDate); 
+    showMsg(`Invoice Generated for ${invCustomer}`); 
+  };
+
+  const settleCreditBill = async () => {
+    if(!invCustomer) return showMsg("Select a Customer Account!", "error");
+    if(!window.confirm(`Mark all bills for ${invCustomer} (${fromDate} to ${toDate}) as PAID?`)) return;
+    
+    const invoiceParcels = parcels.filter(p => {
+        if (p.status === 'Deleted' || p.creditSettled) return false;
+        const isCreditLedger = p.payment === "Credit" || p.deliveryMode === "Credit" || (p.notes && p.notes.includes("Mode: Credit"));
+        const matchCustomer = p.creditCustomer && p.creditCustomer.trim().toLowerCase() === invCustomer.trim().toLowerCase();
+        const pDateStr = p.isoDate ? p.isoDate.split('T')[0] : "";
+        const matchDate = (!fromDate || pDateStr >= fromDate) && (!toDate || pDateStr <= toDate);
+        return isCreditLedger && matchCustomer && matchDate;
+    });
+    
+    if(invoiceParcels.length === 0) return showMsg("No unpaid bills found in this date range.", "error");
+    let updatedParcelsList = [...parcels];
+    for (let p of invoiceParcels) { const updated = {...p, creditSettled: true}; await db.updateParcel(updated.id, updated); updatedParcelsList = updatedParcelsList.map(x => x.id === updated.id ? updated : x); }
+    setParcels(updatedParcelsList); showMsg(`Successfully settled ${invoiceParcels.length} parcels for ${invCustomer}!`);
+  };
+
+  const uniqueCompanies = [...new Set(creditAuthList.map(c => c.company))];
+
+  const unpaidCreditParcels = parcels.filter(p => p.status !== 'Deleted' && !p.creditSettled && (p.payment === 'Credit' || p.deliveryMode === 'Credit' || (p.notes && p.notes.includes("Mode: Credit"))));
+  const customerBalances = {};
+  let grandTotalCredit = 0;
+  unpaidCreditParcels.forEach(p => {
+     if(p.creditCustomer) {
+         const amt = Number(p.price) || 0;
+         if(!customerBalances[p.creditCustomer]) customerBalances[p.creditCustomer] = 0;
+         customerBalances[p.creditCustomer] += amt;
+         grandTotalCredit += amt;
+     }
+  });
+
+  return (
+    <div className="space-y-4 md:space-y-6">
+      <div className="flex flex-wrap gap-2 md:gap-4"><button onClick={()=>setTab('parcels')} className={`px-4 md:px-6 py-2 rounded-full text-[10px] md:text-sm font-bold ${tab==='parcels'?'bg-indigo-600 text-white':cardBg}`}>📋 Audits & Analytics</button><button onClick={()=>setTab('staff')} className={`px-4 md:px-6 py-2 rounded-full text-[10px] md:text-sm font-bold ${tab==='staff'?'bg-indigo-600 text-white':cardBg}`}>👥 System RBAC</button><button onClick={()=>setTab('credit')} className={`px-4 md:px-6 py-2 rounded-full text-[10px] md:text-sm font-bold ${tab==='credit'?'bg-amber-600 text-white':cardBg}`}>💳 Credit Control</button></div>
+      
+      {tab === 'staff' && ( <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6"><div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}><h3 className="font-black text-sm md:text-base">Assign Privilege Context</h3><input value={newUser} onChange={e=>setNewUser(e.target.value)} placeholder="Username Identifier" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} /><input value={newPass} onChange={e=>setNewPass(e.target.value)} type="password" placeholder="Account Password" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} />{isSuper && ( <select value={newRole} onChange={e=>setNewRole(e.target.value)} className={`w-full p-2 md:p-3 rounded-xl border font-bold outline-none text-sm ${inputBg}`}><option value="staff">Privilege Level: STAFF</option><option value="admin">Privilege Level: ADMIN</option><option value="superadmin">Privilege Level: SUPERADMIN</option></select> )}<select disabled={newRole === 'superadmin'} value={newBranch} onChange={e=>setNewBranch(e.target.value)} className={`w-full p-2 md:p-3 rounded-xl border font-bold outline-none text-sm ${inputBg} ${newRole==='superadmin'?'opacity-50 cursor-not-allowed':''}`}>{(isSuper && (newRole === 'admin' || newRole === 'superadmin')) && <option value="All">Global Access (All Branches)</option>}{CITIES.map(c => <option key={c} value={c}>Branch: {c}</option>)}</select><button onClick={handleAddUser} className="w-full bg-indigo-600 text-white font-bold py-2 md:py-3 rounded-xl text-sm md:text-base">Commit Assignment</button></div><div className={`${cardBg} p-4 md:p-6 rounded-2xl border lg:col-span-2 space-y-3`}><h3 className="font-black text-sm md:text-base">Identity Mapping Matrix</h3><div className="space-y-2 max-h-64 overflow-y-auto pr-2">{users.filter(u => isSuper ? true : u.role === 'staff').map(u => { const canManage = isSuper ? (u.username !== user.username) : true; return ( <div key={u.id} className="flex flex-col sm:flex-row justify-between sm:items-center p-3 border rounded-xl bg-black/5 gap-2"><div><p className="font-bold text-sm">{u.username} <span className="text-[10px] ml-1 opacity-50">({u.branch})</span></p><p className={`text-[10px] uppercase font-black ${u.role === 'superadmin' ? 'text-amber-500' : 'text-indigo-500'}`}>{u.role}</p></div>{canManage && ( <div className="flex items-center gap-2"><button onClick={async ()=>{ await db.deleteUser(u.id); setUsers(users.filter(x=>x.id!==u.id)); showMsg("Access revoked", "error"); }} className="text-red-500 text-[10px] font-bold border border-red-500/20 px-2 py-1 rounded bg-red-500/10">Revoke 🗑️</button></div> )}</div> ) })}</div></div></div> )}
+      
+      {tab === 'credit' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}><h3 className="font-black text-sm md:text-base text-amber-500">Add Authorized Credit Account</h3><p className="text-[10px] md:text-xs opacity-60">You can add multiple phone numbers under the same Company Name.</p><input value={newCPhone} onChange={e=>setNewCPhone(e.target.value)} placeholder="Customer 10-digit Mobile" maxLength="10" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} /><input value={newCName} onChange={e=>setNewCName(e.target.value)} placeholder="Company / Individual Name" className={`w-full p-2 md:p-3 rounded-xl border outline-none uppercase ${inputBg}`} /><button onClick={addCreditAuth} className="w-full bg-amber-600 text-white font-bold py-2 md:py-3 rounded-xl text-sm md:text-base">Authorize Account</button></div>
+          <div className={`${cardBg} p-4 md:p-6 rounded-2xl border h-96 overflow-y-auto`}><h3 className="font-black text-sm md:text-base mb-4">Approved Credit Ledger</h3>{creditAuthList.length === 0 ? <p className="text-sm opacity-50">No credit accounts authorized.</p> : <div className="space-y-2">{creditAuthList.map((c, i) => ( <div key={i} className="flex justify-between items-center p-3 border border-slate-500/20 rounded-xl bg-black/5"><div><p className="font-bold text-sm text-amber-500">{c.company}</p><p className="text-[10px] opacity-80 font-mono">📱 {c.phone}</p></div><button onClick={()=>removeCredit(c.phone)} className="text-red-500 text-[10px] font-bold bg-red-500/10 px-2 py-1 rounded border border-red-500/20">Revoke</button></div> ))}</div> }</div>
+          <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4 lg:col-span-2 border-indigo-500/30`}>
+             <h3 className="font-black text-sm md:text-base text-indigo-500">📑 Generate Monthly Credit Invoice</h3>
+             <div className="grid grid-cols-1 sm:grid-cols-6 gap-4">
+                <select value={invCustomer} onChange={e=>setInvCustomer(e.target.value)} className={`sm:col-span-2 p-3 rounded-xl border font-bold text-sm ${inputBg}`}>
+                  <option value="">Select Account...</option>
+                  {uniqueCompanies.map((c,i) => <option key={i} value={c}>{c}</option>)}
+                </select>
+                <div className="flex flex-col">
+                   <label className="text-[9px] uppercase font-bold opacity-60 ml-1 mb-1">Invoice No</label>
+                   <input type="text" value={manualInvNo} onChange={e => setManualInvNo(e.target.value)} placeholder="Ex: 0001" className={`p-3 rounded-xl border text-sm font-bold uppercase focus:ring-2 focus:ring-indigo-500 ${inputBg}`} />
+                </div>
+                <div className="flex flex-col">
+                   <label className="text-[9px] uppercase font-bold opacity-60 ml-1 mb-1">Invoice Date</label>
+                   <input type="date" value={manualInvDate} onChange={e => setManualInvDate(e.target.value)} className={`p-3 rounded-xl border text-sm font-bold focus:ring-2 focus:ring-indigo-500 ${inputBg}`} />
+                </div>
+                <div className="flex flex-col">
+                   <label className="text-[9px] uppercase font-bold opacity-60 ml-1 mb-1">From Bill Date</label>
+                   <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} className={`p-3 rounded-xl border text-sm font-bold ${inputBg}`} />
+                </div>
+                <div className="flex flex-col">
+                   <label className="text-[9px] uppercase font-bold opacity-60 ml-1 mb-1">To Bill Date</label>
+                   <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} className={`p-3 rounded-xl border text-sm font-bold ${inputBg}`} />
+                </div>
+             </div>
+             
+             <div className="flex gap-2 flex-col md:flex-row"><button onClick={triggerInvoice} className="flex-1 bg-indigo-600 text-white font-bold py-3 rounded-xl shadow-md">🖨️ Print Consolidated Invoice</button><button onClick={settleCreditBill} className="flex-1 bg-emerald-600 text-white font-bold py-3 rounded-xl shadow-md">✅ Mark Bill as PAID</button></div>
+          </div>
+          <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4 lg:col-span-2 border-red-500/30 bg-red-500/5`}>
+             <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-red-500/20 pb-4 gap-2">
+                 <div>
+                     <h3 className="font-black text-sm md:text-base text-red-500 uppercase">💰 Unpaid Credit Balances</h3>
+                     <p className="text-[10px] opacity-60 font-bold">Total unsettled outstanding amount by company.</p>
+                 </div>
+                 <span className="bg-red-500 text-white px-4 py-2 rounded-xl text-sm font-black shadow-md">Overall: ₹{grandTotalCredit.toLocaleString()}</span>
+             </div>
+             {Object.keys(customerBalances).length === 0 ? (
+                 <p className="text-sm opacity-50 font-bold text-center py-6">All credit bills are settled! No pending dues.</p>
+             ) : (
+                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    {Object.entries(customerBalances).sort((a,b)=>b[1]-a[1]).map(([customer, amt]) => (
+                        <div key={customer} className={`p-3 md:p-4 border border-red-500/20 rounded-xl flex flex-col justify-between ${isDark ? 'bg-slate-900' : 'bg-white'}`}>
+                            <span className="font-bold text-xs md:text-sm text-slate-500 truncate mb-1" title={customer}>{customer}</span>
+                            <span className="font-black text-red-500 text-lg md:text-xl">₹{amt.toLocaleString()}</span>
+                        </div>
+                    ))}
+                 </div>
+             )}
+          </div>
+        </div>
+      )}
+      
+      {tab === 'parcels' && (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4"><input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="🔍 Keyword" className={`p-2 md:p-3 rounded-xl border text-sm ${cardBg}`} /><select disabled={!isSuper} value={branchFilter} onChange={e=>setBranchFilter(e.target.value)} className={`p-2 md:p-3 rounded-xl border font-bold text-sm ${cardBg} ${!isSuper && 'opacity-50 cursor-not-allowed'}`}>{isSuper && <option value="All">All Branches</option>}{CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select><input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} className={`p-2 md:p-3 rounded-xl border font-bold text-sm ${cardBg}`} title="From Date" /><input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} className={`p-2 md:p-3 rounded-xl border font-bold text-sm ${cardBg}`} title="To Date" /><select value={paymentFilter} onChange={e=>setPaymentFilter(e.target.value)} className={`p-2 md:p-3 rounded-xl border font-bold text-sm ${cardBg}`}><option value="All">All Modes</option><option value="Paid">Paid</option><option value="To Pay">To Pay</option><option value="Credit">Credit</option></select></div>
+          <button onClick={exportData} className="w-full py-2 bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500 hover:text-white transition-colors text-[10px] md:text-xs font-bold rounded-lg border border-indigo-500/20">📥 Export CSV Record</button>
+          
+          <div className={`${cardBg} rounded-2xl border overflow-x-auto shadow-sm mt-6`}>
+            <table className="min-w-[800px] w-full text-left whitespace-nowrap">
+              <thead className={`${tblBg} text-[10px] md:text-xs font-bold uppercase opacity-80`}><tr><th className="p-3 md:p-4">LR Code</th><th className="p-3 md:p-4">Route Info</th><th className="p-3 md:p-4">Billing Parameters</th><th className="p-3 md:p-4">Tracking Node</th><th className="p-3 md:p-4">Operations Control</th></tr></thead>
+              <tbody>
+                {sortedTableData.length === 0 ? <tr><td colSpan="5" className="p-8 text-center opacity-50 font-bold">No records found.</td></tr> : sortedTableData.map(p => {
+                  const canEditDrop = p.status !== 'Delivered' && p.status !== 'RTO' && p.status !== 'Deleted';
+                  return (
+                  <tr key={p.id} className={`border-t hover:bg-black/5 ${p.status === 'Deleted' ? 'bg-red-500/5 border-red-500/10' : 'border-slate-500/10'}`}>
+                    <td className="p-3 md:p-4 font-black text-indigo-500 text-sm cursor-pointer hover:underline" onClick={() => setGlobalView(p)}>{p.id} <span className="block text-[10px] opacity-50 font-normal">{p.date}</span></td>
+                    <td className="p-3 md:p-4 text-xs md:text-sm font-bold">{p.from} ➔ {p.to}</td>
+                    <td className="p-3 md:p-4 text-xs md:text-sm">₹{p.price} <b className="text-[10px] md:text-xs opacity-60">({p.payment})</b></td>
+                    <td className="p-3 md:p-4"><span className="px-2 md:px-3 py-1 rounded-full text-[10px] md:text-xs font-bold uppercase" style={{backgroundColor: S_CLR[p.status]+'22', color: S_CLR[p.status]}}>{p.status}</span></td>
+                    <td className="p-3 md:p-4 space-x-1 md:space-x-2 flex items-center">
+                      {(canEditDrop || isSuper) && p.status !== 'Deleted' && ( <><button onClick={()=>setEditF(p)} className="text-amber-500 text-[10px] md:text-xs font-bold border border-amber-500/20 px-2 py-1 rounded bg-amber-500/5">✏️ Edit</button><button onClick={()=>deleteRecord(p.id)} className="text-red-500 text-[10px] md:text-xs font-bold border border-red-500/20 px-2 py-1 rounded bg-red-500/5">🗑️ Drop</button></> )}
+                      {!canEditDrop && !isSuper && p.status !== 'Deleted' && <span className="text-[10px] opacity-50 italic">🔒 Locked</span>}
+                      {p.status !== 'Deleted' && <div className="ml-2"><PrintGroup p={p} /></div>}
+                    </td>
+                  </tr>
+                )})}
+              </tbody>
+            </table>
+          </div>
+
+          {isSuper && <DeletedParcelsLog parcels={parcels} isDark={isDark} />}
+        </>
+      )}
+      {editF && ( <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[200]"><div className={`${cardBg} p-6 rounded-2xl max-w-lg w-full space-y-4 animate-bounce-in`}><h3 className="font-black text-lg">Modify Manifest Parameters: {editF.id}</h3><div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><input value={editF.sName} onChange={e=>setEditF({...editF, sName:e.target.value.toUpperCase()})} placeholder="Sender Identity" className={`p-2 border rounded text-sm uppercase ${inputBg}`} /><input value={editF.rName} onChange={e=>setEditF({...editF, rName:e.target.value.toUpperCase()})} placeholder="Receiver Identity" className={`p-2 border rounded text-sm uppercase ${inputBg}`} /><select value={editF.status} onChange={e=>setEditF({...editF, status:e.target.value})} className={`p-2 border rounded text-sm ${inputBg}`}>{STATUSES.filter(s=>s!=='Deleted').map(s=><option key={s}>{s}</option>)}</select><input type="number" value={editF.price} onChange={e=>setEditF({...editF, price:Number(e.target.value)})} placeholder="Price Override" className={`p-2 border rounded font-bold text-sm ${inputBg}`} /></div><div className="flex gap-2 mt-4"><button onClick={saveOverrides} className="bg-indigo-600 text-white font-bold py-2 px-4 rounded-xl flex-1 text-sm">Save Changes</button><button onClick={()=>setEditF(null)} className="bg-slate-500 text-white py-2 px-4 rounded-xl text-sm">Dismiss</button></div></div></div> )}
+    </div>
+  );
+}
+
+function Login({onLogin, theme}) {
+  const [u,setU]=useState(""); const [p,setP]=useState(""); const [err, setErr] = useState(""); const isDark = theme === 'dark';
+  const handleSub = async () => { const success = await onLogin(u,p); if(!success) { setP(""); setErr("Invalid Identity ID or Passcode!"); document.getElementById('pwdIn').focus(); } };
+  return (
+    <div className={`flex h-screen items-center justify-center p-4 ${isDark?'bg-slate-900':'bg-slate-100'}`}>
+      <div className={`${isDark?'bg-slate-800 border-slate-700 text-white':'bg-white border-slate-200 text-slate-800'} p-8 md:p-10 rounded-3xl shadow-2xl w-full max-w-sm text-center border relative`}><div className="flex justify-center mb-6"><MpsLogo /></div><h2 className="text-xl md:text-2xl font-black mb-2 tracking-widest">MPS TERMINAL</h2>{err ? <p className="text-red-500 font-bold mb-4 text-xs md:text-sm animate-fade-in">{err}</p> : <div className="h-4 mb-4"></div>}<input id="userIn" onKeyDown={e=> e.key === 'Enter' ? document.getElementById('pwdIn').focus() : null} value={u} onChange={e=>{setU(e.target.value); setErr("");}} placeholder="User Identity ID" className="w-full border p-3 rounded-xl mb-4 text-center font-bold text-slate-900 bg-slate-100 outline-none focus:ring-2 focus:ring-indigo-500 text-sm md:text-base" /><input id="pwdIn" onKeyDown={e=> e.key === 'Enter' && handleSub()} value={p} onChange={e=>{setP(e.target.value); setErr("");}} type="password" placeholder="Credential Security Code" className="w-full border p-3 rounded-xl mb-6 text-center font-bold text-slate-900 bg-slate-100 outline-none focus:ring-2 focus:ring-indigo-500 text-sm md:text-base" /><button onClick={handleSub} className="w-full bg-indigo-600 text-white font-black py-3 rounded-xl hover:bg-indigo-700 transition text-sm md:text-base">Access Server</button></div>
     </div>
   );
 }
