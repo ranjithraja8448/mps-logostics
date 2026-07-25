@@ -35,8 +35,7 @@ const generateLR = (fromCity, toCity, allParcels) => {
           if (parts.length === 3) { 
             const rawSeq = parts[2];
             const num = parseInt(rawSeq, 10); 
-            
-            // 🔥 SMART FILTER: Antha 6-digit dummy numbers-a mattum precise-a ignore pannum
+            // Smart Filter: Ignore large 6-digit dummy numbers, keep actual sequences
             if (!isNaN(num) && rawSeq.length !== 6 && num > max) {
                max = num; 
             }
@@ -78,7 +77,6 @@ function numberToWords(num) {
   return str.toUpperCase();
 }
 
-// 🔥 UNIVERSAL PRINT GROUP BUTTONS 🔥
 const PrintGroup = ({ p }) => (
   <div className="flex items-center gap-1 bg-slate-500/10 p-1 rounded-md border border-slate-500/20 w-max" onClick={(e)=>e.stopPropagation()}>
     <span className="text-[8px] font-black opacity-60 ml-1 uppercase">Print:</span>
@@ -88,7 +86,6 @@ const PrintGroup = ({ p }) => (
   </div>
 );
 
-// 🔥 PERFECTLY ALIGNED COMPACT RECEIPT 🔥
 function drawReceipt(doc, p, startY) {
   doc.setDrawColor(0);
   doc.setLineWidth(0.3);
@@ -317,16 +314,8 @@ function exportToCSV(title, parcelsList) {
 
 function openWhatsApp(phone, isSender, p) {
   const text = `📦 *MPS PARCEL SERVICE*\n\nவணக்கம் / Hello *${isSender ? p.sName : p.rName}*,\nYour parcel is booked successfully! 🎉\n\n🧾 *LR No:* ${p.id}\n📤 *From:* ${p.sName}\n📥 *To:* ${p.rName}\n📍 *Route:* ${p.from} ➔ ${p.to}\n📦 *Items:* ${p.count} ${p.type}\n💰 *Mode:* ${p.payment} (₹${p.price})\n\n📞 *Support:* 90033 77185\n\nThank you for choosing MPS! ✨`;
-  
   window.open(`https://api.whatsapp.com/send?phone=91${phone}&text=${encodeURIComponent(text)}`, '_blank');
 }
-
-const handleBoxTravel = (e, targets) => {
-  let nextId = null; const isSelect = e.target.tagName === 'SELECT'; let isStart = true, isEnd = true;
-  try { if(e.target.selectionStart !== null && e.target.selectionStart !== undefined) { isStart = e.target.selectionStart === 0; isEnd = e.target.selectionEnd === e.target.value?.length; } } catch(err){}
-  if (e.key === 'Enter') nextId = targets.enter; else if (!isSelect && e.key === 'ArrowUp') nextId = targets.up; else if (!isSelect && e.key === 'ArrowDown') nextId = targets.down; else if (!isSelect && e.key === 'ArrowLeft' && isStart) nextId = targets.left; else if (!isSelect && e.key === 'ArrowRight' && isEnd) nextId = targets.right;
-  if (nextId) { if (e.key === 'Enter' || (!isSelect && (e.key === 'ArrowUp' || e.key === 'ArrowDown'))) e.preventDefault(); const nextElem = document.getElementById(nextId); if (nextElem) { nextElem.focus(); if (nextElem.tagName === 'INPUT') nextElem.select(); } }
-};
 
 function SuggestInput({ id, label, value, onChange, onSelect, dataList, isPhone, theme, onKeyDown }) {
   const [open, setOpen] = useState(false); const [activeIndex, setActiveIndex] = useState(-1);
@@ -362,21 +351,11 @@ function CreditSearchDropdown({ value, onChange, uniqueCompanies, isDark }) {
 
   return (
     <div className="relative w-full">
-       <input
-         value={search}
-         onChange={e => { setSearch(e.target.value); setOpen(true); }}
-         onFocus={() => setOpen(true)}
-         onBlur={() => setTimeout(() => setOpen(false), 200)}
-         placeholder="🔍 Type Company Name to Search..."
-         className={`w-full p-3 rounded-xl border outline-none font-bold text-sm ${inputBg}`}
-       />
+       <input value={search} onChange={e => { setSearch(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 200)} placeholder="🔍 Type Company Name to Search..." className={`w-full p-3 rounded-xl border outline-none font-bold text-sm ${inputBg}`} />
        {open && matches.length > 0 && (
          <div className={`absolute bottom-full mb-1 left-0 right-0 max-h-48 overflow-y-auto z-[100] border shadow-2xl rounded-xl ${dropdownBg}`}>
             {matches.map((c, i) => (
-              <div key={i} className={`p-3 cursor-pointer border-b border-slate-500/10 text-sm font-bold transition-colors ${isDark ? 'hover:bg-indigo-600 hover:text-white' : 'hover:bg-indigo-100 hover:text-indigo-900'}`}
-                   onMouseDown={() => { onChange(c); setSearch(c); setOpen(false); }}>
-                {c}
-              </div>
+              <div key={i} className={`p-3 cursor-pointer border-b border-slate-500/10 text-sm font-bold transition-colors ${isDark ? 'hover:bg-indigo-600 hover:text-white' : 'hover:bg-indigo-100 hover:text-indigo-900'}`} onMouseDown={() => { onChange(c); setSearch(c); setOpen(false); }}>{c}</div>
             ))}
          </div>
        )}
@@ -386,36 +365,104 @@ function CreditSearchDropdown({ value, onChange, uniqueCompanies, isDark }) {
 
 const local={ async get(k){try{const r=window.localStorage.getItem(k);return r?JSON.parse(r):null;}catch{return null;}}, async set(k,v){try{window.localStorage.setItem(k,JSON.stringify(v));}catch{}}, async remove(k){try{window.localStorage.removeItem(k);}catch{}} };
 
-class DB{
-  constructor(url, key){ this.isLive = Boolean(url && key); if(this.isLive) { this.base = url.replace(/\/+$/,"")+"/rest/v1"; this.h = {"apikey":key,"Authorization":`Bearer ${key}`,"Content-Type":"application/json"}; } } 
-  async getParcels(){ if(this.isLive) { try { const r=await fetch(`${this.base}/parcels?select=*`,{headers:this.h}); if(r.ok) return await r.json(); } catch(e){} } return await local.get("mps_parcels")||[]; }
-  async insertParcel(p){ 
-    if(this.isLive) { 
-       const r = await fetch(`${this.base}/parcels`,{method:"POST",headers:this.h,body:JSON.stringify(p)}); 
-       if(!r.ok) { throw new Error("Duplicate ID or Network Issue"); }
-    } 
-    await local.set("mps_parcels", [p, ...(await local.get("mps_parcels")||[])]); 
+// 🔥 CACHE BUSTER ADDED TO DB CLASS 🔥
+class DB {
+  constructor(url, key) {
+     this.isLive = Boolean(url && key);
+     if (this.isLive) {
+         this.base = url.replace(/\/+$/, "") + "/rest/v1";
+         this.h = {
+             "apikey": key,
+             "Authorization": `Bearer ${key}`,
+             "Content-Type": "application/json"
+         };
+     }
   }
-  async updateParcel(id, data){ if(this.isLive) { try { await fetch(`${this.base}/parcels?id=eq.${encodeURIComponent(id)}`,{method:"PATCH",headers:this.h,body:JSON.stringify(data)}); } catch(e){} } await local.set("mps_parcels", (await local.get("mps_parcels")||[]).map(x => x.id === id ? {...x, ...data} : x)); }
-  async deleteParcel(id){ if(this.isLive) { try { await fetch(`${this.base}/parcels?id=eq.${encodeURIComponent(id)}`,{method:"DELETE",headers:this.h}); } catch(e){} } await local.set("mps_parcels", (await local.get("mps_parcels")||[]).filter(x => x.id !== id)); }
-  async getUsers(){ if(this.isLive) { try { const r=await fetch(`${this.base}/app_users?select=*`,{headers:this.h}); if(r.ok) return await r.json(); } catch(e){} } let usrs = await local.get("mps_users"); if (!usrs || usrs.length === 0) { usrs = [{id:'super-1', username:'superadmin', password:'123', role:'superadmin', branch:'All'}, {id:'admin-1', username:'admin', password:'123', role:'admin', branch: CITIES[0]}, {id:'staff-1', username:'staff', password:'123', role:'staff', branch: CITIES[0]}]; await local.set("mps_users", usrs); } else if (!usrs.find(u => u.username === 'superadmin')) { usrs.push({id:'super-1', username:'superadmin', password:'123', role:'superadmin', branch:'All'}); await local.set("mps_users", usrs); } return usrs; }
-  async insertUser(u){ if(this.isLive) { try { await fetch(`${this.base}/app_users`,{method:"POST",headers:this.h,body:JSON.stringify(u)}); } catch(e){} } await local.set("mps_users", [u, ...(await this.getUsers())]); }
-  async deleteUser(id){ if(this.isLive) { try { await fetch(`${this.base}/app_users?id=eq.${id}`,{method:"DELETE",headers:this.h}); } catch(e){} } await local.set("mps_users", (await this.getUsers()).filter(u => u.id !== id)); }
-  async updateUser(id, data){ if(this.isLive) { try { await fetch(`${this.base}/app_users?id=eq.${id}`,{method:"PATCH",headers:this.h,body:JSON.stringify(data)}); } catch(e){} } await local.set("mps_users", (await this.getUsers()).map(u => u.id === id ? {...u, ...data} : u)); }
-  
-  async getCreditAuth(){ if(this.isLive) { try { const r=await fetch(`${this.base}/credit_auth?select=*`,{headers:this.h}); if(r.ok) return await r.json(); } catch(e){} } return await local.get("mps_credit_auth")||[]; }
-  async insertCreditAuth(data){ if(this.isLive) { try { await fetch(`${this.base}/credit_auth`,{method:"POST",headers:this.h,body:JSON.stringify(data)}); } catch(e){} } await local.set("mps_credit_auth", [data, ...(await local.get("mps_credit_auth")||[])]); }
-  async deleteCreditAuth(phone){ if(this.isLive) { try { await fetch(`${this.base}/credit_auth?phone=eq.${phone}`,{method:"DELETE",headers:this.h}); } catch(e){} } await local.set("mps_credit_auth", (await local.get("mps_credit_auth")||[]).filter(c => c.phone !== phone)); }
+  async getParcels() {
+     if (this.isLive) {
+         try {
+             // Cache Buster Trick to force fetch latest data ALWAYS 
+             const r = await fetch(`${this.base}/parcels?select=*&_=${Date.now()}`, { headers: this.h, cache: "no-store" });
+             if (r.ok) return await r.json();
+         } catch (e) { console.error("Fetch parcels error:", e); }
+     }
+     return await local.get("mps_parcels") || [];
+  }
+  async insertParcel(p) {
+     if (this.isLive) {
+         const r = await fetch(`${this.base}/parcels`, { method: "POST", headers: this.h, body: JSON.stringify(p) });
+         if (!r.ok) {
+             const errData = await r.text();
+             throw new Error(`DB Insert Failed: ${r.status} - ${errData}`);
+         }
+     }
+     await local.set("mps_parcels", [p, ...(await local.get("mps_parcels") || [])]);
+  }
+  async updateParcel(id, data) {
+     if (this.isLive) {
+         try { await fetch(`${this.base}/parcels?id=eq.${encodeURIComponent(id)}`, { method: "PATCH", headers: this.h, body: JSON.stringify(data) }); } catch (e) {}
+     }
+     await local.set("mps_parcels", (await local.get("mps_parcels") || []).map(x => x.id === id ? { ...x, ...data } : x));
+  }
+  async deleteParcel(id) {
+     if (this.isLive) {
+         try { await fetch(`${this.base}/parcels?id=eq.${encodeURIComponent(id)}`, { method: "DELETE", headers: this.h }); } catch (e) {}
+     }
+     await local.set("mps_parcels", (await local.get("mps_parcels") || []).filter(x => x.id !== id));
+  }
+  async getUsers() {
+     if (this.isLive) {
+         try {
+             const r = await fetch(`${this.base}/app_users?select=*&_=${Date.now()}`, { headers: this.h, cache: "no-store" });
+             if (r.ok) return await r.json();
+         } catch (e) {}
+     }
+     let usrs = await local.get("mps_users");
+     if (!usrs || usrs.length === 0) {
+         usrs = [{ id: 'super-1', username: 'superadmin', password: '123', role: 'superadmin', branch: 'All' }, { id: 'admin-1', username: 'admin', password: '123', role: 'admin', branch: CITIES[0] }, { id: 'staff-1', username: 'staff', password: '123', role: 'staff', branch: CITIES[0] }];
+         await local.set("mps_users", usrs);
+     } else if (!usrs.find(u => u.username === 'superadmin')) {
+         usrs.push({ id: 'super-1', username: 'superadmin', password: '123', role: 'superadmin', branch: 'All' });
+         await local.set("mps_users", usrs);
+     }
+     return usrs;
+  }
+  async insertUser(u) {
+     if (this.isLive) { try { await fetch(`${this.base}/app_users`, { method: "POST", headers: this.h, body: JSON.stringify(u) }); } catch (e) {} }
+     await local.set("mps_users", [u, ...(await this.getUsers())]);
+  }
+  async deleteUser(id) {
+     if (this.isLive) { try { await fetch(`${this.base}/app_users?id=eq.${id}`, { method: "DELETE", headers: this.h }); } catch (e) {} }
+     await local.set("mps_users", (await this.getUsers()).filter(u => u.id !== id));
+  }
+  async updateUser(id, data) {
+     if (this.isLive) { try { await fetch(`${this.base}/app_users?id=eq.${id}`, { method: "PATCH", headers: this.h, body: JSON.stringify(data) }); } catch (e) {} }
+     await local.set("mps_users", (await this.getUsers()).map(u => u.id === id ? { ...u, ...data } : u));
+  }
+  async getCreditAuth() {
+     if (this.isLive) {
+         try {
+             const r = await fetch(`${this.base}/credit_auth?select=*&_=${Date.now()}`, { headers: this.h, cache: "no-store" });
+             if (r.ok) return await r.json();
+         } catch (e) {}
+     }
+     return await local.get("mps_credit_auth") || [];
+  }
+  async insertCreditAuth(data) {
+     if (this.isLive) { try { await fetch(`${this.base}/credit_auth`, { method: "POST", headers: this.h, body: JSON.stringify(data) }); } catch (e) {} }
+     await local.set("mps_credit_auth", [data, ...(await local.get("mps_credit_auth") || [])]);
+  }
+  async deleteCreditAuth(phone) {
+     if (this.isLive) { try { await fetch(`${this.base}/credit_auth?phone=eq.${phone}`, { method: "DELETE", headers: this.h }); } catch (e) {} }
+     await local.set("mps_credit_auth", (await local.get("mps_credit_auth") || []).filter(c => c.phone !== phone));
+  }
 }
 
 function EwayScannerModal({ onScan, onClose }) {
   useEffect(() => {
     const config = { fps: 10, qrbox: { width: 250, height: 250 }, videoConstraints: { facingMode: "environment" } };
     const scanner = new Html5QrcodeScanner("qr-reader", config, false);
-    scanner.render(
-      (decodedText) => { scanner.clear(); onScan(decodedText); },
-      (error) => { /* Ignore background errors */ }
-    );
+    scanner.render((decodedText) => { scanner.clear(); onScan(decodedText); }, (error) => {});
     return () => { scanner.clear().catch(e=>console.log(e)); };
   }, []);
 
@@ -441,6 +488,12 @@ export default function App() {
 
   const [db] = useState(new DB(ENV_URL, ENV_KEY));
   const showMsg = (msg, type='success') => { setToast({msg, type}); setTimeout(() => setToast(null), 3000); };
+
+  const syncData = async () => {
+     showMsg("Syncing Latest Data...", "info");
+     const ps = await db.getParcels(); setParcels(ps);
+     showMsg("Data Synced!");
+  };
 
   useEffect(() => { 
       async function init() { 
@@ -494,7 +547,13 @@ export default function App() {
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
         <header className={`${headerBg} shadow-sm h-auto min-h-[4rem] py-2 flex flex-col md:flex-row items-center justify-between px-4 md:px-8 z-10 shrink-0 gap-2`}>
           <div className="flex flex-wrap justify-center gap-2 text-[10px] md:text-sm font-bold bg-black/5 px-4 py-2 rounded-full"><span onClick={()=>{setPage('book'); setShortcutMode('Paid');}} className="cursor-pointer text-blue-500 hover:text-blue-600">F7: PAID</span><span className="opacity-25 hidden md:inline">|</span><span onClick={()=>{setPage('book'); setShortcutMode('To Pay');}} className="cursor-pointer text-red-500 hover:text-red-600">F8: TO PAY</span><span className="opacity-25 hidden md:inline">|</span><span onClick={()=>{setPage('book'); setShortcutMode('Credit');}} className="cursor-pointer text-amber-500 hover:text-amber-600">F9: CREDIT</span><span className="opacity-25 hidden md:inline">|</span><span onClick={()=>{setPage('book'); setShortcutMode('FOC');}} className="cursor-pointer text-emerald-500 hover:text-emerald-600">F10: FOC</span></div>
-          <div className="flex items-center gap-2 md:gap-4"><span className={`text-[10px] md:text-xs font-black uppercase px-2 py-1 md:px-3 rounded-full border ${user.role === 'superadmin' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20'}`}>{user.role} | {user.branch}</span><button onClick={toggleTheme} className="text-lg md:text-xl">{(isDark)?'☀️':'🌙'}</button></div>
+          
+          <div className="flex items-center gap-2 md:gap-4">
+             {/* 🔥 PUDHU SYNC BUTTON 🔥 */}
+             <button onClick={syncData} className="text-[10px] md:text-xs font-black bg-indigo-500/10 text-indigo-500 px-3 py-1.5 rounded-lg border border-indigo-500/20 hover:bg-indigo-500 hover:text-white transition-colors shadow-sm">🔄 SYNC</button>
+             <span className={`text-[10px] md:text-xs font-black uppercase px-2 py-1 md:px-3 rounded-full border ${user.role === 'superadmin' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20'}`}>{user.role} | {user.branch}</span>
+             <button onClick={toggleTheme} className="text-lg md:text-xl">{(isDark)?'☀️':'🌙'}</button>
+          </div>
         </header>
         <div className="flex-1 overflow-y-auto p-4 md:p-8 relative">
           <div className="max-w-6xl mx-auto animate-fade-in">
@@ -953,7 +1012,6 @@ function Pending({parcels, isDark, user, setGlobalView}) {
   );
 }
 
-// 🔥 UPGRADED BOOK COMPONENT (TERMINATOR RETRY LOGIC) 🔥
 function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, user, creditAuthList}) {
   const initCargo = { count: "1", type: "Box", size: "Standard", weight: "", rate: "" };
   const initF = {sName:"", sPhone:"", sGst:"", rName:"", rPhone:"", rGst:"", from: user.branch === 'All' ? "" : user.branch, to:"", payment:"Paid", creditCustomer:"", notes:""};
@@ -1039,109 +1097,7 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
     const dObj = new Date(); const isoDate = dObj.toISOString(); const locDateStr = dObj.toLocaleDateString('en-IN'); 
     
     try {
-        const freshParcels = await db.getParcels();
-        let finalLR = "";
-
-        if (isManualLR) {
-           finalLR = lrNo.trim().toUpperCase();
-           if(freshParcels.some(p => p.id.toUpperCase() === finalLR)) {
-              setIsSubmitting(false); return showMsg(`LR Number ${finalLR} already exists!`, "error");
-           }
-        } else {
-           finalLR = generateLR(f.from, f.to, freshParcels);
-        }
-
-        const totalQty = cargoList.reduce((sum, item) => sum + Number(item.count), 0);
-        const primaryType = cargoList.length > 1 ? "Mixed Items" : cargoList[0].type;
-        const totalWeight = cargoList.reduce((sum, item) => sum + Number(item.weight||0), 0);
-
-// 🔥  BOOK COMPONENT (INSTANT UI UPDATE FIX) 🔥
-function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, user, creditAuthList}) {
-  const initCargo = { count: "1", type: "Box", size: "Standard", weight: "", rate: "" };
-  const initF = {sName:"", sPhone:"", sGst:"", rName:"", rPhone:"", rGst:"", from: user.branch === 'All' ? "" : user.branch, to:"", payment:"Paid", creditCustomer:"", notes:""};
-  
-  const [f, setF] = useState(initF); 
-  const [cargoList, setCargoList] = useState([{...initCargo}]);
-  
-  const [done, setDone] = useState(null); const [eway, setEway] = useState(""); const [contacts, setContacts] = useState([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showScanner, setShowScanner] = useState(false);
-  const [lrNo, setLrNo] = useState("");
-  const [isManualLR, setIsManualLR] = useState(false);
-
-  useEffect(() => { if(shortcutMode) setF(prev => ({...prev, payment: shortcutMode})); }, [shortcutMode]);
-  
-  useEffect(() => { async function load() { const cMap = {}; parcels.forEach(p => { if (p.sPhone && !cMap[p.sPhone]) cMap[p.sPhone] = { name: p.sName, gst: p.sGst || "" }; if (p.rPhone && !cMap[p.rPhone]) cMap[p.rPhone] = { name: p.rName, gst: p.rGst || "" }; }); const localC = await local.get("mps_contacts") || {}; Object.assign(cMap, localC); setContacts(Object.entries(cMap).map(([phone, data]) => ({ phone, ...data }))); } load(); }, [parcels]);
-
-  useEffect(() => {
-     if(!isManualLR) {
-        if(f.from && f.to) { setLrNo(generateLR(f.from, f.to, parcels)); } 
-        else { setLrNo(""); }
-     }
-  }, [f.from, f.to, isManualLR, parcels]); 
-
-  const handleEwayChange = (e) => { 
-    const val = e.target.value.replace(/\D/g, '').slice(0, 12); 
-    setEway(val); 
-    if (val.length === 12) { 
-        showMsg("Validating E-Way Bill Parameters...", "info"); 
-        setTimeout(() => { 
-            setF(p => ({...p, sName: "SRI MURUGAN TEXTILES", sPhone: "9876543210", sGst: "33AABCU1234F1Z1", from: user.branch === 'All' ? "Salem" : user.branch, rName: "CITY FASHIONS", rPhone: "9988776655", rGst: "29AAAAA0000A1Z5", to: "Bangalore", payment: "To Pay" })); 
-            setCargoList([{count: "15", type: "Bale", size: "Standard", weight: "", rate: "120"}]);
-            showMsg("E-Way Bill Content Processed & Populated!", "success"); 
-        }, 750); 
-    } 
-  };
-
-  const handleQRScan = (text) => {
-    setShowScanner(false);
-    const ewayMatch = text.match(/\b\d{12}\b/); 
-    if(ewayMatch) {
-        const val = ewayMatch[0];
-        setEway(val);
-        showMsg("QR Scanned! E-Way number extracted: " + val, "success");
-        setTimeout(() => { 
-            setF(p => ({...p, sName: "SCANNED CLIENT", sPhone: "9999999999", rName: "TARGET CLIENT", rPhone: "8888888888", payment: "To Pay" })); 
-            setCargoList([{count: "10", type: "Box", size: "Standard", weight: "", rate: "150"}]);
-            showMsg("E-Way Bill Content Auto-Filled!", "info"); 
-        }, 800);
-    } else { showMsg("Invalid QR Code! No E-Way Bill Number found.", "error"); }
-  };
-
-  const smartFocus = (d, isSender) => { setTimeout(() => { if (isSender) { if (!d.name) document.getElementById('sName')?.focus(); else if (!d.gst) document.getElementById('sGst')?.focus(); else if (user.branch !== 'All') document.getElementById('rPhone')?.focus(); else document.getElementById('sFrom')?.focus(); } else { if (!d.name) document.getElementById('rName')?.focus(); else if (!d.gst) document.getElementById('rGst')?.focus(); else document.getElementById('rTo')?.focus(); } }, 50); };
-  
-  const handlePhoneChange = async (isSender, value) => { const fieldPrefix = isSender ? 's' : 'r'; setF(prev => ({ ...prev, [`${fieldPrefix}Phone`]: value })); if (value.length === 10) { const found = contacts.find(c => c.phone === value); if (found) { setF(prev => ({...prev, [`${fieldPrefix}Name`]: (found.name || "").toUpperCase(), [`${fieldPrefix}Gst`]: found.gst || "" })); showMsg("Customer details loaded automatically!", "success"); smartFocus(found, isSender); } } };
-  const handleContactSelect = (isSender, d) => { const px = isSender ? 's' : 'r'; setF(p => ({ ...p, [`${px}Phone`]: d.phone, [`${px}Name`]: (d.name||'').toUpperCase(), [`${px}Gst`]: d.gst||'' })); smartFocus(d, isSender); };
-  
-  const updateCargo = (index, field, value) => {
-      const newList = [...cargoList];
-      newList[index][field] = value;
-      setCargoList(newList);
-  };
-  
-  const addCargoRow = () => { setCargoList([...cargoList, {...initCargo}]); };
-  const removeCargoRow = (index) => { const newList = [...cargoList]; newList.splice(index, 1); setCargoList(newList); };
-
-  const ep = cargoList.reduce((total, item) => total + calcPrice(f.from, f.to, item.rate, item.count, item.type, f.payment, item.size), 0);
-  
-  const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800";
-  const uniqueCompanies = [...new Set(creditAuthList.map(c => c.company))];
-
-  const submit = async () => {
-    if(isSubmitting) return; 
-    if(isManualLR && (!lrNo || lrNo.trim() === "")) return showMsg("LR Number is mandatory in Manual Mode!", "error");
-    if(!f.sName || !f.sPhone || !f.from || !f.rName || !f.rPhone || !f.to) return showMsg("Please fill all profile fields marked with (*)", "error");
-    
-    const invalidCargo = cargoList.find(c => !c.count || !c.rate || !c.type);
-    if(invalidCargo) return showMsg("Please enter Quantity, Type, and Rate for all cargo items!", "error");
-
-    if(f.payment === "Credit" && !f.creditCustomer) return showMsg("Search and Select a Credit Account!", "error");
-    
-    setIsSubmitting(true); 
-    const dObj = new Date(); const isoDate = dObj.toISOString(); const locDateStr = dObj.toLocaleDateString('en-IN'); 
-    
-    try {
-        const freshParcels = await db.getParcels();
+        let freshParcels = await db.getParcels();
         let finalLR = "";
 
         if (isManualLR) {
@@ -1171,193 +1127,21 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
             } catch(insertError) {
                 if(!isManualLR) {
                     retryLimit--;
-                    console.log(`409 Conflict hit for ${currentLR}. Bypassing database limit & Auto-incrementing...`);
+                    console.log(`409 Conflict hit for ${currentLR}. Auto-incrementing...`);
                     const parts = currentLR.split('/');
                     if(parts.length === 3) {
                         const nextNum = parseInt(parts[2], 10) + 1;
                         currentLR = `${parts[0]}/${parts[1]}/${String(nextNum).padStart(4, '0')}`;
-                    } else {
-                        throw insertError;
-                    }
-                } else {
-                    throw insertError;
-                }
+                    } else { throw insertError; }
+                } else { throw insertError; }
             }
         }
 
-        if(!success) {
-            throw new Error("Duplicate ID or Network Issue");
-        }
+        if(!success) { throw new Error("Duplicate ID or Network Issue"); }
 
         const saved = await local.get("mps_contacts") || {}; saved[f.sPhone] = { name: p.sName, gst: f.sGst }; saved[f.rPhone] = { name: p.rName, gst: f.rGst }; await local.set("mps_contacts", saved);
         
-        // 🔥 FIX: Database la irunthu udane list ah update pannama, namma code laye instantly add pandrom! 🔥
-        setParcels([p, ...parcels]); 
-        
-        setDone(p); showMsg("Booking Successful!"); 
-    } catch(err) { 
-        console.error(err);
-        showMsg("Network or Database Error! Please try again.", "error"); 
-    }
-    setIsSubmitting(false);
-  };
-
-  if(done) return ( 
-     <div className={`${cardBg} p-6 md:p-10 rounded-3xl max-w-xl mx-auto text-center border-t-4 border-emerald-500 animate-bounce-in`}>
-        <h2 className="text-xl md:text-2xl font-black mb-4">Parcel Registered Successfully</h2>
-        <div className="bg-indigo-600/10 text-indigo-500 text-xl md:text-2xl font-mono font-bold p-3 rounded-xl mb-6">{done.id}</div>
-        
-        <p className="text-[10px] font-bold uppercase opacity-50 mb-2">Print Receipt Layouts:</p>
-        <div className="flex justify-center gap-2 mb-4">
-            <button onClick={()=>generatePDF(done, 1)} className="flex-1 bg-slate-800 text-white font-bold py-3 rounded-xl text-sm shadow-md">🖨️ Full Page</button>
-            <button onClick={()=>generatePDF(done, 2)} className="flex-1 bg-indigo-500 text-white font-bold py-3 rounded-xl text-sm shadow-md">🖨️ 2 Per Page</button>
-            <button onClick={()=>generatePDF(done, 3)} className="flex-1 bg-emerald-500 text-white font-bold py-3 rounded-xl text-sm shadow-md">🖨️ 3 Per Page</button>
-        </div>
-
-        <button onClick={()=>{setDone(null); setF(initF); setCargoList([{...initCargo}]); setEway(""); setLrNo(""); setIsManualLR(false);}} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl mb-3 mt-4 border border-indigo-500">New Registration</button>
-        <button onClick={() => openWhatsApp(done.sPhone, true, done)} className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl border border-emerald-500">📱 Send SMS / WhatsApp</button>
-     </div> 
-  );
-
-  return (
-    <div className="space-y-4 md:space-y-6">
-// 🔥 UPGRADED BOOK COMPONENT (INSTANT UI UPDATE FIX) 🔥
-function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, user, creditAuthList}) {
-  const initCargo = { count: "1", type: "Box", size: "Standard", weight: "", rate: "" };
-  const initF = {sName:"", sPhone:"", sGst:"", rName:"", rPhone:"", rGst:"", from: user.branch === 'All' ? "" : user.branch, to:"", payment:"Paid", creditCustomer:"", notes:""};
-  
-  const [f, setF] = useState(initF); 
-  const [cargoList, setCargoList] = useState([{...initCargo}]);
-  
-  const [done, setDone] = useState(null); const [eway, setEway] = useState(""); const [contacts, setContacts] = useState([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showScanner, setShowScanner] = useState(false);
-  const [lrNo, setLrNo] = useState("");
-  const [isManualLR, setIsManualLR] = useState(false);
-
-  useEffect(() => { if(shortcutMode) setF(prev => ({...prev, payment: shortcutMode})); }, [shortcutMode]);
-  
-  useEffect(() => { async function load() { const cMap = {}; parcels.forEach(p => { if (p.sPhone && !cMap[p.sPhone]) cMap[p.sPhone] = { name: p.sName, gst: p.sGst || "" }; if (p.rPhone && !cMap[p.rPhone]) cMap[p.rPhone] = { name: p.rName, gst: p.rGst || "" }; }); const localC = await local.get("mps_contacts") || {}; Object.assign(cMap, localC); setContacts(Object.entries(cMap).map(([phone, data]) => ({ phone, ...data }))); } load(); }, [parcels]);
-
-  useEffect(() => {
-     if(!isManualLR) {
-        if(f.from && f.to) { setLrNo(generateLR(f.from, f.to, parcels)); } 
-        else { setLrNo(""); }
-     }
-  }, [f.from, f.to, isManualLR, parcels]); 
-
-  const handleEwayChange = (e) => { 
-    const val = e.target.value.replace(/\D/g, '').slice(0, 12); 
-    setEway(val); 
-    if (val.length === 12) { 
-        showMsg("Validating E-Way Bill Parameters...", "info"); 
-        setTimeout(() => { 
-            setF(p => ({...p, sName: "SRI MURUGAN TEXTILES", sPhone: "9876543210", sGst: "33AABCU1234F1Z1", from: user.branch === 'All' ? "Salem" : user.branch, rName: "CITY FASHIONS", rPhone: "9988776655", rGst: "29AAAAA0000A1Z5", to: "Bangalore", payment: "To Pay" })); 
-            setCargoList([{count: "15", type: "Bale", size: "Standard", weight: "", rate: "120"}]);
-            showMsg("E-Way Bill Content Processed & Populated!", "success"); 
-        }, 750); 
-    } 
-  };
-
-  const handleQRScan = (text) => {
-    setShowScanner(false);
-    const ewayMatch = text.match(/\b\d{12}\b/); 
-    if(ewayMatch) {
-        const val = ewayMatch[0];
-        setEway(val);
-        showMsg("QR Scanned! E-Way number extracted: " + val, "success");
-        setTimeout(() => { 
-            setF(p => ({...p, sName: "SCANNED CLIENT", sPhone: "9999999999", rName: "TARGET CLIENT", rPhone: "8888888888", payment: "To Pay" })); 
-            setCargoList([{count: "10", type: "Box", size: "Standard", weight: "", rate: "150"}]);
-            showMsg("E-Way Bill Content Auto-Filled!", "info"); 
-        }, 800);
-    } else { showMsg("Invalid QR Code! No E-Way Bill Number found.", "error"); }
-  };
-
-  const smartFocus = (d, isSender) => { setTimeout(() => { if (isSender) { if (!d.name) document.getElementById('sName')?.focus(); else if (!d.gst) document.getElementById('sGst')?.focus(); else if (user.branch !== 'All') document.getElementById('rPhone')?.focus(); else document.getElementById('sFrom')?.focus(); } else { if (!d.name) document.getElementById('rName')?.focus(); else if (!d.gst) document.getElementById('rGst')?.focus(); else document.getElementById('rTo')?.focus(); } }, 50); };
-  
-  const handlePhoneChange = async (isSender, value) => { const fieldPrefix = isSender ? 's' : 'r'; setF(prev => ({ ...prev, [`${fieldPrefix}Phone`]: value })); if (value.length === 10) { const found = contacts.find(c => c.phone === value); if (found) { setF(prev => ({...prev, [`${fieldPrefix}Name`]: (found.name || "").toUpperCase(), [`${fieldPrefix}Gst`]: found.gst || "" })); showMsg("Customer details loaded automatically!", "success"); smartFocus(found, isSender); } } };
-  const handleContactSelect = (isSender, d) => { const px = isSender ? 's' : 'r'; setF(p => ({ ...p, [`${px}Phone`]: d.phone, [`${px}Name`]: (d.name||'').toUpperCase(), [`${px}Gst`]: d.gst||'' })); smartFocus(d, isSender); };
-  
-  const updateCargo = (index, field, value) => {
-      const newList = [...cargoList];
-      newList[index][field] = value;
-      setCargoList(newList);
-  };
-  
-  const addCargoRow = () => { setCargoList([...cargoList, {...initCargo}]); };
-  const removeCargoRow = (index) => { const newList = [...cargoList]; newList.splice(index, 1); setCargoList(newList); };
-
-  const ep = cargoList.reduce((total, item) => total + calcPrice(f.from, f.to, item.rate, item.count, item.type, f.payment, item.size), 0);
-  
-  const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800";
-  const uniqueCompanies = [...new Set(creditAuthList.map(c => c.company))];
-
-  const submit = async () => {
-    if(isSubmitting) return; 
-    if(isManualLR && (!lrNo || lrNo.trim() === "")) return showMsg("LR Number is mandatory in Manual Mode!", "error");
-    if(!f.sName || !f.sPhone || !f.from || !f.rName || !f.rPhone || !f.to) return showMsg("Please fill all profile fields marked with (*)", "error");
-    
-    const invalidCargo = cargoList.find(c => !c.count || !c.rate || !c.type);
-    if(invalidCargo) return showMsg("Please enter Quantity, Type, and Rate for all cargo items!", "error");
-
-    if(f.payment === "Credit" && !f.creditCustomer) return showMsg("Search and Select a Credit Account!", "error");
-    
-    setIsSubmitting(true); 
-    const dObj = new Date(); const isoDate = dObj.toISOString(); const locDateStr = dObj.toLocaleDateString('en-IN'); 
-    
-    try {
-        const freshParcels = await db.getParcels();
-        let finalLR = "";
-
-        if (isManualLR) {
-           finalLR = lrNo.trim().toUpperCase();
-           if(freshParcels.some(p => p.id.toUpperCase() === finalLR)) {
-              setIsSubmitting(false); return showMsg(`LR Number ${finalLR} already exists!`, "error");
-           }
-        } else {
-           finalLR = generateLR(f.from, f.to, freshParcels);
-        }
-
-        const totalQty = cargoList.reduce((sum, item) => sum + Number(item.count), 0);
-        const primaryType = cargoList.length > 1 ? "Mixed Items" : cargoList[0].type;
-        const totalWeight = cargoList.reduce((sum, item) => sum + Number(item.weight||0), 0);
-
-        const p = {...f, count: totalQty.toString(), type: primaryType, actualWeight: totalWeight.toString(), cargoList: cargoList, sName: f.sName.toUpperCase(), rName: f.rName.toUpperCase(), notes: f.payment === 'Credit' ? `[A/c: ${f.creditCustomer}] ${f.notes}` : f.notes, creditSettled: false, id: finalLR, date: locDateStr, isoDate: isoDate, status: "Booked", price: ep, bookedBy: user.username, bookedBranch: user.branch, settledBranches: [], history: [{status: "Booked", loc: f.from, time: dObj.toLocaleString()}]};
-        
-        let success = false;
-        let retryLimit = 5;
-        let currentLR = finalLR;
-
-        while (!success && retryLimit > 0) {
-            try {
-                p.id = currentLR;
-                await db.insertParcel(p); 
-                success = true;
-            } catch(insertError) {
-                if(!isManualLR) {
-                    retryLimit--;
-                    console.log(`409 Conflict hit for ${currentLR}. Bypassing database limit & Auto-incrementing...`);
-                    const parts = currentLR.split('/');
-                    if(parts.length === 3) {
-                        const nextNum = parseInt(parts[2], 10) + 1;
-                        currentLR = `${parts[0]}/${parts[1]}/${String(nextNum).padStart(4, '0')}`;
-                    } else {
-                        throw insertError;
-                    }
-                } else {
-                    throw insertError;
-                }
-            }
-        }
-
-        if(!success) {
-            throw new Error("Duplicate ID or Network Issue");
-        }
-
-        const saved = await local.get("mps_contacts") || {}; saved[f.sPhone] = { name: p.sName, gst: f.sGst }; saved[f.rPhone] = { name: p.rName, gst: f.rGst }; await local.set("mps_contacts", saved);
-        
-        // 🔥 FIX: Database la irunthu udane list ah update pannama, namma code laye instantly add pandrom! 🔥
+        // INSTANT UI UPDATE WITHOUT WAITING FOR DB CACHE
         setParcels([p, ...parcels]); 
         
         setDone(p); showMsg("Booking Successful!"); 
@@ -1398,7 +1182,7 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
          <div className="flex-1">
             <label className="text-[10px] uppercase font-bold opacity-60 ml-1 mb-1 block">⚡ Quick Fill (E-Way Bill)</label>
             <div className="flex gap-2">
-               <input id="eway" onKeyDown={e=>handleBoxTravel(e,{enter:'sPhone', down:'sPhone'})} value={eway} onChange={handleEwayChange} placeholder="Enter 12-Digit E-Way..." className={`w-full px-4 py-3 rounded-xl outline-none font-mono font-bold tracking-widest border focus:ring-2 focus:ring-indigo-500 ${inputBg}`} />
+               <input id="eway" value={eway} onChange={handleEwayChange} placeholder="Enter 12-Digit E-Way..." className={`w-full px-4 py-3 rounded-xl outline-none font-mono font-bold tracking-widest border focus:ring-2 focus:ring-indigo-500 ${inputBg}`} />
                <button onClick={() => setShowScanner(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl shadow-md whitespace-nowrap flex items-center justify-center gap-2">📷 Scan</button>
             </div>
          </div>
@@ -1409,16 +1193,16 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 relative z-30">
         <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}>
             <h3 className="font-bold text-indigo-500">Sender Profile</h3>
-            <SuggestInput id="sPhone" onKeyDown={e=>handleBoxTravel(e,{enter:'sName', down:'sName', right:'rPhone', up:'eway'})} label="Mobile Number *" value={f.sPhone} onChange={v=>handlePhoneChange(true, v)} onSelect={d=>handleContactSelect(true, d)} dataList={contacts} isPhone={true} theme={theme} />
-            <SuggestInput id="sName" onKeyDown={e=>handleBoxTravel(e,{enter:'sGst', down:'sGst', right:'rName', up:'sPhone'})} label="Full Name *" value={f.sName} onChange={v=>setF({...f, sName:v.toUpperCase()})} onSelect={d=>handleContactSelect(true, d)} dataList={contacts} isPhone={false} theme={theme} />
-            <input id="sGst" onKeyDown={e=>handleBoxTravel(e,{enter: user.branch === 'All' ? 'sFrom' : 'rPhone', down: user.branch === 'All' ? 'sFrom' : 'rPhone', right:'rGst', up:'sName'})} value={f.sGst} onChange={e=>setF({...f, sGst:e.target.value.toUpperCase()})} placeholder="GST Number" className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 uppercase ${inputBg}`} />
-            <select id="sFrom" disabled={user.branch !== 'All'} onKeyDown={e=>handleBoxTravel(e,{enter:'rPhone', right:'rTo', up:'sGst'})} value={f.from} onChange={e=>setF({...f, from:e.target.value})} className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 ${inputBg} ${user.branch !== 'All' ? 'opacity-50 cursor-not-allowed' : ''}`}><option value="">Select Origin *</option>{CITIES.map(c=><option key={c}>{c}</option>)}</select>
+            <SuggestInput id="sPhone" label="Mobile Number *" value={f.sPhone} onChange={v=>handlePhoneChange(true, v)} onSelect={d=>handleContactSelect(true, d)} dataList={contacts} isPhone={true} theme={theme} />
+            <SuggestInput id="sName" label="Full Name *" value={f.sName} onChange={v=>setF({...f, sName:v.toUpperCase()})} onSelect={d=>handleContactSelect(true, d)} dataList={contacts} isPhone={false} theme={theme} />
+            <input id="sGst" value={f.sGst} onChange={e=>setF({...f, sGst:e.target.value.toUpperCase()})} placeholder="GST Number" className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 uppercase ${inputBg}`} />
+            <select id="sFrom" disabled={user.branch !== 'All'} value={f.from} onChange={e=>setF({...f, from:e.target.value})} className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 ${inputBg} ${user.branch !== 'All' ? 'opacity-50 cursor-not-allowed' : ''}`}><option value="">Select Origin *</option>{CITIES.map(c=><option key={c}>{c}</option>)}</select>
         </div>
         <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}>
             <h3 className="font-bold text-emerald-500">Receiver Profile</h3>
-            <SuggestInput id="rPhone" onKeyDown={e=>handleBoxTravel(e,{enter:'rName', down:'rName', left:'sPhone', up:'eway'})} label="Mobile Number *" value={f.rPhone} onChange={v=>handlePhoneChange(false, v)} onSelect={d=>handleContactSelect(false, d)} dataList={contacts} isPhone={true} theme={theme} />
-            <SuggestInput id="rName" onKeyDown={e=>handleBoxTravel(e,{enter:'rGst', down:'rGst', left:'sName', up:'rPhone'})} label="Full Name *" value={f.rName} onChange={v=>setF({...f, rName:v.toUpperCase()})} onSelect={d=>handleContactSelect(false, d)} dataList={contacts} isPhone={false} theme={theme} />
-            <input id="rGst" onKeyDown={e=>handleBoxTravel(e,{enter:'rTo', down:'rTo', left:'sGst', up:'rName'})} value={f.rGst} onChange={e=>setF({...f, rGst:e.target.value.toUpperCase()})} placeholder="GST Number" className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 uppercase ${inputBg}`} />
+            <SuggestInput id="rPhone" label="Mobile Number *" value={f.rPhone} onChange={v=>handlePhoneChange(false, v)} onSelect={d=>handleContactSelect(false, d)} dataList={contacts} isPhone={true} theme={theme} />
+            <SuggestInput id="rName" label="Full Name *" value={f.rName} onChange={v=>setF({...f, rName:v.toUpperCase()})} onSelect={d=>handleContactSelect(false, d)} dataList={contacts} isPhone={false} theme={theme} />
+            <input id="rGst" value={f.rGst} onChange={e=>setF({...f, rGst:e.target.value.toUpperCase()})} placeholder="GST Number" className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 uppercase ${inputBg}`} />
             <select id="rTo" value={f.to} onChange={e=>setF({...f, to:e.target.value})} className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 ${inputBg}`}><option value="">Select Destination *</option>{CITIES.map(c=><option key={c}>{c}</option>)}</select>
         </div>
       </div>
@@ -1462,8 +1246,6 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
     </div>
   );
 }
-
-
 
 function Track({parcels, isDark, user, setGlobalView, initialStatus}) {
   const [fLR, setFLR] = useState(""); const [fFrom, setFFrom] = useState("All"); const [fTo, setFTo] = useState("All"); 
