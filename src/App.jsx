@@ -1,1690 +1,3169 @@
-import React, { useState, useEffect, Fragment } from "react";
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
-import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { Html5QrcodeScanner } from "html5-qrcode";
-
-/* ══════════════════════════════════════════
-  CONSTANTS & CONFIG
-══════════════════════════════════════════ */
-const ENV_URL = import.meta.env.VITE_SUPABASE_URL || "";
-const ENV_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
-
-const BRANCH_CONFIG = { "Mecheri": "01", "Elampillai": "02", "Jalakandapuram": "03", "Salem": "04", "Coimbatore": "05", "Bhavani": "06", "Sathyamangalam": "07", "Bangalore": "08", "Chennai": "09" };
-const CITIES = Object.keys(BRANCH_CONFIG);
-const TYPES = ["Box","Wooden Box","Bag","Green bag","Yellow Bag","Bale","Documents","Electronics","Furniture","Medical","Machinery"];
-
-const STATUSES = ["Booked","Picked Up","In Transit","Out for Delivery","Delivered", "RTO", "Deleted"];
-const S_CLR  = {"Booked":"#3B82F6","Picked Up":"#F59E0B","In Transit":"#F97316","Out for Delivery":"#8B5CF6","Delivered":"#10B981", "RTO":"#EAB308", "Deleted":"#EF4444"};
-const PAY_MODES = ["Paid", "To Pay", "Credit", "FOC"];
-
-const genUserId = () => `USR-${Math.floor(Math.random()*10000)}`;
-
-// 🔥 PERMANENT FUTURE-PROOF LR GENERATOR 🔥
-const generateLR = (fromCity, toCity, allParcels) => {
-  if (!fromCity || !toCity) return `MPS${String(Math.floor(Math.random()*1000)).padStart(6,'0')}`; 
-  const fCode = BRANCH_CONFIG[fromCity] || "00"; 
-  const tCode = BRANCH_CONFIG[toCity] || "00"; 
-  const fromPrefix = `${fCode}/`; 
-  let max = 0;
-  
-  if(allParcels && allParcels.length > 0) {
-      allParcels.forEach(p => { 
-        if (p.id && p.id.startsWith(fromPrefix)) { 
-          const parts = p.id.split('/'); 
-          if (parts.length === 3) { 
-            const rawSeq = parts[2];
-            const num = parseInt(rawSeq, 10); 
-            // Smart Filter: Ignore large 6-digit dummy numbers, keep actual sequences
-            if (!isNaN(num) && rawSeq.length !== 6 && num > max) {
-               max = num; 
-            }
-          } 
-        } 
-      });
-  }
-  return `${fCode}/${tCode}/${String(max + 1).padStart(4, '0')}`;
-};
-
-const MpsLogo = () => (<svg className="w-8 h-8 text-indigo-500 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>);
-
-function calcPrice(from, to, ratePerUnit, count = 1, type = "Box", paymentMode = "Paid", size = "Standard"){
-  if(paymentMode === "FOC") return 0; 
-  if(!ratePerUnit || ratePerUnit<=0) return 0; 
-  let rate = parseFloat(ratePerUnit); 
-  
-  let sizeMultiplier = 1;
-  if(size === "Medium") sizeMultiplier = 1.5;
-  if(size === "Large") sizeMultiplier = 2.0;
-  if(size === "Jumbo") sizeMultiplier = 3.0;
-
-  let tc = 0;
-  if(type==="Electronics") tc = 60; if(type==="Furniture") tc = 150; if(type==="Medical") tc = 40; if(type==="Machinery") tc = 120;
-  return Math.round((rate * sizeMultiplier * (parseInt(count) || 1)) + tc);
-}
-
-function numberToWords(num) {
-  const a = ['','One ','Two ','Three ','Four ', 'Five ','Six ','Seven ','Eight ','Nine ','Ten ','Eleven ','Twelve ','Thirteen ','Fourteen ','Fifteen ','Sixteen ','Seventeen ','Eighteen ','Nineteen '];
-  const b = ['', '', 'Twenty','Thirty','Forty','Fifty', 'Sixty','Seventy','Eighty','Ninety'];
-  if ((num = num.toString()).length > 9) return 'Overflow';
-  let n = ('000000000' + num).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
-  if (!n) return; let str = '';
-  str += (n[1] != 0) ? (a[Number(n[1])] || b[n[1][0]] + ' ' + a[n[1][1]]) + 'Crore ' : '';
-  str += (n[2] != 0) ? (a[Number(n[2])] || b[n[2][0]] + ' ' + a[n[2][1]]) + 'Lakh ' : '';
-  str += (n[3] != 0) ? (a[Number(n[3])] || b[n[3][0]] + ' ' + a[n[3][1]]) + 'Thousand ' : '';
-  str += (n[4] != 0) ? (a[Number(n[4])] || b[n[4][0]] + ' ' + a[n[4][1]]) + 'Hundred ' : '';
-  str += (n[5] != 0) ? ((str != '') ? 'and ' : '') + (a[Number(n[5])] || b[n[5][0]] + ' ' + a[n[5][1]]) + 'Only' : 'Only';
-  return str.toUpperCase();
-}
-
-const PrintGroup = ({ p }) => (
-  <div className="flex items-center gap-1 bg-slate-500/10 p-1 rounded-md border border-slate-500/20 w-max" onClick={(e)=>e.stopPropagation()}>
-    <span className="text-[8px] font-black opacity-60 ml-1 uppercase">Print:</span>
-    <button onClick={(e)=>{e.stopPropagation(); generatePDF(p,1);}} className="bg-white dark:bg-slate-700 hover:bg-blue-500 hover:text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-sm transition-colors" title="1 Per Page">1</button>
-    <button onClick={(e)=>{e.stopPropagation(); generatePDF(p,2);}} className="bg-white dark:bg-slate-700 hover:bg-indigo-500 hover:text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-sm transition-colors" title="2 Per Page (A5)">2</button>
-    <button onClick={(e)=>{e.stopPropagation(); generatePDF(p,3);}} className="bg-white dark:bg-slate-700 hover:bg-emerald-500 hover:text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-sm transition-colors" title="3 Per Page">3</button>
-  </div>
-);
-
-function drawReceipt(doc, p, startY) {
-  doc.setDrawColor(0);
-  doc.setLineWidth(0.3);
-  doc.rect(10, startY, 190, 93); 
-
-  doc.line(10, startY + 20, 200, startY + 20); 
-  doc.line(10, startY + 26, 200, startY + 26); 
-  doc.line(10, startY + 50, 145, startY + 50); 
-  doc.line(10, startY + 56, 145, startY + 56); 
-  doc.line(145, startY + 68, 200, startY + 68); 
-  doc.line(10, startY + 76, 200, startY + 76); 
-
-  doc.line(145, startY, 145, startY + 76); 
-  doc.line(175, startY + 20, 175, startY + 76); 
-  doc.line(77, startY + 20, 77, startY + 50); 
-  doc.line(16, startY + 26, 16, startY + 50); 
-  doc.line(83, startY + 26, 83, startY + 50); 
-  
-  doc.line(22, startY + 50, 22, startY + 76); 
-  doc.line(95, startY + 50, 95, startY + 76); 
-  doc.line(110, startY + 50, 110, startY + 76); 
-  doc.line(125, startY + 50, 125, startY + 76); 
-
-  doc.line(77, startY + 76, 77, startY + 93);
-  doc.line(145, startY + 76, 145, startY + 93);
-
-  doc.setFont("helvetica", "bolditalic"); doc.setFontSize(22); doc.text("MPS", 12, startY + 14); 
-  doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.text("MECHERI", 36, startY + 10); doc.text("PARCEL SERVICE", 36, startY + 16);
-  doc.setFont("helvetica", "normal"); doc.setFontSize(6); doc.text("• WE DELIVER TRUST •", 42, startY + 19);
-  
-  const centerX = 107; 
-  doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.text("GSTIN : 33CICPS6965E1Z1", centerX, startY + 6, { align: "center" }); 
-  doc.setFont("helvetica", "normal"); doc.text("Dharmapuri Main Road, Mecheri, Salem-Dt.", centerX, startY + 10, { align: "center" }); 
-  doc.setFont("helvetica", "bold"); doc.text("90033 77185 / 80726 72255", centerX, startY + 14, { align: "center" }); 
-  
-  doc.setFontSize(9); doc.text(`LR. NO.  :  ${p.id}`, 147, startY + 6); 
-  doc.text(`Date     :  ${p.date}`, 147, startY + 12); 
-  doc.text(`Pay Mode:  ${p.payment}`, 147, startY + 18);
-
-  doc.setFont("helvetica", "normal"); doc.setFontSize(8); 
-  doc.text(`From : ${p.from}`, 12, startY + 24); 
-  doc.text(`To : ${p.to}`, 79, startY + 24); 
-  doc.text("Particulars", 152, startY + 24); 
-  doc.text("Amount", 182, startY + 24);
-
-  doc.setFont("helvetica", "bold"); doc.setFontSize(7); 
-  doc.text("Consignor", 14, startY + 45, { angle: 90 }); 
-  doc.text("Consignee", 81, startY + 45, { angle: 90 }); 
-
-  doc.setFontSize(8); doc.setFont("helvetica", "normal"); 
-  doc.text(`Tel : ${p.sPhone}`, 18, startY + 32); doc.text(`GST : ${p.sGst || ""}`, 18, startY + 38); doc.setFont("helvetica", "bold"); doc.text(`${p.sName}`, 18, startY + 46);
-  doc.setFont("helvetica", "normal"); doc.text(`Tel : ${p.rPhone}`, 85, startY + 32); doc.text(`GST : ${p.rGst || ""}`, 85, startY + 38); doc.setFont("helvetica", "bold"); doc.text(`${p.rName}`, 85, startY + 46);
-
-  doc.setFontSize(7); doc.setFont("helvetica", "normal"); 
-  const particulars = ["Freight", "Hamali", "Fuel Sur", "Docket", "Collection", "Others"]; 
-  particulars.forEach((item, i) => { doc.text(item, 147, startY + 31 + (i * 6)); });
-  doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.text(`Rs. ${p.price}`, 178, startY + 31); 
-
-  doc.setFontSize(7); doc.setFont("helvetica", "normal"); 
-  doc.text("Qty", 12, startY + 54); doc.text("Description (Cargo)", 40, startY + 54); doc.text("Value", 98, startY + 54); doc.text("Actual Wt", 111, startY + 54); doc.text("Charged Wt", 126, startY + 54);
-  
-  doc.setFontSize(8); doc.setFont("helvetica", "bold"); 
-  const cList = p.cargoList && p.cargoList.length > 0 ? p.cargoList : [{count: p.count, type: p.type, size: p.size, weight: p.actualWeight}];
-  
-  cList.slice(0, 3).forEach((item, idx) => {
-     const yPos = startY + 61 + (idx * 6);
-     doc.text(`${item.count}`, 14, yPos); 
-     doc.text(`${item.type} ${item.size && item.size !== 'Standard' ? `(${item.size})` : ''}`, 24, yPos); 
-     doc.text(`${item.weight || "-"}`, 115, yPos); 
-  });
-
-  doc.setFontSize(6); doc.setFont("helvetica", "normal"); doc.text("Door Delivery Ground Floor Only", 96, startY + 74); 
-  doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.text("Total", 155, startY + 74); doc.text(`Rs. ${p.price}`, 178, startY + 74);
-
-  doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.text("GSTIN Payable by :", 13, startY + 81); 
-  doc.setFontSize(7); doc.setFont("helvetica", "normal"); 
-  doc.rect(13, startY + 84, 2, 2); doc.text("Consignor", 17, startY + 86); 
-  doc.rect(35, startY + 84, 2, 2); doc.text("Consignee", 39, startY + 86); 
-  if(p.payment === "Paid" || p.payment === "Credit" || p.payment === "FOC") doc.text("X", 13.2, startY + 85.8); 
-  if(p.payment === "To Pay") doc.text("X", 35.2, startY + 85.8);
-  
-  doc.setFontSize(7); doc.text("Consignee Signature", 85, startY + 81); doc.text("For Mecheri Parcel Service", 152, startY + 81);
-}
-
-function generatePDF(p, layout = 1) {
-  const doc = new jsPDF();
-  if (layout === 1) {
-    drawReceipt(doc, p, 10);
-  } else if (layout === 2) {
-    drawReceipt(doc, p, 10);
-    drawReceipt(doc, p, 110);
-  } else if (layout === 3) {
-    drawReceipt(doc, p, 10);
-    drawReceipt(doc, p, 105);
-    drawReceipt(doc, p, 200);
-  }
-  window.open(doc.output('bloburl'), '_blank');
-}
-
-function generateEOD_PDF(dateStr, branch, parcelsList, pettyList) {
-  const doc = new jsPDF();
-  doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.text("END OF DAY (EOD) SETTLEMENT", 105, 15, { align: "center" });
-  doc.setFontSize(10); doc.text(`Branch: ${branch} | Date: ${dateStr}`, 105, 22, { align: "center" }); doc.line(10, 25, 200, 25);
-  let y = 32; doc.setFontSize(10); doc.text("Cash Collections (Paid Booking & Delivered To-Pay):", 10, y); y+=6; doc.setFont("helvetica", "normal");
-  let totalCash = 0;
-  parcelsList.forEach(p => {
-     const pDate = p.isoDate ? p.isoDate.split('T')[0] : ""; 
-     if((p.from === branch && p.payment === 'Paid' && pDate === dateStr) || (p.to === branch && p.payment === 'To Pay' && p.deliveryMode === 'Cash' && p.status==='Delivered' && pDate === dateStr)){
-        doc.text(`LR: ${p.id} | Rs. ${p.price} | Mode: ${p.payment}`, 10, y); totalCash += p.price; y+=6;
-        if(y>280){ doc.addPage(); y=20; }
-     }
-  });
-  y+=4; doc.setFont("helvetica", "bold"); doc.text(`Total Cash Collected: Rs. ${totalCash}`, 10, y); y+=10; doc.line(10, y-4, 200, y-4);
-  doc.text("Petty Cash Expenses Today:", 10, y); y+=6; doc.setFont("helvetica", "normal"); let totalExp = 0;
-  pettyList.forEach(pt => { if(pt.date === dateStr) { doc.text(`${pt.desc} - Rs. ${pt.amt}`, 10, y); totalExp += pt.amt; y+=6; } });
-  y+=4; doc.setFont("helvetica", "bold"); doc.text(`Total Expenses: Rs. ${totalExp}`, 10, y); y+=12;
-  doc.setFontSize(12); doc.text(`NET CASH TO HANDOVER: Rs. ${totalCash - totalExp}`, 10, y); doc.line(10, y+4, 200, y+4);
-  
-  window.open(doc.output('bloburl'), '_blank');
-}
-
-function generateInvoicePDF(customer, customerPhone, fromD, toD, parcelsList, manualInvoiceNo, manualInvDate) {
-  const doc = new jsPDF();
-  doc.setFont("helvetica", "bold"); doc.setFontSize(18); 
-  doc.text("MPS Parcel Service", 105, 15, { align: "center" });
-  doc.setFontSize(9); doc.setFont("helvetica", "normal");
-  doc.text("Address : Dharmapuri Main Road, Mecheri, Salem-Dt. 636 451. GST : 33CICPS6965E1Z1", 105, 20, { align: "center" });
-  doc.text("Phone Number : 90033 77185 / 80726 72255", 105, 24, { align: "center" });
-  doc.setFontSize(14); doc.setFont("helvetica", "bold");
-  doc.text("INVOICE", 105, 34, { align: "center" });
-  
-  const invoiceNo = manualInvoiceNo || "N/A"; 
-  const printDate = manualInvDate ? new Date(manualInvDate).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN');
-  
-  doc.setFontSize(10); doc.setFont("helvetica", "bold");
-  
-  let partyName = customer;
-  let gstText = "";
-  let addressText = "";
-  if (customer.toUpperCase().includes("SAI SILKS")) { partyName = "SAI SILKS KALAMANDIR LIMITED"; gstText = "GSTIN : 33AMCS1175P1ZU"; }
-
-  doc.text(`Party Name : ${partyName}`, 14, 45);
-  doc.setFont("helvetica", "normal");
-  doc.text(`Phone No : ${customerPhone}`, 14, 50);
-  
-  if(gstText) {
-      doc.setFont("helvetica", "bold"); doc.text(gstText, 14, 55); doc.setFontSize(8);
-      doc.setFont("helvetica", "normal"); doc.text(addressText, 14, 60, { maxWidth: 100 }); doc.setFontSize(10);
-  }
-  
-  let yOffset = gstText ? 65 : 55;
-  doc.text(`Billing Period : ${fromD} to ${toD}`, 14, yOffset);
-  doc.setFont("helvetica", "bold"); doc.text(`Invoice no.: ${invoiceNo}`, 150, 45);
-  doc.setFont("helvetica", "normal"); doc.text(`Invoice Date: ${printDate}`, 150, 50);
-  
-  const tableColumn = ["S.No", "LR Number", "Booking Date", "Consignor", "Consignee", "Packages", "Amount"];
-  const tableRows = []; let totalAmount = 0; let totalPackages = 0;
-  
-  const sortedParcels = [...parcelsList].sort((a, b) => new Date(a.isoDate) - new Date(b.isoDate));
-  sortedParcels.forEach((p, index) => { const parcelData = [index + 1, p.id, p.date, p.sName, p.rName, `${p.count} ${p.type}`, p.price]; tableRows.push(parcelData); totalAmount += Number(p.price) || 0; totalPackages += Number(p.count) || 0; });
-  tableRows.push(["Total", "", "", "", "", totalPackages.toString(), totalAmount.toString()]);
-  
-  autoTable(doc, {
-      startY: yOffset + 5, head: [tableColumn], body: tableRows, theme: 'grid',
-      headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 9, halign: 'center' },
-      bodyStyles: { fontSize: 8, textColor: [0, 0, 0] },
-      columnStyles: { 0: { halign: 'center' }, 1: { fontStyle: 'bold' }, 5: { halign: 'center' }, 6: { halign: 'right', fontStyle: 'bold' } },
-      willDrawCell: function (data) { if (data.row.index === tableRows.length - 1) { data.cell.styles.fontStyle = 'bold'; data.cell.styles.fillColor = [245, 245, 245]; } }
-  });
-  
-  const finalY = doc.lastAutoTable.finalY || (yOffset + 5);
-  doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.text(`Net Payable Amount : RUPEES ${numberToWords(totalAmount)}`, 14, finalY + 8);
-  doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.text(`Print DateTime : ${new Date().toLocaleString('en-IN')}`, 14, finalY + 16);
-  doc.setFont("helvetica", "bold"); doc.text("Remark : Respected and Dear Valued Customer, Kindly ensure to make the payment earliest.", 14, finalY + 22);
-  doc.text("Bank Details for Payment:", 14, finalY + 32); doc.setFont("helvetica", "normal"); doc.text("Bank Name : Tamilnad Mercantile Bank (TMB) ", 14, finalY + 38);
-  doc.text("A/C Name  : MECHERI PARCEL SERVICE", 14, finalY + 43); doc.text("A/C No    : 287150050800853", 14, finalY + 48); doc.text("IFSC Code : TMBL0000287", 14, finalY + 53);
-  window.open(doc.output('bloburl'), '_blank');
-}
-
-function generateListPDF(title, branch, parcelsList) {
-  const doc = new jsPDF();
-  doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.text(`MPS - ${title}`, 105, 15, { align: "center" });
-  doc.setFontSize(10); doc.setFont("helvetica", "normal");
-  doc.text(`Branch: ${branch} | Print Date: ${new Date().toLocaleString('en-IN')}`, 105, 22, { align: "center" });
-  
-  const tableColumn = ["S.No", "LR Number", "Date", "Route", "Customer (Sender -> Receiver)", "Cargo", "Amount"];
-  const tableRows = [];
-  let totalQty = 0, totalAmt = 0;
-
-  parcelsList.forEach((p, index) => {
-      tableRows.push([ 
-         index + 1, 
-         p.id, 
-         p.date, 
-         `${p.from} -> ${p.to}`, 
-         `${p.sName} -> ${p.rName}`, 
-         `${p.count} ${p.type}`, 
-         `Rs.${p.price} (${p.payment})` 
-      ]);
-      totalQty += Number(p.count) || 0;
-      totalAmt += Number(p.price) || 0;
-  });
-
-  tableRows.push(["TOTAL", "", "", "", "", `${totalQty} Items`, `Rs.${totalAmt}`]);
-
-  autoTable(doc, {
-      startY: 28, head: [tableColumn], body: tableRows, theme: 'grid',
-      headStyles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8, halign: 'center' },
-      bodyStyles: { fontSize: 7, textColor: [0, 0, 0] },
-      columnStyles: { 0: { halign: 'center' }, 2: { halign: 'center' }, 5: { halign: 'center' }, 6: { halign: 'right', fontStyle: 'bold' } },
-      willDrawCell: function (data) { if (data.row.index === tableRows.length - 1) { data.cell.styles.fontStyle = 'bold'; data.cell.styles.fillColor = [240, 240, 240]; } }
-  });
-  window.open(doc.output('bloburl'), '_blank');
-}
-
-function exportToCSV(title, parcelsList) {
-  if (parcelsList.length === 0) return alert("No data to export!");
-  const headers = ["LR No", "Date", "Sender", "Receiver", "Origin", "Destination", "Payment Mode", "Amount", "Status", "Booked By"];
-  const rows = parcelsList.map(p => [p.id, p.date, p.sName, p.rName, p.from, p.to, p.payment, p.price, p.status, p.bookedBy].join(','));
-  const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join('\n');
-  const encodedUri = encodeURI(csvContent);
-  const link = document.createElement("a");
-  link.setAttribute("href", encodedUri); link.setAttribute("download", `MPS_${title}.csv`);
-  document.body.appendChild(link); link.click(); link.remove();
-}
-
-function openWhatsApp(phone, isSender, p) {
-  const text = `📦 *MPS PARCEL SERVICE*\n\nவணக்கம் / Hello *${isSender ? p.sName : p.rName}*,\nYour parcel is booked successfully! 🎉\n\n🧾 *LR No:* ${p.id}\n📤 *From:* ${p.sName}\n📥 *To:* ${p.rName}\n📍 *Route:* ${p.from} ➔ ${p.to}\n📦 *Items:* ${p.count} ${p.type}\n💰 *Mode:* ${p.payment} (₹${p.price})\n\n📞 *Support:* 90033 77185\n\nThank you for choosing MPS! ✨`;
-  window.open(`https://api.whatsapp.com/send?phone=91${phone}&text=${encodeURIComponent(text)}`, '_blank');
-}
-
-function SuggestInput({ id, label, value, onChange, onSelect, dataList, isPhone, theme, onKeyDown }) {
-  const [open, setOpen] = useState(false); const [activeIndex, setActiveIndex] = useState(-1);
-  const matches = dataList.filter(c => isPhone ? c.phone.includes(value) : (c.name||"").toLowerCase().includes(value.toLowerCase())).filter(()=>value.length>=2);
-  useEffect(() => { setActiveIndex(-1); }, [value]);
-  const handleKeyDown = (e) => {
-    if (open && matches.length > 0) {
-      if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIndex(prev => (prev + 1) % matches.length); return; } else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIndex(prev => (prev - 1 + matches.length) % matches.length); return; } else if (e.key === 'Enter') { if (matches.length === 1 || activeIndex >= 0) { e.preventDefault(); const selectedMatch = activeIndex >= 0 ? matches[activeIndex] : matches[0]; onSelect(selectedMatch); setOpen(false); return; } }
-    }
-    if (onKeyDown) onKeyDown(e);
-  };
-  const inputBg = theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800';
-  return (
-    <div className={`relative w-full ${open ? 'z-50' : 'z-10'}`}>
-      <input id={id} onKeyDown={handleKeyDown} value={value} onChange={(e) => { onChange(e.target.value); setOpen(true); if (isPhone && e.target.value.length === 10) { const exact = dataList.find(d=>d.phone===e.target.value); if(exact) { onSelect(exact); setOpen(false); } } }} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 200)} placeholder={label} maxLength={isPhone ? "10" : "100"} className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-20 ${inputBg}`} />
-      {open && matches.length > 0 && (
-        <div className={`absolute top-full left-0 right-0 mt-2 rounded-xl shadow-2xl border overflow-hidden max-h-48 overflow-y-auto z-[60] ${theme==='dark'?'bg-slate-800 border-slate-600':'bg-white border-slate-200'}`}>
-          {matches.map((c, i) => ( <div key={i} className={`p-3 cursor-pointer text-sm transition-colors ${activeIndex === i ? (theme==='dark'?'bg-indigo-600 text-white':'bg-indigo-100 text-indigo-900') : (theme==='dark'?'hover:bg-indigo-600 text-white':'hover:bg-indigo-50 text-slate-800')}`} onClick={() => { onSelect(c); setOpen(false); }}><b>{isPhone ? c.phone : c.name}</b> <span className="opacity-60">- {isPhone ? c.name : c.phone}</span></div> ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function CreditSearchDropdown({ value, onChange, uniqueCompanies, isDark }) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState(value);
-  useEffect(() => { setSearch(value); }, [value]);
-
-  const matches = uniqueCompanies.filter(c => c.toLowerCase().includes(search.toLowerCase()));
-  const inputBg = isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-800';
-  const dropdownBg = isDark ? 'bg-slate-800 border-slate-600' : 'bg-white border-slate-200';
-
-  return (
-    <div className="relative w-full">
-       <input value={search} onChange={e => { setSearch(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 200)} placeholder="🔍 Type Company Name to Search..." className={`w-full p-3 rounded-xl border outline-none font-bold text-sm ${inputBg}`} />
-       {open && matches.length > 0 && (
-         <div className={`absolute bottom-full mb-1 left-0 right-0 max-h-48 overflow-y-auto z-[100] border shadow-2xl rounded-xl ${dropdownBg}`}>
-            {matches.map((c, i) => (
-              <div key={i} className={`p-3 cursor-pointer border-b border-slate-500/10 text-sm font-bold transition-colors ${isDark ? 'hover:bg-indigo-600 hover:text-white' : 'hover:bg-indigo-100 hover:text-indigo-900'}`} onMouseDown={() => { onChange(c); setSearch(c); setOpen(false); }}>{c}</div>
-            ))}
-         </div>
-       )}
-    </div>
-  )
-}
-
-const local={ async get(k){try{const r=window.localStorage.getItem(k);return r?JSON.parse(r):null;}catch{return null;}}, async set(k,v){try{window.localStorage.setItem(k,JSON.stringify(v));}catch{}}, async remove(k){try{window.localStorage.removeItem(k);}catch{}} };
-
-// 🔥 CACHE BUSTER ADDED TO DB CLASS 🔥
-class DB {
-  constructor(url, key) {
-     this.isLive = Boolean(url && key);
-     if (this.isLive) {
-         this.base = url.replace(/\/+$/, "") + "/rest/v1";
-         this.h = {
-             "apikey": key,
-             "Authorization": `Bearer ${key}`,
-             "Content-Type": "application/json"
-         };
-     }
-  }
-  async getParcels() {
-     if (this.isLive) {
-         try {
-             // Cache Buster Trick to force fetch latest data ALWAYS 
-             const r = await fetch(`${this.base}/parcels?select=*&_=${Date.now()}`, { headers: this.h, cache: "no-store" });
-             if (r.ok) return await r.json();
-         } catch (e) { console.error("Fetch parcels error:", e); }
-     }
-     return await local.get("mps_parcels") || [];
-  }
-  async insertParcel(p) {
-     if (this.isLive) {
-         const r = await fetch(`${this.base}/parcels`, { method: "POST", headers: this.h, body: JSON.stringify(p) });
-         if (!r.ok) {
-             const errData = await r.text();
-             throw new Error(`DB Insert Failed: ${r.status} - ${errData}`);
-         }
-     }
-     await local.set("mps_parcels", [p, ...(await local.get("mps_parcels") || [])]);
-  }
-  async updateParcel(id, data) {
-     if (this.isLive) {
-         try { await fetch(`${this.base}/parcels?id=eq.${encodeURIComponent(id)}`, { method: "PATCH", headers: this.h, body: JSON.stringify(data) }); } catch (e) {}
-     }
-     await local.set("mps_parcels", (await local.get("mps_parcels") || []).map(x => x.id === id ? { ...x, ...data } : x));
-  }
-  async deleteParcel(id) {
-     if (this.isLive) {
-         try { await fetch(`${this.base}/parcels?id=eq.${encodeURIComponent(id)}`, { method: "DELETE", headers: this.h }); } catch (e) {}
-     }
-     await local.set("mps_parcels", (await local.get("mps_parcels") || []).filter(x => x.id !== id));
-  }
-  async getUsers() {
-     if (this.isLive) {
-         try {
-             const r = await fetch(`${this.base}/app_users?select=*&_=${Date.now()}`, { headers: this.h, cache: "no-store" });
-             if (r.ok) return await r.json();
-         } catch (e) {}
-     }
-     let usrs = await local.get("mps_users");
-     if (!usrs || usrs.length === 0) {
-         usrs = [{ id: 'super-1', username: 'superadmin', password: '123', role: 'superadmin', branch: 'All' }, { id: 'admin-1', username: 'admin', password: '123', role: 'admin', branch: CITIES[0] }, { id: 'staff-1', username: 'staff', password: '123', role: 'staff', branch: CITIES[0] }];
-         await local.set("mps_users", usrs);
-     } else if (!usrs.find(u => u.username === 'superadmin')) {
-         usrs.push({ id: 'super-1', username: 'superadmin', password: '123', role: 'superadmin', branch: 'All' });
-         await local.set("mps_users", usrs);
-     }
-     return usrs;
-  }
-  async insertUser(u) {
-     if (this.isLive) { try { await fetch(`${this.base}/app_users`, { method: "POST", headers: this.h, body: JSON.stringify(u) }); } catch (e) {} }
-     await local.set("mps_users", [u, ...(await this.getUsers())]);
-  }
-  async deleteUser(id) {
-     if (this.isLive) { try { await fetch(`${this.base}/app_users?id=eq.${id}`, { method: "DELETE", headers: this.h }); } catch (e) {} }
-     await local.set("mps_users", (await this.getUsers()).filter(u => u.id !== id));
-  }
-  async updateUser(id, data) {
-     if (this.isLive) { try { await fetch(`${this.base}/app_users?id=eq.${id}`, { method: "PATCH", headers: this.h, body: JSON.stringify(data) }); } catch (e) {} }
-     await local.set("mps_users", (await this.getUsers()).map(u => u.id === id ? { ...u, ...data } : u));
-  }
-  async getCreditAuth() {
-     if (this.isLive) {
-         try {
-             const r = await fetch(`${this.base}/credit_auth?select=*&_=${Date.now()}`, { headers: this.h, cache: "no-store" });
-             if (r.ok) return await r.json();
-         } catch (e) {}
-     }
-     return await local.get("mps_credit_auth") || [];
-  }
-  async insertCreditAuth(data) {
-     if (this.isLive) { try { await fetch(`${this.base}/credit_auth`, { method: "POST", headers: this.h, body: JSON.stringify(data) }); } catch (e) {} }
-     await local.set("mps_credit_auth", [data, ...(await local.get("mps_credit_auth") || [])]);
-  }
-  async deleteCreditAuth(phone) {
-     if (this.isLive) { try { await fetch(`${this.base}/credit_auth?phone=eq.${phone}`, { method: "DELETE", headers: this.h }); } catch (e) {} }
-     await local.set("mps_credit_auth", (await local.get("mps_credit_auth") || []).filter(c => c.phone !== phone));
-  }
-}
-
-function EwayScannerModal({ onScan, onClose }) {
-  useEffect(() => {
-    const config = { fps: 10, qrbox: { width: 250, height: 250 }, videoConstraints: { facingMode: "environment" } };
-    const scanner = new Html5QrcodeScanner("qr-reader", config, false);
-    scanner.render((decodedText) => { scanner.clear(); onScan(decodedText); }, (error) => {});
-    return () => { scanner.clear().catch(e=>console.log(e)); };
-  }, []);
-
-  return (
-    <div className="fixed inset-0 bg-black/90 flex flex-col items-center justify-center z-[200] p-4">
-      <div className="bg-white p-4 rounded-3xl w-full max-w-sm shadow-2xl">
-         <div className="flex justify-between items-center mb-4">
-           <h3 className="font-black text-slate-800 text-lg">📷 Scan E-Way QR</h3>
-           <button onClick={onClose} className="bg-red-100 text-red-500 px-4 py-2 rounded-xl font-bold">Close</button>
-         </div>
-         <div id="qr-reader" className="w-full overflow-hidden rounded-2xl border-2 border-indigo-100"></div>
-         <p className="text-center text-xs font-bold opacity-60 mt-4 text-slate-800">Point back camera at E-Way Bill document</p>
-      </div>
-    </div>
-  );
-}
-
-export default function App() {
-  const [page, setPage] = useState("dashboard"); const [parcels, setParcels] = useState([]); const [users, setUsers] = useState([]); const [user, setUser] = useState(null); const [toast, setToast] = useState(null); const [shortcutMode, setShortcutMode] = useState(""); const [theme, setTheme] = useState("light"); const [sidebarExpanded, setSidebarExpanded] = useState(false); const [creditAuthList, setCreditAuthList] = useState([]); 
-  const [globalViewItem, setGlobalViewItem] = useState(null);
-  
-  const [trackFilter, setTrackFilter] = useState("All");
-
-  const [db] = useState(new DB(ENV_URL, ENV_KEY));
-  const showMsg = (msg, type='success') => { setToast({msg, type}); setTimeout(() => setToast(null), 3000); };
-
-  const syncData = async () => {
-     showMsg("Syncing Latest Data...", "info");
-     const ps = await db.getParcels(); setParcels(ps);
-     showMsg("Data Synced!");
-  };
-
-  useEffect(() => { 
-      async function init() { 
-          const session = await local.get("mps_session"); if(session) setUser(session); 
-          const savedTheme = await local.get("mps_theme"); if(savedTheme) setTheme(savedTheme); 
-          const cList = await db.getCreditAuth(); setCreditAuthList(cList); 
-          const ps = await db.getParcels(); setParcels(ps); 
-          const usrs = await db.getUsers(); setUsers(usrs); 
-      } 
-      init(); 
-  }, []);
-  
-  const toggleTheme = () => { const nt = theme === "dark" ? "light" : "dark"; setTheme(nt); local.set("mps_theme", nt); };
-
-  useEffect(() => {
-    const handleKey = (e) => { 
-      if(!user || globalViewItem) return; let mode = ""; 
-      if (e.key === 'F7') mode = 'Paid'; else if (e.key === 'F8') mode = 'To Pay'; else if (e.key === 'F9') mode = 'Credit'; else if (e.key === 'F10') mode = 'FOC'; 
-      else if (e.key === 'F6') { e.preventDefault(); setPage('delivery'); showMsg("Delivery Scanner Activated!", "info"); }
-      if(mode) { e.preventDefault(); setPage('book'); setShortcutMode(mode); showMsg(`${mode} Mode Activated!`, "info"); } 
-    };
-    window.addEventListener('keydown', handleKey); return () => window.removeEventListener('keydown', handleKey);
-  }, [user, globalViewItem]);
-
-  if(!user) return <Login onLogin={async (u,p) => { const valid = users.find(x=>x.username===u && x.password===p); if(valid){ setUser(valid); await local.set("mps_session", valid); showMsg("Welcome!"); return true; } else { return false; } }} theme={theme} />;
-  const isDark = theme === "dark"; const bgClass = isDark ? "bg-slate-900 text-slate-100" : "bg-slate-50 text-slate-800"; const headerBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200";
-
-  return (
-    <div className={`flex h-screen font-sans ${bgClass} transition-colors duration-300`}>
-      <aside className={`${sidebarExpanded ? "w-64" : "w-16 md:w-20"} bg-slate-950 text-slate-300 flex flex-col shadow-2xl z-20 shrink-0 transition-all duration-300`}>
-        <div className="h-16 md:h-20 flex items-center justify-between px-2 md:px-4 border-b border-slate-800 bg-black/10">
-          {sidebarExpanded ? ( <div className="flex items-center animate-fade-in pl-2"><MpsLogo /><div><h1 className="text-xl font-black text-white tracking-widest">MPS</h1><p className="text-[10px] uppercase text-indigo-400 font-bold">{user.branch} Branch</p></div></div> ) : ( <div className="mx-auto"><MpsLogo /></div> )}
-          <button onClick={() => setSidebarExpanded(!sidebarExpanded)} className="text-slate-400 hover:text-white text-md p-1 focus:outline-none transition-colors">{sidebarExpanded ? "◀" : "▶"}</button>
-        </div>
-        <nav className="flex-1 px-2 py-4 md:px-3 md:py-6 space-y-2 overflow-y-auto">
-          {[
-            { id: 'dashboard', icon: '📊', label: 'Analysis', role: 'staff' },
-            { id: 'book', icon: '📦', label: 'Book Parcel', role: 'staff' },
-            { id: 'pending', icon: '⏳', label: 'Pending', role: 'staff' },
-            { id: 'track', icon: '🔍', label: 'Track', role: 'staff' },
-            { id: 'delivery', icon: '🤝', label: 'Delivery [F6]', role: 'staff' },
-            { id: 'accounts', icon: '💰', label: 'Accounts', role: 'admin' },
-            { id: 'admin', icon: '⚙️', label: 'System', role: 'admin' }
-          ].map(item => {
-            if (!(item.role === 'staff' || user.role === 'admin' || user.role === 'superadmin')) return null;
-            return ( <button key={item.id} title={item.label} onClick={() => setPage(item.id)} className={`w-full flex items-center py-3 rounded-xl font-medium transition-all ${sidebarExpanded ? "px-4" : "justify-center px-0"} ${page === item.id ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800'}`}><span className="text-lg">{item.icon}</span>{sidebarExpanded && <span className="ml-3 animate-fade-in text-sm">{item.label}</span>}</button> );
-          })}
-        </nav>
-        <div className="p-4 border-t border-slate-800 flex justify-center"><button onClick={async ()=>{setUser(null); await local.remove("mps_session");}} className="text-slate-400 hover:text-white transition-colors flex items-center justify-center font-bold text-sm"><span>🚪</span> {sidebarExpanded && <span className="ml-2">Logout</span>}</button></div>
-      </aside>
-      <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        <header className={`${headerBg} shadow-sm h-auto min-h-[4rem] py-2 flex flex-col md:flex-row items-center justify-between px-4 md:px-8 z-10 shrink-0 gap-2`}>
-          <div className="flex flex-wrap justify-center gap-2 text-[10px] md:text-sm font-bold bg-black/5 px-4 py-2 rounded-full"><span onClick={()=>{setPage('book'); setShortcutMode('Paid');}} className="cursor-pointer text-blue-500 hover:text-blue-600">F7: PAID</span><span className="opacity-25 hidden md:inline">|</span><span onClick={()=>{setPage('book'); setShortcutMode('To Pay');}} className="cursor-pointer text-red-500 hover:text-red-600">F8: TO PAY</span><span className="opacity-25 hidden md:inline">|</span><span onClick={()=>{setPage('book'); setShortcutMode('Credit');}} className="cursor-pointer text-amber-500 hover:text-amber-600">F9: CREDIT</span><span className="opacity-25 hidden md:inline">|</span><span onClick={()=>{setPage('book'); setShortcutMode('FOC');}} className="cursor-pointer text-emerald-500 hover:text-emerald-600">F10: FOC</span></div>
-          
-          <div className="flex items-center gap-2 md:gap-4">
-             {/* 🔥 PUDHU SYNC BUTTON 🔥 */}
-             <button onClick={syncData} className="text-[10px] md:text-xs font-black bg-indigo-500/10 text-indigo-500 px-3 py-1.5 rounded-lg border border-indigo-500/20 hover:bg-indigo-500 hover:text-white transition-colors shadow-sm">🔄 SYNC</button>
-             <span className={`text-[10px] md:text-xs font-black uppercase px-2 py-1 md:px-3 rounded-full border ${user.role === 'superadmin' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20'}`}>{user.role} | {user.branch}</span>
-             <button onClick={toggleTheme} className="text-lg md:text-xl">{(isDark)?'☀️':'🌙'}</button>
-          </div>
-        </header>
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 relative">
-          <div className="max-w-6xl mx-auto animate-fade-in">
-            {page === 'dashboard' && <Dashboard parcels={parcels} isDark={isDark} user={user} setGlobalView={setGlobalViewItem} setPage={setPage} setTrackFilter={setTrackFilter}/>}
-            {page === 'pending' && <Pending parcels={parcels} isDark={isDark} user={user} setGlobalView={setGlobalViewItem}/>}
-            {page === 'book' && <Book shortcutMode={shortcutMode} parcels={parcels} setParcels={setParcels} db={db} showMsg={showMsg} isDark={isDark} theme={theme} user={user} creditAuthList={creditAuthList} />}
-            {page === 'track' && <Track parcels={parcels} isDark={isDark} user={user} setGlobalView={setGlobalViewItem} initialStatus={trackFilter}/>}
-            {page === 'delivery' && <Delivery parcels={parcels} setParcels={setParcels} db={db} showMsg={showMsg} isDark={isDark} user={user} creditAuthList={creditAuthList} setGlobalView={setGlobalViewItem}/>}
-            {page === 'accounts' && (user.role === 'admin' || user.role === 'superadmin') && <Accounts parcels={parcels} setParcels={setParcels} db={db} showMsg={showMsg} isDark={isDark} user={user} />}
-            {page === 'admin' && (user.role === 'admin' || user.role === 'superadmin') && <Admin parcels={parcels} users={users} setUsers={setUsers} setParcels={setParcels} db={db} showMsg={showMsg} isDark={isDark} user={user} creditAuthList={creditAuthList} setCreditAuthList={setCreditAuthList} setGlobalView={setGlobalViewItem}/>}
-          </div>
-        </div>
-      </main>
-      {toast && ( <div className={`fixed bottom-4 right-4 md:bottom-8 md:right-8 px-4 md:px-6 py-2 md:py-3 rounded-xl shadow-2xl font-bold text-white z-50 animate-bounce-in text-sm md:text-base ${toast.type==='error'?'bg-red-500':'bg-emerald-500'}`}>{toast.msg}</div> )}
-      {globalViewItem && <ParcelModal item={globalViewItem} creditAuthList={creditAuthList} onClose={()=>setGlobalViewItem(null)} db={db} parcels={parcels} setParcels={setParcels} user={user} showMsg={showMsg} isDark={isDark} />}
-    </div>
-  );
-}
-
-function ParcelModal({item, creditAuthList, onClose, db, parcels, setParcels, user, showMsg, isDark}) {
-  const [payMethod, setPayMethod] = useState("");
-  const [delCreditCustomer, setDelCreditCustomer] = useState(""); 
-  const cardBg = isDark ? "bg-slate-800 border-slate-700 text-white" : "bg-white border-slate-200 text-slate-900";
-  
-  const deliverParcel = async () => {
-    if(item.payment === "To Pay" && !payMethod) return showMsg("Please specify payment mode!", "error");
-    
-    let finalCreditCustomer = item.creditCustomer || "";
-    
-    if (item.payment === "To Pay" && payMethod === "Credit") {
-        if (!delCreditCustomer) return showMsg("Search and Select a Credit Account!", "error");
-        finalCreditCustomer = delCreditCustomer; 
-        showMsg(`Bill assigned to ${finalCreditCustomer}'s Account!`, "info");
-    }
-
-    const dMode = item.payment === "To Pay" ? `[Mode: ${payMethod}]` : "";
-    const updatedHistory = [...item.history, {status: "Delivered", loc: item.to, time: new Date().toLocaleString()}];
-    
-    const modifiedItem = {
-        ...item, status: "Delivered", history: updatedHistory, deliveryMode: payMethod, 
-        deliveredBy: user.username, deliveredBranch: user.branch, 
-        creditCustomer: finalCreditCustomer, creditSettled: item.creditSettled || false,
-        notes: `${item.notes || ""} Delivered ${dMode}`
-    };
-    
-    await db.updateParcel(modifiedItem.id, modifiedItem);
-    setParcels(parcels.map(p => p.id === modifiedItem.id ? modifiedItem : p));
-    showMsg("Parcel Delivered Successfully!");
-    onClose();
-  };
-
-  const isPending = item.status === "Booked" || item.status === "In Transit";
-  const uniqueCompanies = [...new Set(creditAuthList.map(c => c.company))];
-
-  return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[100] overflow-y-auto">
-      <div className={`${cardBg} p-6 rounded-3xl max-w-md w-full space-y-4 border shadow-2xl animate-bounce-in my-auto`}>
-        <div className="flex justify-between items-center border-b border-slate-500/20 pb-2">
-          <h3 className="font-black text-lg text-indigo-500">Manifest: {item.id}</h3>
-          <span className="px-2 py-1 text-[10px] font-bold rounded-full uppercase" style={{backgroundColor: S_CLR[item.status]+'22', color: S_CLR[item.status]}}>{item.status}</span>
-        </div>
-        <div className="grid grid-cols-2 gap-3 text-xs md:text-sm">
-          <div><p className="opacity-50">Origin ➔ Target</p><p className="font-bold">{item.from} ➔ {item.to}</p></div>
-          <div><p className="opacity-50">Date Logged</p><p className="font-bold">{item.date}</p></div>
-          <div className="col-span-2"><p className="opacity-50">Consignor (Sender)</p><p className="font-bold">{item.sName} <span className="opacity-60 font-normal">({item.sPhone})</span></p></div>
-          <div className="col-span-2"><p className="opacity-50">Consignee (Receiver)</p><p className="font-bold">{item.rName} <span className="opacity-60 font-normal">({item.rPhone})</span></p></div>
-          
-          <div className="col-span-2 bg-black/5 p-2 rounded-xl">
-             <p className="opacity-50 mb-1">Cargo Details ({item.count} Items Total)</p>
-             {item.cargoList ? item.cargoList.map((c, idx) => (
-                <p key={idx} className="font-bold text-xs">{c.count} x {c.type} {c.size && c.size !== 'Standard' ? <span className="text-amber-500">({c.size})</span> : ''} <span className="opacity-50 text-[10px] ml-1">{c.weight ? `${c.weight}kg` : ''}</span></p>
-             )) : (
-                <p className="font-bold text-xs">{item.count} {item.type} {item.size && item.size !== 'Standard' ? <span className="text-[10px] text-amber-500 font-black">({item.size})</span> : ''}</p>
-             )}
-          </div>
-          
-          <div className="col-span-2"><p className="opacity-50">Financial Parameter</p><p className="font-bold text-emerald-500 text-lg">₹{item.price} ({item.payment})</p></div>
-          
-          {item.status === 'Delivered' && (
-             <div className="col-span-2 mt-2 p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
-               <p className="text-[10px] uppercase font-bold text-emerald-600 mb-1">✅ Delivery & Payment Info</p>
-               <div className="font-bold">
-                  {item.payment === 'To Pay' ? (
-                     <p>Collected via: <span className="text-emerald-500 px-2 py-0.5 bg-emerald-500/10 rounded-md">{item.deliveryMode || 'Cash'}</span></p>
-                  ) : (
-                     <p>Booking Mode: <span className="text-indigo-500 px-2 py-0.5 bg-indigo-500/10 rounded-md">{item.payment}</span></p>
-                  )}
-                  <p className="text-[10px] opacity-60 mt-1">Delivered By: {item.deliveredBy || 'System'}</p>
-               </div>
-             </div>
-          )}
-        </div>
-
-        <div className={`mt-4 p-4 rounded-2xl border ${isDark ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-           <h4 className="text-[10px] font-bold uppercase opacity-60 mb-3 tracking-widest text-indigo-500">📍 Live Tracking Timeline</h4>
-           <div className="relative border-l-2 border-indigo-500/30 ml-2 space-y-4">
-             {item.history && item.history.map((h, i) => (
-                <div key={i} className="relative pl-4 animate-fade-in">
-                  <div className={`absolute -left-[5px] top-1.5 w-2 h-2 rounded-full ${i === item.history.length-1 ? 'bg-emerald-500 ring-4 ring-emerald-500/20' : 'bg-indigo-500'}`}></div>
-                  <p className="text-xs font-bold">{h.status} <span className="opacity-50 font-normal ml-1">@ {h.loc}</span></p>
-                  <p className="text-[9px] opacity-50 mt-0.5">{h.time}</p>
-                  {h.reason && <p className="text-[10px] text-red-500 mt-1 font-bold bg-red-500/10 px-2 py-1 rounded inline-block">Reason: {h.reason}</p>}
-                </div>
-             ))}
-           </div>
-        </div>
-        
-        {(isPending && (user.branch === item.to || user.role === 'superadmin')) && (
-          <div className="mt-4 p-4 border border-indigo-500/30 bg-indigo-500/5 rounded-2xl space-y-3">
-             <h4 className="text-xs font-bold text-indigo-500 uppercase">⚡ Quick Delivery Check</h4>
-             {item.payment === "To Pay" && (
-                <div className="space-y-3">
-                  <select value={payMethod} onChange={e=>setPayMethod(e.target.value)} className="w-full p-2 rounded-xl border outline-none text-sm bg-transparent font-bold">
-                    <option value="" className="text-slate-900">Select Payment Collected...</option>
-                    <option value="Cash" className="text-slate-900">💵 Physical Cash</option>
-                    <option value="GPay" className="text-slate-900">📱 UPI / GPay</option>
-                    <option value="Credit" className="text-slate-900">💳 Credit A/C</option>
-                  </select>
-                  
-                  {payMethod === 'Credit' && (
-                     <CreditSearchDropdown 
-                        value={delCreditCustomer} 
-                        onChange={setDelCreditCustomer} 
-                        uniqueCompanies={uniqueCompanies} 
-                        isDark={isDark} 
-                     />
-                  )}
-                </div>
-             )}
-             <button onClick={deliverParcel} className="w-full bg-emerald-600 text-white font-bold py-2 rounded-xl hover:bg-emerald-700 shadow-md">Confirm Delivery</button>
-          </div>
-        )}
-
-        <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-slate-500/20">
-          <div className="flex justify-center"><PrintGroup p={item} /></div>
-          <button onClick={onClose} className="w-full bg-slate-600 text-white font-bold py-3 rounded-xl text-sm shadow-md hover:bg-slate-700 mt-2">Dismiss</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Dashboard({parcels, isDark, user, setPage, setTrackFilter, setGlobalView}) {
-  const [selectedBranch, setSelectedBranch] = useState(user.branch === 'All' ? 'All' : user.branch);
-  const [expandedStaff, setExpandedStaff] = useState(null); 
-  const [deliveryDate, setDeliveryDate] = useState(new Date().toISOString().split('T')[0]);
-  
-  const activeParcels = parcels.filter(p => p.status !== 'Deleted');
-  const branchParcels = activeParcels.filter(p => selectedBranch === 'All' ? true : (p.bookedBranch === selectedBranch || p.from === selectedBranch || p.to === selectedBranch));
-  const rev = branchParcels.reduce((a,b)=>a+(Number(b.price)||0),0);
-  const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-100";
-  const chartData = STATUSES.filter(s=>s!=='Deleted').map(s => ({ name: s, count: branchParcels.filter(p=>p.status===s).length, fill: S_CLR[s] }));
-
-  const pendingCount = branchParcels.filter(p => p.status === 'Booked' || p.status === 'In Transit').length;
-
-  const goToTrack = (status) => {
-     setTrackFilter(status);
-     setPage('track');
-  };
-
-  const [selY, selM, selD] = deliveryDate.split('-');
-  const targetDate = new Date(selY, selM - 1, selD);
-  const targetDateString = targetDate.toDateString();
-  const t1 = targetDate.toLocaleDateString();
-  const t2 = targetDate.toLocaleDateString('en-IN');
-  const t3 = targetDate.toLocaleDateString('en-US');
-  const t4 = `${String(selD).padStart(2, '0')}/${String(selM).padStart(2, '0')}/${selY}`;
-  const t5 = `${Number(selD)}/${Number(selM)}/${selY}`;
-  const t6 = `${String(selM).padStart(2, '0')}/${String(selD).padStart(2, '0')}/${selY}`;
-
-  const filteredDelParcels = branchParcels.filter(p => {
-     if(p.status !== 'Delivered' || !p.history) return false;
-     return p.history.some(h => {
-        if(h.status !== 'Delivered') return false;
-        const hTimeStr = h.time || "";
-        let isMatch = false;
-        try {
-            const parsedDate = new Date(hTimeStr);
-            if (!isNaN(parsedDate)) { isMatch = (parsedDate.toDateString() === targetDateString); }
-        } catch(e) {}
-        if (!isMatch) {
-            isMatch = hTimeStr.includes(t1) || hTimeStr.includes(t2) || hTimeStr.includes(t3) || 
-                      hTimeStr.includes(t4) || hTimeStr.includes(t5) || hTimeStr.includes(t6);
+{
+  "name": "iv-cargo-clone",
+  "version": "0.0.0",
+  "lockfileVersion": 3,
+  "requires": true,
+  "packages": {
+    "": {
+      "name": "iv-cargo-clone",
+      "version": "0.0.0",
+      "dependencies": {
+        "html5-qrcode": "^2.3.8",
+        "jspdf": "^4.2.1",
+        "jspdf-autotable": "^5.0.8",
+        "react": "^19.2.6",
+        "react-dom": "^19.2.6",
+        "recharts": "^3.8.1"
+      },
+      "devDependencies": {
+        "@eslint/js": "^10.0.1",
+        "@types/react": "^19.2.14",
+        "@types/react-dom": "^19.2.3",
+        "@vitejs/plugin-react": "^6.0.1",
+        "autoprefixer": "^10.5.0",
+        "eslint": "^10.3.0",
+        "eslint-plugin-react-hooks": "^7.1.1",
+        "eslint-plugin-react-refresh": "^0.5.2",
+        "globals": "^17.6.0",
+        "postcss": "^8.5.14",
+        "tailwindcss": "^4.3.0",
+        "vite": "^8.0.12"
+      }
+    },
+    "node_modules/@babel/code-frame": {
+      "version": "7.29.0",
+      "resolved": "https://registry.npmjs.org/@babel/code-frame/-/code-frame-7.29.0.tgz",
+      "integrity": "sha512-9NhCeYjq9+3uxgdtp20LSiJXJvN0FeCtNGpJxuMFZ1Kv3cWUNb6DOhJwUvcVCzKGR66cw4njwM6hrJLqgOwbcw==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "@babel/helper-validator-identifier": "^7.28.5",
+        "js-tokens": "^4.0.0",
+        "picocolors": "^1.1.1"
+      },
+      "engines": {
+        "node": ">=6.9.0"
+      }
+    },
+    "node_modules/@babel/compat-data": {
+      "version": "7.29.3",
+      "resolved": "https://registry.npmjs.org/@babel/compat-data/-/compat-data-7.29.3.tgz",
+      "integrity": "sha512-LIVqM46zQWZhj17qA8wb4nW/ixr2y1Nw+r1etiAWgRM6U1IqP+LNhL1yg440jYZR72jCWcWbLWzIosH+uP1fqg==",
+      "dev": true,
+      "license": "MIT",
+      "engines": {
+        "node": ">=6.9.0"
+      }
+    },
+    "node_modules/@babel/core": {
+      "version": "7.29.0",
+      "resolved": "https://registry.npmjs.org/@babel/core/-/core-7.29.0.tgz",
+      "integrity": "sha512-CGOfOJqWjg2qW/Mb6zNsDm+u5vFQ8DxXfbM09z69p5Z6+mE1ikP2jUXw+j42Pf1XTYED2Rni5f95npYeuwMDQA==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "@babel/code-frame": "^7.29.0",
+        "@babel/generator": "^7.29.0",
+        "@babel/helper-compilation-targets": "^7.28.6",
+        "@babel/helper-module-transforms": "^7.28.6",
+        "@babel/helpers": "^7.28.6",
+        "@babel/parser": "^7.29.0",
+        "@babel/template": "^7.28.6",
+        "@babel/traverse": "^7.29.0",
+        "@babel/types": "^7.29.0",
+        "@jridgewell/remapping": "^2.3.5",
+        "convert-source-map": "^2.0.0",
+        "debug": "^4.1.0",
+        "gensync": "^1.0.0-beta.2",
+        "json5": "^2.2.3",
+        "semver": "^6.3.1"
+      },
+      "engines": {
+        "node": ">=6.9.0"
+      },
+      "funding": {
+        "type": "opencollective",
+        "url": "https://opencollective.com/babel"
+      }
+    },
+    "node_modules/@babel/generator": {
+      "version": "7.29.1",
+      "resolved": "https://registry.npmjs.org/@babel/generator/-/generator-7.29.1.tgz",
+      "integrity": "sha512-qsaF+9Qcm2Qv8SRIMMscAvG4O3lJ0F1GuMo5HR/Bp02LopNgnZBC/EkbevHFeGs4ls/oPz9v+Bsmzbkbe+0dUw==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "@babel/parser": "^7.29.0",
+        "@babel/types": "^7.29.0",
+        "@jridgewell/gen-mapping": "^0.3.12",
+        "@jridgewell/trace-mapping": "^0.3.28",
+        "jsesc": "^3.0.2"
+      },
+      "engines": {
+        "node": ">=6.9.0"
+      }
+    },
+    "node_modules/@babel/helper-compilation-targets": {
+      "version": "7.28.6",
+      "resolved": "https://registry.npmjs.org/@babel/helper-compilation-targets/-/helper-compilation-targets-7.28.6.tgz",
+      "integrity": "sha512-JYtls3hqi15fcx5GaSNL7SCTJ2MNmjrkHXg4FSpOA/grxK8KwyZ5bubHsCq8FXCkua6xhuaaBit+3b7+VZRfcA==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "@babel/compat-data": "^7.28.6",
+        "@babel/helper-validator-option": "^7.27.1",
+        "browserslist": "^4.24.0",
+        "lru-cache": "^5.1.1",
+        "semver": "^6.3.1"
+      },
+      "engines": {
+        "node": ">=6.9.0"
+      }
+    },
+    "node_modules/@babel/helper-globals": {
+      "version": "7.28.0",
+      "resolved": "https://registry.npmjs.org/@babel/helper-globals/-/helper-globals-7.28.0.tgz",
+      "integrity": "sha512-+W6cISkXFa1jXsDEdYA8HeevQT/FULhxzR99pxphltZcVaugps53THCeiWA8SguxxpSp3gKPiuYfSWopkLQ4hw==",
+      "dev": true,
+      "license": "MIT",
+      "engines": {
+        "node": ">=6.9.0"
+      }
+    },
+    "node_modules/@babel/helper-module-imports": {
+      "version": "7.28.6",
+      "resolved": "https://registry.npmjs.org/@babel/helper-module-imports/-/helper-module-imports-7.28.6.tgz",
+      "integrity": "sha512-l5XkZK7r7wa9LucGw9LwZyyCUscb4x37JWTPz7swwFE/0FMQAGpiWUZn8u9DzkSBWEcK25jmvubfpw2dnAMdbw==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "@babel/traverse": "^7.28.6",
+        "@babel/types": "^7.28.6"
+      },
+      "engines": {
+        "node": ">=6.9.0"
+      }
+    },
+    "node_modules/@babel/helper-module-transforms": {
+      "version": "7.28.6",
+      "resolved": "https://registry.npmjs.org/@babel/helper-module-transforms/-/helper-module-transforms-7.28.6.tgz",
+      "integrity": "sha512-67oXFAYr2cDLDVGLXTEABjdBJZ6drElUSI7WKp70NrpyISso3plG9SAGEF6y7zbha/wOzUByWWTJvEDVNIUGcA==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "@babel/helper-module-imports": "^7.28.6",
+        "@babel/helper-validator-identifier": "^7.28.5",
+        "@babel/traverse": "^7.28.6"
+      },
+      "engines": {
+        "node": ">=6.9.0"
+      },
+      "peerDependencies": {
+        "@babel/core": "^7.0.0"
+      }
+    },
+    "node_modules/@babel/helper-string-parser": {
+      "version": "7.27.1",
+      "resolved": "https://registry.npmjs.org/@babel/helper-string-parser/-/helper-string-parser-7.27.1.tgz",
+      "integrity": "sha512-qMlSxKbpRlAridDExk92nSobyDdpPijUq2DW6oDnUqd0iOGxmQjyqhMIihI9+zv4LPyZdRje2cavWPbCbWm3eA==",
+      "dev": true,
+      "license": "MIT",
+      "engines": {
+        "node": ">=6.9.0"
+      }
+    },
+    "node_modules/@babel/helper-validator-identifier": {
+      "version": "7.28.5",
+      "resolved": "https://registry.npmjs.org/@babel/helper-validator-identifier/-/helper-validator-identifier-7.28.5.tgz",
+      "integrity": "sha512-qSs4ifwzKJSV39ucNjsvc6WVHs6b7S03sOh2OcHF9UHfVPqWWALUsNUVzhSBiItjRZoLHx7nIarVjqKVusUZ1Q==",
+      "dev": true,
+      "license": "MIT",
+      "engines": {
+        "node": ">=6.9.0"
+      }
+    },
+    "node_modules/@babel/helper-validator-option": {
+      "version": "7.27.1",
+      "resolved": "https://registry.npmjs.org/@babel/helper-validator-option/-/helper-validator-option-7.27.1.tgz",
+      "integrity": "sha512-YvjJow9FxbhFFKDSuFnVCe2WxXk1zWc22fFePVNEaWJEu8IrZVlda6N0uHwzZrUM1il7NC9Mlp4MaJYbYd9JSg==",
+      "dev": true,
+      "license": "MIT",
+      "engines": {
+        "node": ">=6.9.0"
+      }
+    },
+    "node_modules/@babel/helpers": {
+      "version": "7.29.2",
+      "resolved": "https://registry.npmjs.org/@babel/helpers/-/helpers-7.29.2.tgz",
+      "integrity": "sha512-HoGuUs4sCZNezVEKdVcwqmZN8GoHirLUcLaYVNBK2J0DadGtdcqgr3BCbvH8+XUo4NGjNl3VOtSjEKNzqfFgKw==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "@babel/template": "^7.28.6",
+        "@babel/types": "^7.29.0"
+      },
+      "engines": {
+        "node": ">=6.9.0"
+      }
+    },
+    "node_modules/@babel/parser": {
+      "version": "7.29.3",
+      "resolved": "https://registry.npmjs.org/@babel/parser/-/parser-7.29.3.tgz",
+      "integrity": "sha512-b3ctpQwp+PROvU/cttc4OYl4MzfJUWy6FZg+PMXfzmt/+39iHVF0sDfqay8TQM3JA2EUOyKcFZt75jWriQijsA==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "@babel/types": "^7.29.0"
+      },
+      "bin": {
+        "parser": "bin/babel-parser.js"
+      },
+      "engines": {
+        "node": ">=6.0.0"
+      }
+    },
+    "node_modules/@babel/runtime": {
+      "version": "7.29.2",
+      "resolved": "https://registry.npmjs.org/@babel/runtime/-/runtime-7.29.2.tgz",
+      "integrity": "sha512-JiDShH45zKHWyGe4ZNVRrCjBz8Nh9TMmZG1kh4QTK8hCBTWBi8Da+i7s1fJw7/lYpM4ccepSNfqzZ/QvABBi5g==",
+      "license": "MIT",
+      "engines": {
+        "node": ">=6.9.0"
+      }
+    },
+    "node_modules/@babel/template": {
+      "version": "7.28.6",
+      "resolved": "https://registry.npmjs.org/@babel/template/-/template-7.28.6.tgz",
+      "integrity": "sha512-YA6Ma2KsCdGb+WC6UpBVFJGXL58MDA6oyONbjyF/+5sBgxY/dwkhLogbMT2GXXyU84/IhRw/2D1Os1B/giz+BQ==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "@babel/code-frame": "^7.28.6",
+        "@babel/parser": "^7.28.6",
+        "@babel/types": "^7.28.6"
+      },
+      "engines": {
+        "node": ">=6.9.0"
+      }
+    },
+    "node_modules/@babel/traverse": {
+      "version": "7.29.0",
+      "resolved": "https://registry.npmjs.org/@babel/traverse/-/traverse-7.29.0.tgz",
+      "integrity": "sha512-4HPiQr0X7+waHfyXPZpWPfWL/J7dcN1mx9gL6WdQVMbPnF3+ZhSMs8tCxN7oHddJE9fhNE7+lxdnlyemKfJRuA==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "@babel/code-frame": "^7.29.0",
+        "@babel/generator": "^7.29.0",
+        "@babel/helper-globals": "^7.28.0",
+        "@babel/parser": "^7.29.0",
+        "@babel/template": "^7.28.6",
+        "@babel/types": "^7.29.0",
+        "debug": "^4.3.1"
+      },
+      "engines": {
+        "node": ">=6.9.0"
+      }
+    },
+    "node_modules/@babel/types": {
+      "version": "7.29.0",
+      "resolved": "https://registry.npmjs.org/@babel/types/-/types-7.29.0.tgz",
+      "integrity": "sha512-LwdZHpScM4Qz8Xw2iKSzS+cfglZzJGvofQICy7W7v4caru4EaAmyUuO6BGrbyQ2mYV11W0U8j5mBhd14dd3B0A==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "@babel/helper-string-parser": "^7.27.1",
+        "@babel/helper-validator-identifier": "^7.28.5"
+      },
+      "engines": {
+        "node": ">=6.9.0"
+      }
+    },
+    "node_modules/@emnapi/core": {
+      "version": "1.10.0",
+      "resolved": "https://registry.npmjs.org/@emnapi/core/-/core-1.10.0.tgz",
+      "integrity": "sha512-yq6OkJ4p82CAfPl0u9mQebQHKPJkY7WrIuk205cTYnYe+k2Z8YBh11FrbRG/H6ihirqcacOgl2BIO8oyMQLeXw==",
+      "dev": true,
+      "license": "MIT",
+      "optional": true,
+      "dependencies": {
+        "@emnapi/wasi-threads": "1.2.1",
+        "tslib": "^2.4.0"
+      }
+    },
+    "node_modules/@emnapi/runtime": {
+      "version": "1.10.0",
+      "resolved": "https://registry.npmjs.org/@emnapi/runtime/-/runtime-1.10.0.tgz",
+      "integrity": "sha512-ewvYlk86xUoGI0zQRNq/mC+16R1QeDlKQy21Ki3oSYXNgLb45GV1P6A0M+/s6nyCuNDqe5VpaY84BzXGwVbwFA==",
+      "dev": true,
+      "license": "MIT",
+      "optional": true,
+      "dependencies": {
+        "tslib": "^2.4.0"
+      }
+    },
+    "node_modules/@emnapi/wasi-threads": {
+      "version": "1.2.1",
+      "resolved": "https://registry.npmjs.org/@emnapi/wasi-threads/-/wasi-threads-1.2.1.tgz",
+      "integrity": "sha512-uTII7OYF+/Mes/MrcIOYp5yOtSMLBWSIoLPpcgwipoiKbli6k322tcoFsxoIIxPDqW01SQGAgko4EzZi2BNv2w==",
+      "dev": true,
+      "license": "MIT",
+      "optional": true,
+      "dependencies": {
+        "tslib": "^2.4.0"
+      }
+    },
+    "node_modules/@eslint-community/eslint-utils": {
+      "version": "4.9.1",
+      "resolved": "https://registry.npmjs.org/@eslint-community/eslint-utils/-/eslint-utils-4.9.1.tgz",
+      "integrity": "sha512-phrYmNiYppR7znFEdqgfWHXR6NCkZEK7hwWDHZUjit/2/U0r6XvkDl0SYnoM51Hq7FhCGdLDT6zxCCOY1hexsQ==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "eslint-visitor-keys": "^3.4.3"
+      },
+      "engines": {
+        "node": "^12.22.0 || ^14.17.0 || >=16.0.0"
+      },
+      "funding": {
+        "url": "https://opencollective.com/eslint"
+      },
+      "peerDependencies": {
+        "eslint": "^6.0.0 || ^7.0.0 || >=8.0.0"
+      }
+    },
+    "node_modules/@eslint-community/eslint-utils/node_modules/eslint-visitor-keys": {
+      "version": "3.4.3",
+      "resolved": "https://registry.npmjs.org/eslint-visitor-keys/-/eslint-visitor-keys-3.4.3.tgz",
+      "integrity": "sha512-wpc+LXeiyiisxPlEkUzU6svyS1frIO3Mgxj1fdy7Pm8Ygzguax2N3Fa/D/ag1WqbOprdI+uY6wMUl8/a2G+iag==",
+      "dev": true,
+      "license": "Apache-2.0",
+      "engines": {
+        "node": "^12.22.0 || ^14.17.0 || >=16.0.0"
+      },
+      "funding": {
+        "url": "https://opencollective.com/eslint"
+      }
+    },
+    "node_modules/@eslint-community/regexpp": {
+      "version": "4.12.2",
+      "resolved": "https://registry.npmjs.org/@eslint-community/regexpp/-/regexpp-4.12.2.tgz",
+      "integrity": "sha512-EriSTlt5OC9/7SXkRSCAhfSxxoSUgBm33OH+IkwbdpgoqsSsUg7y3uh+IICI/Qg4BBWr3U2i39RpmycbxMq4ew==",
+      "dev": true,
+      "license": "MIT",
+      "engines": {
+        "node": "^12.0.0 || ^14.0.0 || >=16.0.0"
+      }
+    },
+    "node_modules/@eslint/config-array": {
+      "version": "0.23.5",
+      "resolved": "https://registry.npmjs.org/@eslint/config-array/-/config-array-0.23.5.tgz",
+      "integrity": "sha512-Y3kKLvC1dvTOT+oGlqNQ1XLqK6D1HU2YXPc52NmAlJZbMMWDzGYXMiPRJ8TYD39muD/OTjlZmNJ4ib7dvSrMBA==",
+      "dev": true,
+      "license": "Apache-2.0",
+      "dependencies": {
+        "@eslint/object-schema": "^3.0.5",
+        "debug": "^4.3.1",
+        "minimatch": "^10.2.4"
+      },
+      "engines": {
+        "node": "^20.19.0 || ^22.13.0 || >=24"
+      }
+    },
+    "node_modules/@eslint/config-helpers": {
+      "version": "0.6.0",
+      "resolved": "https://registry.npmjs.org/@eslint/config-helpers/-/config-helpers-0.6.0.tgz",
+      "integrity": "sha512-ii6Bw9jJ2zi2cWA2Z+9/QZ/+3DX6kwaV5Q986D/CdP3Lap3w/pgQZ373FV7byY/i7L4IRH/G43I5dz1ClsCbpA==",
+      "dev": true,
+      "license": "Apache-2.0",
+      "dependencies": {
+        "@eslint/core": "^1.2.1"
+      },
+      "engines": {
+        "node": "^20.19.0 || ^22.13.0 || >=24"
+      }
+    },
+    "node_modules/@eslint/core": {
+      "version": "1.2.1",
+      "resolved": "https://registry.npmjs.org/@eslint/core/-/core-1.2.1.tgz",
+      "integrity": "sha512-MwcE1P+AZ4C6DWlpin/OmOA54mmIZ/+xZuJiQd4SyB29oAJjN30UW9wkKNptW2ctp4cEsvhlLY/CsQ1uoHDloQ==",
+      "dev": true,
+      "license": "Apache-2.0",
+      "dependencies": {
+        "@types/json-schema": "^7.0.15"
+      },
+      "engines": {
+        "node": "^20.19.0 || ^22.13.0 || >=24"
+      }
+    },
+    "node_modules/@eslint/js": {
+      "version": "10.0.1",
+      "resolved": "https://registry.npmjs.org/@eslint/js/-/js-10.0.1.tgz",
+      "integrity": "sha512-zeR9k5pd4gxjZ0abRoIaxdc7I3nDktoXZk2qOv9gCNWx3mVwEn32VRhyLaRsDiJjTs0xq/T8mfPtyuXu7GWBcA==",
+      "dev": true,
+      "license": "MIT",
+      "engines": {
+        "node": "^20.19.0 || ^22.13.0 || >=24"
+      },
+      "funding": {
+        "url": "https://eslint.org/donate"
+      },
+      "peerDependencies": {
+        "eslint": "^10.0.0"
+      },
+      "peerDependenciesMeta": {
+        "eslint": {
+          "optional": true
         }
-        return isMatch;
-     });
-  });
-
-  const staffStats = {};
-  let tPaid = 0, tToPay = 0, tCredit = 0, tCollected = 0, tTotalValue = 0;
-
-  filteredDelParcels.forEach(p => {
-     const staffName = p.deliveredBy || "System";
-     if (!staffStats[staffName]) {
-         staffStats[staffName] = { count: 0, totalValue: 0, collected: 0, paid: 0, toPay: 0, credit: 0, parcels: [] };
-     }
-     
-     const amt = Number(p.price) || 0;
-     staffStats[staffName].count += 1;
-     staffStats[staffName].totalValue += amt;
-     tTotalValue += amt;
-     staffStats[staffName].parcels.push(p);
-     
-     if (p.payment === 'Paid') {
-         staffStats[staffName].paid += amt;
-         tPaid += amt;
-     } else if (p.payment === 'Credit' || (p.payment === 'To Pay' && p.deliveryMode === 'Credit')) {
-         staffStats[staffName].credit += amt;
-         tCredit += amt;
-     } else if (p.payment === 'To Pay') {
-         staffStats[staffName].toPay += amt;
-         tToPay += amt;
-         if (p.deliveryMode === 'Cash' || p.deliveryMode === 'GPay' || !p.deliveryMode) {
-             staffStats[staffName].collected += amt;
-             tCollected += amt;
-         }
-     }
-  });
-
-  return (
-    <div className="space-y-6">
-      {(user.role === 'superadmin' || user.branch === 'All') && (
-        <div className="flex justify-end mb-2">
-          <select value={selectedBranch} onChange={e=>setSelectedBranch(e.target.value)} className={`p-2 px-4 rounded-xl font-bold border outline-none shadow-sm cursor-pointer ${isDark?'bg-slate-900 border-slate-700':'bg-white border-slate-200'}`}>
-            <option value="All">🌍 Global Network (All Branches)</option>
-            {CITIES.map(c => <option key={c} value={c}>🏢 Branch: {c}</option>)}
-          </select>
-        </div>
-      )}
-      
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
-          <div onClick={() => goToTrack('All')} className={`${cardBg} p-4 rounded-2xl shadow-sm border flex flex-col justify-center cursor-pointer hover:ring-2 hover:scale-105 ring-blue-500 transition-all duration-300`}>
-             <span className="text-[10px] font-bold opacity-60 uppercase mb-1">Total Bookings</span>
-             <span className={`text-xl md:text-3xl font-black text-blue-500`}>{branchParcels.length}</span>
-          </div>
-          <div onClick={() => goToTrack('In Transit')} className={`${cardBg} p-4 rounded-2xl shadow-sm border flex flex-col justify-center cursor-pointer hover:ring-2 hover:scale-105 ring-amber-500 transition-all duration-300`}>
-             <span className="text-[10px] font-bold opacity-60 uppercase mb-1">In Transit</span>
-             <span className={`text-xl md:text-3xl font-black text-amber-500`}>{branchParcels.filter(p=>p.status==="In Transit").length}</span>
-          </div>
-          <div onClick={() => setPage('pending')} className={`${cardBg} p-4 rounded-2xl shadow-sm border flex flex-col justify-center cursor-pointer hover:ring-2 hover:scale-105 ring-rose-500 transition-all duration-300`}>
-             <span className="text-[10px] font-bold opacity-60 uppercase mb-1">Pending Stock</span>
-             <span className={`text-xl md:text-3xl font-black text-rose-500`}>{pendingCount}</span>
-          </div>
-          <div onClick={() => goToTrack('Delivered')} className={`${cardBg} p-4 rounded-2xl shadow-sm border flex flex-col justify-center cursor-pointer hover:ring-2 hover:scale-105 ring-emerald-500 transition-all duration-300`}>
-             <span className="text-[10px] font-bold opacity-60 uppercase mb-1">Total Delivered</span>
-             <span className={`text-xl md:text-3xl font-black text-emerald-500`}>{branchParcels.filter(p=>p.status==="Delivered").length}</span>
-          </div>
-          <div className={`${cardBg} p-4 rounded-2xl shadow-sm border flex flex-col justify-center`}>
-             <span className="text-[10px] font-bold opacity-60 uppercase mb-1">Branch Revenue</span>
-             <span className={`text-xl md:text-3xl font-black text-indigo-500`}>₹{rev}</span>
-          </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-         <div className={`${cardBg} p-4 md:p-6 rounded-2xl border shadow-sm md:col-span-2 h-auto md:h-[400px]`}>
-           <h3 className="font-black text-sm text-slate-400 uppercase mb-4">Branch Status Analysis</h3>
-           <ResponsiveContainer width="100%" height={280}>
-             <BarChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 20 }}>
-               <XAxis dataKey="name" tick={{fontSize: 10}} axisLine={false} tickLine={false} />
-               <Tooltip cursor={{fill: 'rgba(0,0,0,0.05)'}} contentStyle={{background: '#1e293b', border:'none', color:'#fff', borderRadius:'8px', fontSize:'12px'}} />
-               <Bar dataKey="count" radius={[4, 4, 0, 0]}>{chartData.map((e, i) => (<Cell key={i} fill={e.fill} />))}</Bar>
-             </BarChart>
-           </ResponsiveContainer>
-         </div>
-
-         <div className={`${cardBg} p-4 md:p-6 rounded-2xl border shadow-sm flex flex-col h-auto md:h-[400px]`}>
-            <div className="flex justify-between items-center mb-4 border-b border-slate-500/20 pb-2">
-               <div className="flex items-center gap-2">
-                  <h3 className="font-black text-sm text-emerald-500 uppercase hidden sm:block">🏆 Deliveries</h3>
-                  <input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} className={`px-2 py-0.5 text-[10px] md:text-xs font-bold rounded outline-none border cursor-pointer ${isDark ? 'bg-slate-900 border-emerald-500/30 text-emerald-400' : 'bg-emerald-50 border-emerald-300 text-emerald-700'}`} />
-               </div>
-               <div className="flex gap-2">
-                  <button onClick={() => generateListPDF(`Deliveries - ${deliveryDate}`, selectedBranch, filteredDelParcels)} className="bg-blue-500 text-white text-[10px] px-2 py-1 rounded-md font-bold shadow hover:bg-blue-600 transition-colors">🖨️ PRINT</button>
-                  <span className="bg-emerald-500 text-white text-[10px] px-2 py-1 rounded-md font-bold shadow">{filteredDelParcels.length} Items</span>
-               </div>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
-               {Object.keys(staffStats).length === 0 ? (
-                  <p className="text-xs opacity-50 text-center mt-10 font-bold">No deliveries on {deliveryDate}.</p>
-               ) : (
-                  Object.entries(staffStats).sort((a,b)=>b[1].count-a[1].count).map(([staff, stats], i) => (
-                     <div key={i} className={`flex flex-col rounded-xl border overflow-hidden ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                        <div onClick={() => setExpandedStaff(expandedStaff === staff ? null : staff)} className="flex justify-between items-center p-3 cursor-pointer hover:bg-black/5 transition-colors">
-                           <div className="flex flex-col">
-                              <div className="flex items-center gap-2">
-                                 <span className="text-lg">{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '👤'}</span>
-                                 <span className="font-bold text-sm">{staff}</span>
-                              </div>
-                              <span className="text-[10px] font-bold text-indigo-500 ml-7 mt-0.5">₹{stats.totalValue} Total Value</span>
-                           </div>
-                           <div className="flex items-center gap-2">
-                              <span className="text-emerald-500 font-black text-lg">{stats.count}</span>
-                              <span className="text-[10px] opacity-50">{expandedStaff === staff ? '▲' : '▼'}</span>
-                           </div>
-                        </div>
-
-                        {expandedStaff === staff && (
-                           <div className={`p-2 space-y-2 border-t ${isDark ? 'border-slate-700 bg-slate-950/50' : 'border-slate-200 bg-white'}`}>
-                              <div className="flex justify-between text-[9px] uppercase font-bold opacity-70 px-1 pt-1">
-                                 <span>Paid: ₹{stats.paid}</span>
-                                 <span>ToPay: ₹{stats.toPay}</span>
-                                 <span>Credit: ₹{stats.credit}</span>
-                              </div>
-                              <div className="text-[10px] font-black text-emerald-500 px-1 pb-1 border-b border-slate-500/20 mb-1">
-                                 👉 Cash to Collect: ₹{stats.collected}
-                              </div>
-                              {stats.parcels.map(p => (
-                                 <div key={p.id} onClick={() => setGlobalView(p)} className="flex justify-between items-center p-2 rounded-lg cursor-pointer hover:bg-indigo-500/10 transition-colors">
-                                    <div className="flex flex-col">
-                                       <span className="text-[11px] font-black text-indigo-500 hover:underline">📦 {p.id}</span>
-                                       <span className="text-[10px] opacity-70 font-bold truncate w-32 md:w-40" title={p.rName}>{p.rName}</span>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                       <div className="flex flex-col text-right">
-                                          <span className="text-[11px] font-bold">₹{p.price}</span>
-                                          <span className="text-[9px] opacity-60 font-bold">{p.payment === 'To Pay' ? p.deliveryMode : p.payment}</span>
-                                       </div>
-                                       <PrintGroup p={p} />
-                                    </div>
-                                 </div>
-                              ))}
-                           </div>
-                        )}
-                     </div>
-                  ))
-               )}
-            </div>
-
-            {Object.keys(staffStats).length > 0 && (
-               <div className={`mt-3 p-3 rounded-xl border-t-2 border-dashed flex justify-between items-center font-black text-xs shrink-0 ${isDark ? 'border-slate-700 text-white bg-slate-950' : 'border-slate-200 text-slate-900 bg-slate-100'}`}>
-                  <div className="flex flex-col">
-                     <span className="uppercase tracking-wider opacity-60 text-[9px]">Total on {deliveryDate}</span>
-                     <span className="text-indigo-500 font-black text-sm mt-0.5">₹{tTotalValue} Value</span>
-                  </div>
-                  <div className="text-right flex flex-col">
-                     <span className="text-emerald-500 text-sm">₹{tCollected} Cash In-Hand</span>
-                     <span className="text-[9px] opacity-70 font-bold mt-0.5">P: ₹{tPaid} | TP: ₹{tToPay} | C: ₹{tCredit}</span>
-                  </div>
-               </div>
-            )}
-         </div>
-      </div>
-    </div>
-  );
-}
-
-function Pending({parcels, isDark, user, setGlobalView}) {
-  const [fLR, setFLR] = useState(""); const [fFrom, setFFrom] = useState("All"); const [fTo, setFTo] = useState("All"); 
-  const [fFromDate, setFFromDate] = useState(""); const [fToDate, setFToDate] = useState("");
-  const [sortOrder, setSortOrder] = useState("lr_asc");
-
-  const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-100"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800"; const tblBg = isDark ? "bg-slate-800/40" : "bg-slate-50";
-  const getDays = (iso) => { if(!iso) return 0; const diff = new Date() - new Date(iso); return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24))); };
-  
-  let pendingParcels = parcels.filter(p => {
-    if (p.status !== 'Booked' && p.status !== 'In Transit') return false;
-    if (user.role !== 'superadmin' && p.from !== user.branch && p.to !== user.branch) return false;
-    const sTerm = fLR.toLowerCase();
-    if (fLR && !p.id.toLowerCase().includes(sTerm) && !p.sPhone.includes(sTerm) && !(p.sName && p.sName.toLowerCase().includes(sTerm)) && !(p.rName && p.rName.toLowerCase().includes(sTerm))) return false;
-    if (fFrom !== "All" && p.from !== fFrom) return false;
-    if (fTo !== "All" && p.to !== fTo) return false;
-    
-    const pDate = p.isoDate ? p.isoDate.split('T')[0] : "";
-    if (fFromDate && pDate < fFromDate) return false;
-    if (fToDate && pDate > fToDate) return false;
-    return true;
-  });
-
-  pendingParcels.sort((a, b) => {
-    if (sortOrder === "lr_asc") return a.id.localeCompare(b.id);
-    if (sortOrder === "lr_desc") return b.id.localeCompare(a.id);
-    if (sortOrder === "date_desc") return new Date(b.isoDate) - new Date(a.isoDate);
-    if (sortOrder === "date_asc") return new Date(a.isoDate) - new Date(b.isoDate);
-    return 0;
-  });
-
-  const pendingQty = pendingParcels.reduce((sum, p) => sum + (Number(p.count)||0), 0);
-  const pendingPaid = pendingParcels.filter(p=>p.payment==='Paid').reduce((sum, p) => sum + (Number(p.price)||0), 0);
-  const pendingToPay = pendingParcels.filter(p=>p.payment==='To Pay').reduce((sum, p) => sum + (Number(p.price)||0), 0);
-
-  return (
-    <div className="space-y-4">
-      <div className={`${cardBg} p-4 rounded-2xl border space-y-3`}>
-        <h3 className="font-bold text-sm text-amber-500">Filter Pending Stock</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2">
-          <input value={fLR} onChange={e=>setFLR(e.target.value)} placeholder="LR / Phone / Name" className={`p-2 rounded-xl border text-sm ${inputBg}`} />
-          <select value={fFrom} onChange={e=>setFFrom(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`}><option value="All">Any Origin</option>{CITIES.map(c => <option key={c}>{c}</option>)}</select>
-          <select value={fTo} onChange={e=>setFTo(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`}><option value="All">Any Destination</option>{CITIES.map(c => <option key={c}>{c}</option>)}</select>
-          <input type="date" title="From Date" value={fFromDate} onChange={e=>setFFromDate(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`} />
-          <input type="date" title="To Date" value={fToDate} onChange={e=>setFToDate(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`} />
-          <select value={sortOrder} onChange={e=>setSortOrder(e.target.value)} className={`p-2 rounded-xl border text-sm font-black text-amber-600 ${inputBg}`}>
-            <option value="lr_asc">Sort: LR (A ➔ Z)</option>
-            <option value="lr_desc">Sort: LR (Z ➔ A)</option>
-            <option value="date_desc">Sort: Newest First</option>
-            <option value="date_asc">Sort: Oldest First</option>
-          </select>
-        </div>
-      </div>
-      <div className={`${cardBg} rounded-2xl shadow-sm border overflow-hidden`}>
-        <div className="bg-amber-500/10 text-amber-600 p-4 font-bold md:text-lg flex justify-between items-center border-b border-amber-500/20">
-            <span>⏳ Global Pending Parcels</span>
-            <div className="flex gap-2">
-               <button onClick={() => exportToCSV("Pending_List", pendingParcels)} className="bg-amber-600 hover:bg-amber-700 text-white text-xs px-3 py-1.5 rounded-lg shadow-md transition-colors">📥 Excel</button>
-               <button onClick={() => generateListPDF("Pending Manifest", user.branch, pendingParcels)} className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded-lg shadow-md transition-colors">🖨️ Print List</button>
-               <span className="bg-amber-500 text-white px-3 py-1.5 rounded-lg text-xs md:text-sm">{pendingParcels.length} Items</span>
-            </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm whitespace-nowrap">
-            <thead className={`${tblBg} opacity-70 text-[10px] uppercase font-bold`}>
-               <tr>
-                  <th className="p-4">LR No</th>
-                  <th className="p-4">Route</th>
-                  <th className="p-4">Customer Details</th>
-                  <th className="p-4">Qty</th>
-                  <th className="p-4">Status</th>
-                  <th className="p-4">Age</th>
-                  <th className="p-4 text-center">Action</th>
-               </tr>
-            </thead>
-            <tbody>
-              {pendingParcels.length === 0 ? <tr><td colSpan="7" className="p-8 text-center opacity-50 font-bold">No pending parcels! All cleared.</td></tr> : pendingParcels.map(p => {
-                const days = getDays(p.isoDate);
-                return (
-                  <tr key={p.id} className="border-t border-slate-500/10 hover:bg-black/5 cursor-pointer" onClick={() => setGlobalView(p)}>
-                    <td className="p-4 font-black text-indigo-500 hover:underline">{p.id}</td>
-                    <td className="p-4 font-bold">{p.from} ➔ {p.to}</td>
-                    <td className="p-4 text-xs"><p className="font-bold text-slate-400">{p.sName || "Unknown"} ➔ {p.rName || "Unknown"}</p><p className="opacity-50 text-[11px]">{p.sPhone} | {p.rPhone}</p></td>
-                    <td className="p-4 font-black text-amber-500">{p.count} <span className="text-[10px] font-normal">{p.type}</span></td>
-                    <td className="p-4"><span className="px-2 py-1 rounded-full text-[10px] font-bold" style={{backgroundColor: S_CLR[p.status]+'22', color: S_CLR[p.status]}}>{p.status}</span></td>
-                    <td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold ${days > 2 ? 'bg-red-500/10 text-red-500' : 'bg-emerald-500/10 text-emerald-500'}`}>{days === 0 ? 'Today' : `${days} Days`}</span></td>
-                    <td className="p-4 text-center"><PrintGroup p={p} /></td>
-                  </tr>
-                )
-              })}
-            </tbody>
-            {pendingParcels.length > 0 && (
-              <tfoot className={`${isDark?'bg-slate-900 border-slate-700':'bg-slate-100 border-slate-200'} border-t-2 font-black`}>
-                 <tr>
-                    <td colSpan="3" className="p-4 text-right opacity-50 uppercase text-xs">Pending Summary :</td>
-                    <td className="p-4 text-amber-500 text-lg">{pendingQty} <span className="text-xs">Items</span></td>
-                    <td colSpan="3" className="p-4">
-                       <div className="flex gap-4 text-xs bg-black/5 p-2 rounded-xl inline-flex border border-slate-500/10">
-                          {pendingPaid > 0 && <span className="text-emerald-500">Paid: ₹{pendingPaid}</span>}
-                          {pendingToPay > 0 && <span className="text-rose-500">ToPay: ₹{pendingToPay}</span>}
-                       </div>
-                    </td>
-                 </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, user, creditAuthList}) {
-  const initCargo = { count: "1", type: "Box", size: "Standard", weight: "", rate: "" };
-  const initF = {sName:"", sPhone:"", sGst:"", rName:"", rPhone:"", rGst:"", from: user.branch === 'All' ? "" : user.branch, to:"", payment:"Paid", creditCustomer:"", notes:""};
-  
-  const [f, setF] = useState(initF); 
-  const [cargoList, setCargoList] = useState([{...initCargo}]);
-  
-  const [done, setDone] = useState(null); const [eway, setEway] = useState(""); const [contacts, setContacts] = useState([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showScanner, setShowScanner] = useState(false);
-  const [lrNo, setLrNo] = useState("");
-  const [isManualLR, setIsManualLR] = useState(false);
-
-  useEffect(() => { if(shortcutMode) setF(prev => ({...prev, payment: shortcutMode})); }, [shortcutMode]);
-  
-  useEffect(() => { async function load() { const cMap = {}; parcels.forEach(p => { if (p.sPhone && !cMap[p.sPhone]) cMap[p.sPhone] = { name: p.sName, gst: p.sGst || "" }; if (p.rPhone && !cMap[p.rPhone]) cMap[p.rPhone] = { name: p.rName, gst: p.rGst || "" }; }); const localC = await local.get("mps_contacts") || {}; Object.assign(cMap, localC); setContacts(Object.entries(cMap).map(([phone, data]) => ({ phone, ...data }))); } load(); }, [parcels]);
-
-  useEffect(() => {
-     if(!isManualLR) {
-        if(f.from && f.to) { setLrNo(generateLR(f.from, f.to, parcels)); } 
-        else { setLrNo(""); }
-     }
-  }, [f.from, f.to, isManualLR, parcels]); 
-
-  const handleEwayChange = (e) => { 
-    const val = e.target.value.replace(/\D/g, '').slice(0, 12); 
-    setEway(val); 
-    if (val.length === 12) { 
-        showMsg("Validating E-Way Bill Parameters...", "info"); 
-        setTimeout(() => { 
-            setF(p => ({...p, sName: "SRI MURUGAN TEXTILES", sPhone: "9876543210", sGst: "33AABCU1234F1Z1", from: user.branch === 'All' ? "Salem" : user.branch, rName: "CITY FASHIONS", rPhone: "9988776655", rGst: "29AAAAA0000A1Z5", to: "Bangalore", payment: "To Pay" })); 
-            setCargoList([{count: "15", type: "Bale", size: "Standard", weight: "", rate: "120"}]);
-            showMsg("E-Way Bill Content Processed & Populated!", "success"); 
-        }, 750); 
-    } 
-  };
-
-  const handleQRScan = (text) => {
-    setShowScanner(false);
-    const ewayMatch = text.match(/\b\d{12}\b/); 
-    if(ewayMatch) {
-        const val = ewayMatch[0];
-        setEway(val);
-        showMsg("QR Scanned! E-Way number extracted: " + val, "success");
-        setTimeout(() => { 
-            setF(p => ({...p, sName: "SCANNED CLIENT", sPhone: "9999999999", rName: "TARGET CLIENT", rPhone: "8888888888", payment: "To Pay" })); 
-            setCargoList([{count: "10", type: "Box", size: "Standard", weight: "", rate: "150"}]);
-            showMsg("E-Way Bill Content Auto-Filled!", "info"); 
-        }, 800);
-    } else { showMsg("Invalid QR Code! No E-Way Bill Number found.", "error"); }
-  };
-
-  const smartFocus = (d, isSender) => { setTimeout(() => { if (isSender) { if (!d.name) document.getElementById('sName')?.focus(); else if (!d.gst) document.getElementById('sGst')?.focus(); else if (user.branch !== 'All') document.getElementById('rPhone')?.focus(); else document.getElementById('sFrom')?.focus(); } else { if (!d.name) document.getElementById('rName')?.focus(); else if (!d.gst) document.getElementById('rGst')?.focus(); else document.getElementById('rTo')?.focus(); } }, 50); };
-  
-  const handlePhoneChange = async (isSender, value) => { const fieldPrefix = isSender ? 's' : 'r'; setF(prev => ({ ...prev, [`${fieldPrefix}Phone`]: value })); if (value.length === 10) { const found = contacts.find(c => c.phone === value); if (found) { setF(prev => ({...prev, [`${fieldPrefix}Name`]: (found.name || "").toUpperCase(), [`${fieldPrefix}Gst`]: found.gst || "" })); showMsg("Customer details loaded automatically!", "success"); smartFocus(found, isSender); } } };
-  const handleContactSelect = (isSender, d) => { const px = isSender ? 's' : 'r'; setF(p => ({ ...p, [`${px}Phone`]: d.phone, [`${px}Name`]: (d.name||'').toUpperCase(), [`${px}Gst`]: d.gst||'' })); smartFocus(d, isSender); };
-  
-  const updateCargo = (index, field, value) => {
-      const newList = [...cargoList];
-      newList[index][field] = value;
-      setCargoList(newList);
-  };
-  
-  const addCargoRow = () => { setCargoList([...cargoList, {...initCargo}]); };
-  const removeCargoRow = (index) => { const newList = [...cargoList]; newList.splice(index, 1); setCargoList(newList); };
-
-  const ep = cargoList.reduce((total, item) => total + calcPrice(f.from, f.to, item.rate, item.count, item.type, f.payment, item.size), 0);
-  
-  const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800";
-  const uniqueCompanies = [...new Set(creditAuthList.map(c => c.company))];
-
-  const submit = async () => {
-    if(isSubmitting) return; 
-    if(isManualLR && (!lrNo || lrNo.trim() === "")) return showMsg("LR Number is mandatory in Manual Mode!", "error");
-    if(!f.sName || !f.sPhone || !f.from || !f.rName || !f.rPhone || !f.to) return showMsg("Please fill all profile fields marked with (*)", "error");
-    
-    const invalidCargo = cargoList.find(c => !c.count || !c.rate || !c.type);
-    if(invalidCargo) return showMsg("Please enter Quantity, Type, and Rate for all cargo items!", "error");
-
-    if(f.payment === "Credit" && !f.creditCustomer) return showMsg("Search and Select a Credit Account!", "error");
-    
-    setIsSubmitting(true); 
-    const dObj = new Date(); const isoDate = dObj.toISOString(); const locDateStr = dObj.toLocaleDateString('en-IN'); 
-    
-    try {
-        let freshParcels = await db.getParcels();
-        let finalLR = "";
-
-        if (isManualLR) {
-           finalLR = lrNo.trim().toUpperCase();
-           if(freshParcels.some(p => p.id.toUpperCase() === finalLR)) {
-              setIsSubmitting(false); return showMsg(`LR Number ${finalLR} already exists!`, "error");
-           }
-        } else {
-           finalLR = generateLR(f.from, f.to, freshParcels);
+      }
+    },
+    "node_modules/@eslint/object-schema": {
+      "version": "3.0.5",
+      "resolved": "https://registry.npmjs.org/@eslint/object-schema/-/object-schema-3.0.5.tgz",
+      "integrity": "sha512-vqTaUEgxzm+YDSdElad6PiRoX4t8VGDjCtt05zn4nU810UIx/uNEV7/lZJ6KwFThKZOzOxzXy48da+No7HZaMw==",
+      "dev": true,
+      "license": "Apache-2.0",
+      "engines": {
+        "node": "^20.19.0 || ^22.13.0 || >=24"
+      }
+    },
+    "node_modules/@eslint/plugin-kit": {
+      "version": "0.7.1",
+      "resolved": "https://registry.npmjs.org/@eslint/plugin-kit/-/plugin-kit-0.7.1.tgz",
+      "integrity": "sha512-rZAP3aVgB9ds9KOeUSL+zZ21hPmo8dh6fnIFwRQj5EAZl9gzR7wxYbYXYysAM8CTqGmUGyp2S4kUdV17MnGuWQ==",
+      "dev": true,
+      "license": "Apache-2.0",
+      "dependencies": {
+        "@eslint/core": "^1.2.1",
+        "levn": "^0.4.1"
+      },
+      "engines": {
+        "node": "^20.19.0 || ^22.13.0 || >=24"
+      }
+    },
+    "node_modules/@humanfs/core": {
+      "version": "0.19.2",
+      "resolved": "https://registry.npmjs.org/@humanfs/core/-/core-0.19.2.tgz",
+      "integrity": "sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==",
+      "dev": true,
+      "license": "Apache-2.0",
+      "dependencies": {
+        "@humanfs/types": "^0.15.0"
+      },
+      "engines": {
+        "node": ">=18.18.0"
+      }
+    },
+    "node_modules/@humanfs/node": {
+      "version": "0.16.8",
+      "resolved": "https://registry.npmjs.org/@humanfs/node/-/node-0.16.8.tgz",
+      "integrity": "sha512-gE1eQNZ3R++kTzFUpdGlpmy8kDZD/MLyHqDwqjkVQI0JMdI1D51sy1H958PNXYkM2rAac7e5/CnIKZrHtPh3BQ==",
+      "dev": true,
+      "license": "Apache-2.0",
+      "dependencies": {
+        "@humanfs/core": "^0.19.2",
+        "@humanfs/types": "^0.15.0",
+        "@humanwhocodes/retry": "^0.4.0"
+      },
+      "engines": {
+        "node": ">=18.18.0"
+      }
+    },
+    "node_modules/@humanfs/types": {
+      "version": "0.15.0",
+      "resolved": "https://registry.npmjs.org/@humanfs/types/-/types-0.15.0.tgz",
+      "integrity": "sha512-ZZ1w0aoQkwuUuC7Yf+7sdeaNfqQiiLcSRbfI08oAxqLtpXQr9AIVX7Ay7HLDuiLYAaFPu8oBYNq/QIi9URHJ3Q==",
+      "dev": true,
+      "license": "Apache-2.0",
+      "engines": {
+        "node": ">=18.18.0"
+      }
+    },
+    "node_modules/@humanwhocodes/module-importer": {
+      "version": "1.0.1",
+      "resolved": "https://registry.npmjs.org/@humanwhocodes/module-importer/-/module-importer-1.0.1.tgz",
+      "integrity": "sha512-bxveV4V8v5Yb4ncFTT3rPSgZBOpCkjfK0y4oVVVJwIuDVBRMDXrPyXRL988i5ap9m9bnyEEjWfm5WkBmtffLfA==",
+      "dev": true,
+      "license": "Apache-2.0",
+      "engines": {
+        "node": ">=12.22"
+      },
+      "funding": {
+        "type": "github",
+        "url": "https://github.com/sponsors/nzakas"
+      }
+    },
+    "node_modules/@humanwhocodes/retry": {
+      "version": "0.4.3",
+      "resolved": "https://registry.npmjs.org/@humanwhocodes/retry/-/retry-0.4.3.tgz",
+      "integrity": "sha512-bV0Tgo9K4hfPCek+aMAn81RppFKv2ySDQeMoSZuvTASywNTnVJCArCZE2FWqpvIatKu7VMRLWlR1EazvVhDyhQ==",
+      "dev": true,
+      "license": "Apache-2.0",
+      "engines": {
+        "node": ">=18.18"
+      },
+      "funding": {
+        "type": "github",
+        "url": "https://github.com/sponsors/nzakas"
+      }
+    },
+    "node_modules/@jridgewell/gen-mapping": {
+      "version": "0.3.13",
+      "resolved": "https://registry.npmjs.org/@jridgewell/gen-mapping/-/gen-mapping-0.3.13.tgz",
+      "integrity": "sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "@jridgewell/sourcemap-codec": "^1.5.0",
+        "@jridgewell/trace-mapping": "^0.3.24"
+      }
+    },
+    "node_modules/@jridgewell/remapping": {
+      "version": "2.3.5",
+      "resolved": "https://registry.npmjs.org/@jridgewell/remapping/-/remapping-2.3.5.tgz",
+      "integrity": "sha512-LI9u/+laYG4Ds1TDKSJW2YPrIlcVYOwi2fUC6xB43lueCjgxV4lffOCZCtYFiH6TNOX+tQKXx97T4IKHbhyHEQ==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "@jridgewell/gen-mapping": "^0.3.5",
+        "@jridgewell/trace-mapping": "^0.3.24"
+      }
+    },
+    "node_modules/@jridgewell/resolve-uri": {
+      "version": "3.1.2",
+      "resolved": "https://registry.npmjs.org/@jridgewell/resolve-uri/-/resolve-uri-3.1.2.tgz",
+      "integrity": "sha512-bRISgCIjP20/tbWSPWMEi54QVPRZExkuD9lJL+UIxUKtwVJA8wW1Trb1jMs1RFXo1CBTNZ/5hpC9QvmKWdopKw==",
+      "dev": true,
+      "license": "MIT",
+      "engines": {
+        "node": ">=6.0.0"
+      }
+    },
+    "node_modules/@jridgewell/sourcemap-codec": {
+      "version": "1.5.5",
+      "resolved": "https://registry.npmjs.org/@jridgewell/sourcemap-codec/-/sourcemap-codec-1.5.5.tgz",
+      "integrity": "sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==",
+      "dev": true,
+      "license": "MIT"
+    },
+    "node_modules/@jridgewell/trace-mapping": {
+      "version": "0.3.31",
+      "resolved": "https://registry.npmjs.org/@jridgewell/trace-mapping/-/trace-mapping-0.3.31.tgz",
+      "integrity": "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "@jridgewell/resolve-uri": "^3.1.0",
+        "@jridgewell/sourcemap-codec": "^1.4.14"
+      }
+    },
+    "node_modules/@napi-rs/wasm-runtime": {
+      "version": "1.1.4",
+      "resolved": "https://registry.npmjs.org/@napi-rs/wasm-runtime/-/wasm-runtime-1.1.4.tgz",
+      "integrity": "sha512-3NQNNgA1YSlJb/kMH1ildASP9HW7/7kYnRI2szWJaofaS1hWmbGI4H+d3+22aGzXXN9IJ+n+GiFVcGipJP18ow==",
+      "dev": true,
+      "license": "MIT",
+      "optional": true,
+      "dependencies": {
+        "@tybys/wasm-util": "^0.10.1"
+      },
+      "funding": {
+        "type": "github",
+        "url": "https://github.com/sponsors/Brooooooklyn"
+      },
+      "peerDependencies": {
+        "@emnapi/core": "^1.7.1",
+        "@emnapi/runtime": "^1.7.1"
+      }
+    },
+    "node_modules/@oxc-project/types": {
+      "version": "0.130.0",
+      "resolved": "https://registry.npmjs.org/@oxc-project/types/-/types-0.130.0.tgz",
+      "integrity": "sha512-ibD2usx9JRu7f5pu2tMKMI4cpA4NgXJQoYRP4pQ7Pxmn1l6k/53qWtQWZayhYy3X4QZkt90Ot+mJEaeXouio6Q==",
+      "dev": true,
+      "license": "MIT",
+      "funding": {
+        "url": "https://github.com/sponsors/Boshen"
+      }
+    },
+    "node_modules/@reduxjs/toolkit": {
+      "version": "2.12.0",
+      "resolved": "https://registry.npmjs.org/@reduxjs/toolkit/-/toolkit-2.12.0.tgz",
+      "integrity": "sha512-KiT+RzZbp6mQET+Mg+h2c97+9j1sNflUxQkIHI7Yuzf6Peu+OYpmkn6nbHWmLLWj+1ZODUJFwGZ7gx3L9R9EOw==",
+      "license": "MIT",
+      "dependencies": {
+        "@standard-schema/spec": "^1.0.0",
+        "@standard-schema/utils": "^0.3.0",
+        "immer": "^11.0.0",
+        "redux": "^5.0.1",
+        "redux-thunk": "^3.1.0",
+        "reselect": "^5.1.0"
+      },
+      "peerDependencies": {
+        "react": "^16.9.0 || ^17.0.0 || ^18 || ^19",
+        "react-redux": "^7.2.1 || ^8.1.3 || ^9.0.0"
+      },
+      "peerDependenciesMeta": {
+        "react": {
+          "optional": true
+        },
+        "react-redux": {
+          "optional": true
         }
-
-        const totalQty = cargoList.reduce((sum, item) => sum + Number(item.count), 0);
-        const primaryType = cargoList.length > 1 ? "Mixed Items" : cargoList[0].type;
-        const totalWeight = cargoList.reduce((sum, item) => sum + Number(item.weight||0), 0);
-
-        const p = {...f, count: totalQty.toString(), type: primaryType, actualWeight: totalWeight.toString(), cargoList: cargoList, sName: f.sName.toUpperCase(), rName: f.rName.toUpperCase(), notes: f.payment === 'Credit' ? `[A/c: ${f.creditCustomer}] ${f.notes}` : f.notes, creditSettled: false, id: finalLR, date: locDateStr, isoDate: isoDate, status: "Booked", price: ep, bookedBy: user.username, bookedBranch: user.branch, settledBranches: [], history: [{status: "Booked", loc: f.from, time: dObj.toLocaleString()}]};
-        
-        let success = false;
-        let retryLimit = 5;
-        let currentLR = finalLR;
-
-        while (!success && retryLimit > 0) {
-            try {
-                p.id = currentLR;
-                await db.insertParcel(p); 
-                success = true;
-            } catch(insertError) {
-                if(!isManualLR) {
-                    retryLimit--;
-                    console.log(`409 Conflict hit for ${currentLR}. Auto-incrementing...`);
-                    const parts = currentLR.split('/');
-                    if(parts.length === 3) {
-                        const nextNum = parseInt(parts[2], 10) + 1;
-                        currentLR = `${parts[0]}/${parts[1]}/${String(nextNum).padStart(4, '0')}`;
-                    } else { throw insertError; }
-                } else { throw insertError; }
-            }
+      }
+    },
+    "node_modules/@reduxjs/toolkit/node_modules/immer": {
+      "version": "11.1.8",
+      "resolved": "https://registry.npmjs.org/immer/-/immer-11.1.8.tgz",
+      "integrity": "sha512-/tbkHMW7y10Lx6i1crLjD4/OhNkRG+Fo7byZHtah0547nIeXYcpIXaUh0IAQY6gO5459qpGGYapcEOHtFXkIuA==",
+      "license": "MIT",
+      "funding": {
+        "type": "opencollective",
+        "url": "https://opencollective.com/immer"
+      }
+    },
+    "node_modules/@rolldown/binding-android-arm64": {
+      "version": "1.0.1",
+      "resolved": "https://registry.npmjs.org/@rolldown/binding-android-arm64/-/binding-android-arm64-1.0.1.tgz",
+      "integrity": "sha512-fJI3I0r3C3Oj/zdBCpaCmBRZYf07xpaq4yCfDDoSFm+beWNzbIl26puW8RraUdugoJw/95zerNOn6jasAhzSmg==",
+      "cpu": [
+        "arm64"
+      ],
+      "dev": true,
+      "license": "MIT",
+      "optional": true,
+      "os": [
+        "android"
+      ],
+      "engines": {
+        "node": "^20.19.0 || >=22.12.0"
+      }
+    },
+    "node_modules/@rolldown/binding-darwin-arm64": {
+      "version": "1.0.1",
+      "resolved": "https://registry.npmjs.org/@rolldown/binding-darwin-arm64/-/binding-darwin-arm64-1.0.1.tgz",
+      "integrity": "sha512-cKnAhWEsV7TPcA/5EAteDp6KcJZBQ2G+BqE7zayMMi7kMvwRsbv7WT9aOnn0WNl4SKEIf43vjS31iUPu80nzXg==",
+      "cpu": [
+        "arm64"
+      ],
+      "dev": true,
+      "license": "MIT",
+      "optional": true,
+      "os": [
+        "darwin"
+      ],
+      "engines": {
+        "node": "^20.19.0 || >=22.12.0"
+      }
+    },
+    "node_modules/@rolldown/binding-darwin-x64": {
+      "version": "1.0.1",
+      "resolved": "https://registry.npmjs.org/@rolldown/binding-darwin-x64/-/binding-darwin-x64-1.0.1.tgz",
+      "integrity": "sha512-YKrVwQjIRBPo+5G/u03wGjbdy4q7pyzCe93DK9VJ7zkVmeg8LJ7GbgsiHWdR4xSoe4CAXRD7Bcjgbtr64bkXNg==",
+      "cpu": [
+        "x64"
+      ],
+      "dev": true,
+      "license": "MIT",
+      "optional": true,
+      "os": [
+        "darwin"
+      ],
+      "engines": {
+        "node": "^20.19.0 || >=22.12.0"
+      }
+    },
+    "node_modules/@rolldown/binding-freebsd-x64": {
+      "version": "1.0.1",
+      "resolved": "https://registry.npmjs.org/@rolldown/binding-freebsd-x64/-/binding-freebsd-x64-1.0.1.tgz",
+      "integrity": "sha512-z/oBsREo46SsFqBwYtFe0kpJeBijAT48O/WXLI4suiCLBkr03RTtTJMCzSdDd2znlh8VJizL09XVkQgk8IZonw==",
+      "cpu": [
+        "x64"
+      ],
+      "dev": true,
+      "license": "MIT",
+      "optional": true,
+      "os": [
+        "freebsd"
+      ],
+      "engines": {
+        "node": "^20.19.0 || >=22.12.0"
+      }
+    },
+    "node_modules/@rolldown/binding-linux-arm-gnueabihf": {
+      "version": "1.0.1",
+      "resolved": "https://registry.npmjs.org/@rolldown/binding-linux-arm-gnueabihf/-/binding-linux-arm-gnueabihf-1.0.1.tgz",
+      "integrity": "sha512-ik8q7GM11zxvYxFc2PeDcT6TBvhCQMaUxfph/M5l9sKuTs/Sjg3L+Byw0F7w0ZVLBZmx30P+gG0ECzzN+MFcmQ==",
+      "cpu": [
+        "arm"
+      ],
+      "dev": true,
+      "license": "MIT",
+      "optional": true,
+      "os": [
+        "linux"
+      ],
+      "engines": {
+        "node": "^20.19.0 || >=22.12.0"
+      }
+    },
+    "node_modules/@rolldown/binding-linux-arm64-gnu": {
+      "version": "1.0.1",
+      "resolved": "https://registry.npmjs.org/@rolldown/binding-linux-arm64-gnu/-/binding-linux-arm64-gnu-1.0.1.tgz",
+      "integrity": "sha512-QoSx2EkyrrdZ6kcyE8stqZ62t0Yra8Fs5ia9lOxJrh6TMQJK7gQKmscdTHf7pOXKREKrVwOtJcQG3qVSfc866A==",
+      "cpu": [
+        "arm64"
+      ],
+      "dev": true,
+      "libc": [
+        "glibc"
+      ],
+      "license": "MIT",
+      "optional": true,
+      "os": [
+        "linux"
+      ],
+      "engines": {
+        "node": "^20.19.0 || >=22.12.0"
+      }
+    },
+    "node_modules/@rolldown/binding-linux-arm64-musl": {
+      "version": "1.0.1",
+      "resolved": "https://registry.npmjs.org/@rolldown/binding-linux-arm64-musl/-/binding-linux-arm64-musl-1.0.1.tgz",
+      "integrity": "sha512-uwNwFpwKeNiZawfAWBgg0VIztPTV3ihhh1vV334h9ivnNLorxnQMU6Fz8wG1Zb4Qh9LC1/MkcyT3YlDXG3Rsgg==",
+      "cpu": [
+        "arm64"
+      ],
+      "dev": true,
+      "libc": [
+        "musl"
+      ],
+      "license": "MIT",
+      "optional": true,
+      "os": [
+        "linux"
+      ],
+      "engines": {
+        "node": "^20.19.0 || >=22.12.0"
+      }
+    },
+    "node_modules/@rolldown/binding-linux-ppc64-gnu": {
+      "version": "1.0.1",
+      "resolved": "https://registry.npmjs.org/@rolldown/binding-linux-ppc64-gnu/-/binding-linux-ppc64-gnu-1.0.1.tgz",
+      "integrity": "sha512-zY1bul7OWr7DFBiJ++wofXvnr8B45ce3QsQUhKrIhXsygAh7bTkwyeM1bi1a2g5C/yC/N8TZyGDEoMfm/l9mpg==",
+      "cpu": [
+        "ppc64"
+      ],
+      "dev": true,
+      "libc": [
+        "glibc"
+      ],
+      "license": "MIT",
+      "optional": true,
+      "os": [
+        "linux"
+      ],
+      "engines": {
+        "node": "^20.19.0 || >=22.12.0"
+      }
+    },
+    "node_modules/@rolldown/binding-linux-s390x-gnu": {
+      "version": "1.0.1",
+      "resolved": "https://registry.npmjs.org/@rolldown/binding-linux-s390x-gnu/-/binding-linux-s390x-gnu-1.0.1.tgz",
+      "integrity": "sha512-0frlsT/f4Ft6I7SMESTKnF3cZsdicQn1dCMkF/jT9wDLE+gGoiQfv1nmT9e+s7s/fekvvy6tZM2jHvI2tkbJDQ==",
+      "cpu": [
+        "s390x"
+      ],
+      "dev": true,
+      "libc": [
+        "glibc"
+      ],
+      "license": "MIT",
+      "optional": true,
+      "os": [
+        "linux"
+      ],
+      "engines": {
+        "node": "^20.19.0 || >=22.12.0"
+      }
+    },
+    "node_modules/@rolldown/binding-linux-x64-gnu": {
+      "version": "1.0.1",
+      "resolved": "https://registry.npmjs.org/@rolldown/binding-linux-x64-gnu/-/binding-linux-x64-gnu-1.0.1.tgz",
+      "integrity": "sha512-XABVmGp9Tg0WspTVvwduTc4fpqy6JnAUrSQe6OuyqD/03nI7r0O9OWUkMIwFrjKAIqolvqoA4ZrJppgwE0Gxmw==",
+      "cpu": [
+        "x64"
+      ],
+      "dev": true,
+      "libc": [
+        "glibc"
+      ],
+      "license": "MIT",
+      "optional": true,
+      "os": [
+        "linux"
+      ],
+      "engines": {
+        "node": "^20.19.0 || >=22.12.0"
+      }
+    },
+    "node_modules/@rolldown/binding-linux-x64-musl": {
+      "version": "1.0.1",
+      "resolved": "https://registry.npmjs.org/@rolldown/binding-linux-x64-musl/-/binding-linux-x64-musl-1.0.1.tgz",
+      "integrity": "sha512-bV4fzswuzVcKD90o/VM6QqKxnxlDq0g2BISDLNVmxrnhpv1DDbyPhCIjYfvzYLV+MvkKKnQt2Q6AO86SEBULUQ==",
+      "cpu": [
+        "x64"
+      ],
+      "dev": true,
+      "libc": [
+        "musl"
+      ],
+      "license": "MIT",
+      "optional": true,
+      "os": [
+        "linux"
+      ],
+      "engines": {
+        "node": "^20.19.0 || >=22.12.0"
+      }
+    },
+    "node_modules/@rolldown/binding-openharmony-arm64": {
+      "version": "1.0.1",
+      "resolved": "https://registry.npmjs.org/@rolldown/binding-openharmony-arm64/-/binding-openharmony-arm64-1.0.1.tgz",
+      "integrity": "sha512-/Mh0Zhq3OP7fVs0kcQHZP6lZEthMGTaSf8UBQYSFEZDWGXXlEC+nJ6EqenaK2t4LBXMe3A+K/G2BVXXdtOr4PQ==",
+      "cpu": [
+        "arm64"
+      ],
+      "dev": true,
+      "license": "MIT",
+      "optional": true,
+      "os": [
+        "openharmony"
+      ],
+      "engines": {
+        "node": "^20.19.0 || >=22.12.0"
+      }
+    },
+    "node_modules/@rolldown/binding-wasm32-wasi": {
+      "version": "1.0.1",
+      "resolved": "https://registry.npmjs.org/@rolldown/binding-wasm32-wasi/-/binding-wasm32-wasi-1.0.1.tgz",
+      "integrity": "sha512-+1xc9X45l8ufsBAm6Gjvx2qDRIY9lTVt0cgWNcJ+1gdhXvkbxePA60yRTwSTuXL09CMhyJmjpV7E3NoyxbqFQQ==",
+      "cpu": [
+        "wasm32"
+      ],
+      "dev": true,
+      "license": "MIT",
+      "optional": true,
+      "dependencies": {
+        "@emnapi/core": "1.10.0",
+        "@emnapi/runtime": "1.10.0",
+        "@napi-rs/wasm-runtime": "^1.1.4"
+      },
+      "engines": {
+        "node": "^20.19.0 || >=22.12.0"
+      }
+    },
+    "node_modules/@rolldown/binding-win32-arm64-msvc": {
+      "version": "1.0.1",
+      "resolved": "https://registry.npmjs.org/@rolldown/binding-win32-arm64-msvc/-/binding-win32-arm64-msvc-1.0.1.tgz",
+      "integrity": "sha512-1D+UqZdfnuR+Jy1GgMJwi85bD40H21uNmOPRWQhw4oRSuolZ/B5rixZ45DK2KXOTCvmVCecauWgEhbw8bI7tOw==",
+      "cpu": [
+        "arm64"
+      ],
+      "dev": true,
+      "license": "MIT",
+      "optional": true,
+      "os": [
+        "win32"
+      ],
+      "engines": {
+        "node": "^20.19.0 || >=22.12.0"
+      }
+    },
+    "node_modules/@rolldown/binding-win32-x64-msvc": {
+      "version": "1.0.1",
+      "resolved": "https://registry.npmjs.org/@rolldown/binding-win32-x64-msvc/-/binding-win32-x64-msvc-1.0.1.tgz",
+      "integrity": "sha512-INAycaWuhlOK3wk4mRHGsdgwYWmd9cChdPdE9bwWmy6rn9VqVNYNFGhOdXrofXUxwHIncSiPNb8tNm8knDVIeQ==",
+      "cpu": [
+        "x64"
+      ],
+      "dev": true,
+      "license": "MIT",
+      "optional": true,
+      "os": [
+        "win32"
+      ],
+      "engines": {
+        "node": "^20.19.0 || >=22.12.0"
+      }
+    },
+    "node_modules/@rolldown/pluginutils": {
+      "version": "1.0.1",
+      "resolved": "https://registry.npmjs.org/@rolldown/pluginutils/-/pluginutils-1.0.1.tgz",
+      "integrity": "sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw==",
+      "dev": true,
+      "license": "MIT"
+    },
+    "node_modules/@standard-schema/spec": {
+      "version": "1.1.0",
+      "resolved": "https://registry.npmjs.org/@standard-schema/spec/-/spec-1.1.0.tgz",
+      "integrity": "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==",
+      "license": "MIT"
+    },
+    "node_modules/@standard-schema/utils": {
+      "version": "0.3.0",
+      "resolved": "https://registry.npmjs.org/@standard-schema/utils/-/utils-0.3.0.tgz",
+      "integrity": "sha512-e7Mew686owMaPJVNNLs55PUvgz371nKgwsc4vxE49zsODpJEnxgxRo2y/OKrqueavXgZNMDVj3DdHFlaSAeU8g==",
+      "license": "MIT"
+    },
+    "node_modules/@tybys/wasm-util": {
+      "version": "0.10.2",
+      "resolved": "https://registry.npmjs.org/@tybys/wasm-util/-/wasm-util-0.10.2.tgz",
+      "integrity": "sha512-RoBvJ2X0wuKlWFIjrwffGw1IqZHKQqzIchKaadZZfnNpsAYp2mM0h36JtPCjNDAHGgYez/15uMBpfGwchhiMgg==",
+      "dev": true,
+      "license": "MIT",
+      "optional": true,
+      "dependencies": {
+        "tslib": "^2.4.0"
+      }
+    },
+    "node_modules/@types/d3-array": {
+      "version": "3.2.2",
+      "resolved": "https://registry.npmjs.org/@types/d3-array/-/d3-array-3.2.2.tgz",
+      "integrity": "sha512-hOLWVbm7uRza0BYXpIIW5pxfrKe0W+D5lrFiAEYR+pb6w3N2SwSMaJbXdUfSEv+dT4MfHBLtn5js0LAWaO6otw==",
+      "license": "MIT"
+    },
+    "node_modules/@types/d3-color": {
+      "version": "3.1.3",
+      "resolved": "https://registry.npmjs.org/@types/d3-color/-/d3-color-3.1.3.tgz",
+      "integrity": "sha512-iO90scth9WAbmgv7ogoq57O9YpKmFBbmoEoCHDB2xMBY0+/KVrqAaCDyCE16dUspeOvIxFFRI+0sEtqDqy2b4A==",
+      "license": "MIT"
+    },
+    "node_modules/@types/d3-ease": {
+      "version": "3.0.2",
+      "resolved": "https://registry.npmjs.org/@types/d3-ease/-/d3-ease-3.0.2.tgz",
+      "integrity": "sha512-NcV1JjO5oDzoK26oMzbILE6HW7uVXOHLQvHshBUW4UMdZGfiY6v5BeQwh9a9tCzv+CeefZQHJt5SRgK154RtiA==",
+      "license": "MIT"
+    },
+    "node_modules/@types/d3-interpolate": {
+      "version": "3.0.4",
+      "resolved": "https://registry.npmjs.org/@types/d3-interpolate/-/d3-interpolate-3.0.4.tgz",
+      "integrity": "sha512-mgLPETlrpVV1YRJIglr4Ez47g7Yxjl1lj7YKsiMCb27VJH9W8NVM6Bb9d8kkpG/uAQS5AmbA48q2IAolKKo1MA==",
+      "license": "MIT",
+      "dependencies": {
+        "@types/d3-color": "*"
+      }
+    },
+    "node_modules/@types/d3-path": {
+      "version": "3.1.1",
+      "resolved": "https://registry.npmjs.org/@types/d3-path/-/d3-path-3.1.1.tgz",
+      "integrity": "sha512-VMZBYyQvbGmWyWVea0EHs/BwLgxc+MKi1zLDCONksozI4YJMcTt8ZEuIR4Sb1MMTE8MMW49v0IwI5+b7RmfWlg==",
+      "license": "MIT"
+    },
+    "node_modules/@types/d3-scale": {
+      "version": "4.0.9",
+      "resolved": "https://registry.npmjs.org/@types/d3-scale/-/d3-scale-4.0.9.tgz",
+      "integrity": "sha512-dLmtwB8zkAeO/juAMfnV+sItKjlsw2lKdZVVy6LRr0cBmegxSABiLEpGVmSJJ8O08i4+sGR6qQtb6WtuwJdvVw==",
+      "license": "MIT",
+      "dependencies": {
+        "@types/d3-time": "*"
+      }
+    },
+    "node_modules/@types/d3-shape": {
+      "version": "3.1.8",
+      "resolved": "https://registry.npmjs.org/@types/d3-shape/-/d3-shape-3.1.8.tgz",
+      "integrity": "sha512-lae0iWfcDeR7qt7rA88BNiqdvPS5pFVPpo5OfjElwNaT2yyekbM0C9vK+yqBqEmHr6lDkRnYNoTBYlAgJa7a4w==",
+      "license": "MIT",
+      "dependencies": {
+        "@types/d3-path": "*"
+      }
+    },
+    "node_modules/@types/d3-time": {
+      "version": "3.0.4",
+      "resolved": "https://registry.npmjs.org/@types/d3-time/-/d3-time-3.0.4.tgz",
+      "integrity": "sha512-yuzZug1nkAAaBlBBikKZTgzCeA+k1uy4ZFwWANOfKw5z5LRhV0gNA7gNkKm7HoK+HRN0wX3EkxGk0fpbWhmB7g==",
+      "license": "MIT"
+    },
+    "node_modules/@types/d3-timer": {
+      "version": "3.0.2",
+      "resolved": "https://registry.npmjs.org/@types/d3-timer/-/d3-timer-3.0.2.tgz",
+      "integrity": "sha512-Ps3T8E8dZDam6fUyNiMkekK3XUsaUEik+idO9/YjPtfj2qruF8tFBXS7XhtE4iIXBLxhmLjP3SXpLhVf21I9Lw==",
+      "license": "MIT"
+    },
+    "node_modules/@types/esrecurse": {
+      "version": "4.3.1",
+      "resolved": "https://registry.npmjs.org/@types/esrecurse/-/esrecurse-4.3.1.tgz",
+      "integrity": "sha512-xJBAbDifo5hpffDBuHl0Y8ywswbiAp/Wi7Y/GtAgSlZyIABppyurxVueOPE8LUQOxdlgi6Zqce7uoEpqNTeiUw==",
+      "dev": true,
+      "license": "MIT"
+    },
+    "node_modules/@types/estree": {
+      "version": "1.0.9",
+      "resolved": "https://registry.npmjs.org/@types/estree/-/estree-1.0.9.tgz",
+      "integrity": "sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==",
+      "dev": true,
+      "license": "MIT"
+    },
+    "node_modules/@types/json-schema": {
+      "version": "7.0.15",
+      "resolved": "https://registry.npmjs.org/@types/json-schema/-/json-schema-7.0.15.tgz",
+      "integrity": "sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==",
+      "dev": true,
+      "license": "MIT"
+    },
+    "node_modules/@types/pako": {
+      "version": "2.0.4",
+      "resolved": "https://registry.npmjs.org/@types/pako/-/pako-2.0.4.tgz",
+      "integrity": "sha512-VWDCbrLeVXJM9fihYodcLiIv0ku+AlOa/TQ1SvYOaBuyrSKgEcro95LJyIsJ4vSo6BXIxOKxiJAat04CmST9Fw==",
+      "license": "MIT"
+    },
+    "node_modules/@types/raf": {
+      "version": "3.4.3",
+      "resolved": "https://registry.npmjs.org/@types/raf/-/raf-3.4.3.tgz",
+      "integrity": "sha512-c4YAvMedbPZ5tEyxzQdMoOhhJ4RD3rngZIdwC2/qDN3d7JpEhB6fiBRKVY1lg5B7Wk+uPBjn5f39j1/2MY1oOw==",
+      "license": "MIT",
+      "optional": true
+    },
+    "node_modules/@types/react": {
+      "version": "19.2.14",
+      "resolved": "https://registry.npmjs.org/@types/react/-/react-19.2.14.tgz",
+      "integrity": "sha512-ilcTH/UniCkMdtexkoCN0bI7pMcJDvmQFPvuPvmEaYA/NSfFTAgdUSLAoVjaRJm7+6PvcM+q1zYOwS4wTYMF9w==",
+      "devOptional": true,
+      "license": "MIT",
+      "dependencies": {
+        "csstype": "^3.2.2"
+      }
+    },
+    "node_modules/@types/react-dom": {
+      "version": "19.2.3",
+      "resolved": "https://registry.npmjs.org/@types/react-dom/-/react-dom-19.2.3.tgz",
+      "integrity": "sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ==",
+      "dev": true,
+      "license": "MIT",
+      "peerDependencies": {
+        "@types/react": "^19.2.0"
+      }
+    },
+    "node_modules/@types/trusted-types": {
+      "version": "2.0.7",
+      "resolved": "https://registry.npmjs.org/@types/trusted-types/-/trusted-types-2.0.7.tgz",
+      "integrity": "sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==",
+      "license": "MIT",
+      "optional": true
+    },
+    "node_modules/@types/use-sync-external-store": {
+      "version": "0.0.6",
+      "resolved": "https://registry.npmjs.org/@types/use-sync-external-store/-/use-sync-external-store-0.0.6.tgz",
+      "integrity": "sha512-zFDAD+tlpf2r4asuHEj0XH6pY6i0g5NeAHPn+15wk3BV6JA69eERFXC1gyGThDkVa1zCyKr5jox1+2LbV/AMLg==",
+      "license": "MIT"
+    },
+    "node_modules/@vitejs/plugin-react": {
+      "version": "6.0.2",
+      "resolved": "https://registry.npmjs.org/@vitejs/plugin-react/-/plugin-react-6.0.2.tgz",
+      "integrity": "sha512-DlSMqo4WhThw4vB8Mpn0Woe9J+Jfq1geJ61AKW0QEgLzGMNwtIMdxbDUzLxcun8W7NbJO0e2Jg/Nxm3cCSVzzg==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "@rolldown/pluginutils": "^1.0.0"
+      },
+      "engines": {
+        "node": "^20.19.0 || >=22.12.0"
+      },
+      "peerDependencies": {
+        "@rolldown/plugin-babel": "^0.1.7 || ^0.2.0",
+        "babel-plugin-react-compiler": "^1.0.0",
+        "vite": "^8.0.0"
+      },
+      "peerDependenciesMeta": {
+        "@rolldown/plugin-babel": {
+          "optional": true
+        },
+        "babel-plugin-react-compiler": {
+          "optional": true
         }
-
-        if(!success) { throw new Error("Duplicate ID or Network Issue"); }
-
-        const saved = await local.get("mps_contacts") || {}; saved[f.sPhone] = { name: p.sName, gst: f.sGst }; saved[f.rPhone] = { name: p.rName, gst: f.rGst }; await local.set("mps_contacts", saved);
-        
-        // INSTANT UI UPDATE WITHOUT WAITING FOR DB CACHE
-        setParcels([p, ...parcels]); 
-        
-        setDone(p); showMsg("Booking Successful!"); 
-    } catch(err) { 
-        console.error(err);
-        showMsg("Network or Database Error! Please try again.", "error"); 
+      }
+    },
+    "node_modules/acorn": {
+      "version": "8.16.0",
+      "resolved": "https://registry.npmjs.org/acorn/-/acorn-8.16.0.tgz",
+      "integrity": "sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==",
+      "dev": true,
+      "license": "MIT",
+      "bin": {
+        "acorn": "bin/acorn"
+      },
+      "engines": {
+        "node": ">=0.4.0"
+      }
+    },
+    "node_modules/acorn-jsx": {
+      "version": "5.3.2",
+      "resolved": "https://registry.npmjs.org/acorn-jsx/-/acorn-jsx-5.3.2.tgz",
+      "integrity": "sha512-rq9s+JNhf0IChjtDXxllJ7g41oZk5SlXtp0LHwyA5cejwn7vKmKp4pPri6YEePv2PU65sAsegbXtIinmDFDXgQ==",
+      "dev": true,
+      "license": "MIT",
+      "peerDependencies": {
+        "acorn": "^6.0.0 || ^7.0.0 || ^8.0.0"
+      }
+    },
+    "node_modules/ajv": {
+      "version": "6.15.0",
+      "resolved": "https://registry.npmjs.org/ajv/-/ajv-6.15.0.tgz",
+      "integrity": "sha512-fgFx7Hfoq60ytK2c7DhnF8jIvzYgOMxfugjLOSMHjLIPgenqa7S7oaagATUq99mV6IYvN2tRmC0wnTYX6iPbMw==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "fast-deep-equal": "^3.1.1",
+        "fast-json-stable-stringify": "^2.0.0",
+        "json-schema-traverse": "^0.4.1",
+        "uri-js": "^4.2.2"
+      },
+      "funding": {
+        "type": "github",
+        "url": "https://github.com/sponsors/epoberezkin"
+      }
+    },
+    "node_modules/autoprefixer": {
+      "version": "10.5.0",
+      "resolved": "https://registry.npmjs.org/autoprefixer/-/autoprefixer-10.5.0.tgz",
+      "integrity": "sha512-FMhOoZV4+qR6aTUALKX2rEqGG+oyATvwBt9IIzVR5rMa2HRWPkxf+P+PAJLD1I/H5/II+HuZcBJYEFBpq39ong==",
+      "dev": true,
+      "funding": [
+        {
+          "type": "opencollective",
+          "url": "https://opencollective.com/postcss/"
+        },
+        {
+          "type": "tidelift",
+          "url": "https://tidelift.com/funding/github/npm/autoprefixer"
+        },
+        {
+          "type": "github",
+          "url": "https://github.com/sponsors/ai"
+        }
+      ],
+      "license": "MIT",
+      "dependencies": {
+        "browserslist": "^4.28.2",
+        "caniuse-lite": "^1.0.30001787",
+        "fraction.js": "^5.3.4",
+        "picocolors": "^1.1.1",
+        "postcss-value-parser": "^4.2.0"
+      },
+      "bin": {
+        "autoprefixer": "bin/autoprefixer"
+      },
+      "engines": {
+        "node": "^10 || ^12 || >=14"
+      },
+      "peerDependencies": {
+        "postcss": "^8.1.0"
+      }
+    },
+    "node_modules/balanced-match": {
+      "version": "4.0.4",
+      "resolved": "https://registry.npmjs.org/balanced-match/-/balanced-match-4.0.4.tgz",
+      "integrity": "sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==",
+      "dev": true,
+      "license": "MIT",
+      "engines": {
+        "node": "18 || 20 || >=22"
+      }
+    },
+    "node_modules/base64-arraybuffer": {
+      "version": "1.0.2",
+      "resolved": "https://registry.npmjs.org/base64-arraybuffer/-/base64-arraybuffer-1.0.2.tgz",
+      "integrity": "sha512-I3yl4r9QB5ZRY3XuJVEPfc2XhZO6YweFPI+UovAzn+8/hb3oJ6lnysaFcjVpkCPfVWFUDvoZ8kmVDP7WyRtYtQ==",
+      "license": "MIT",
+      "optional": true,
+      "engines": {
+        "node": ">= 0.6.0"
+      }
+    },
+    "node_modules/baseline-browser-mapping": {
+      "version": "2.10.30",
+      "resolved": "https://registry.npmjs.org/baseline-browser-mapping/-/baseline-browser-mapping-2.10.30.tgz",
+      "integrity": "sha512-xjOFN16Ha1+Rz4nFYKqHU/LSB+gx/Vi3yQLX7r7sAW+Wa+8hhF2h4pvqTrTMc8+WcDBEunnUurr46Jvv0jk3Vg==",
+      "dev": true,
+      "license": "Apache-2.0",
+      "bin": {
+        "baseline-browser-mapping": "dist/cli.cjs"
+      },
+      "engines": {
+        "node": ">=6.0.0"
+      }
+    },
+    "node_modules/brace-expansion": {
+      "version": "5.0.6",
+      "resolved": "https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.6.tgz",
+      "integrity": "sha512-kLpxurY4Z4r9sgMsyG0Z9uzsBlgiU/EFKhj/h91/8yHu0edo7XuixOIH3VcJ8kkxs6/jPzoI6U9Vj3WqbMQ94g==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "balanced-match": "^4.0.2"
+      },
+      "engines": {
+        "node": "18 || 20 || >=22"
+      }
+    },
+    "node_modules/browserslist": {
+      "version": "4.28.2",
+      "resolved": "https://registry.npmjs.org/browserslist/-/browserslist-4.28.2.tgz",
+      "integrity": "sha512-48xSriZYYg+8qXna9kwqjIVzuQxi+KYWp2+5nCYnYKPTr0LvD89Jqk2Or5ogxz0NUMfIjhh2lIUX/LyX9B4oIg==",
+      "dev": true,
+      "funding": [
+        {
+          "type": "opencollective",
+          "url": "https://opencollective.com/browserslist"
+        },
+        {
+          "type": "tidelift",
+          "url": "https://tidelift.com/funding/github/npm/browserslist"
+        },
+        {
+          "type": "github",
+          "url": "https://github.com/sponsors/ai"
+        }
+      ],
+      "license": "MIT",
+      "dependencies": {
+        "baseline-browser-mapping": "^2.10.12",
+        "caniuse-lite": "^1.0.30001782",
+        "electron-to-chromium": "^1.5.328",
+        "node-releases": "^2.0.36",
+        "update-browserslist-db": "^1.2.3"
+      },
+      "bin": {
+        "browserslist": "cli.js"
+      },
+      "engines": {
+        "node": "^6 || ^7 || ^8 || ^9 || ^10 || ^11 || ^12 || >=13.7"
+      }
+    },
+    "node_modules/caniuse-lite": {
+      "version": "1.0.30001792",
+      "resolved": "https://registry.npmjs.org/caniuse-lite/-/caniuse-lite-1.0.30001792.tgz",
+      "integrity": "sha512-hVLMUZFgR4JJ6ACt1uEESvQN1/dBVqPAKY0hgrV70eN3391K6juAfTjKZLKvOMsx8PxA7gsY1/tLMMTcfFLLpw==",
+      "dev": true,
+      "funding": [
+        {
+          "type": "opencollective",
+          "url": "https://opencollective.com/browserslist"
+        },
+        {
+          "type": "tidelift",
+          "url": "https://tidelift.com/funding/github/npm/caniuse-lite"
+        },
+        {
+          "type": "github",
+          "url": "https://github.com/sponsors/ai"
+        }
+      ],
+      "license": "CC-BY-4.0"
+    },
+    "node_modules/canvg": {
+      "version": "3.0.11",
+      "resolved": "https://registry.npmjs.org/canvg/-/canvg-3.0.11.tgz",
+      "integrity": "sha512-5ON+q7jCTgMp9cjpu4Jo6XbvfYwSB2Ow3kzHKfIyJfaCAOHLbdKPQqGKgfED/R5B+3TFFfe8pegYA+b423SRyA==",
+      "license": "MIT",
+      "optional": true,
+      "dependencies": {
+        "@babel/runtime": "^7.12.5",
+        "@types/raf": "^3.4.0",
+        "core-js": "^3.8.3",
+        "raf": "^3.4.1",
+        "regenerator-runtime": "^0.13.7",
+        "rgbcolor": "^1.0.1",
+        "stackblur-canvas": "^2.0.0",
+        "svg-pathdata": "^6.0.3"
+      },
+      "engines": {
+        "node": ">=10.0.0"
+      }
+    },
+    "node_modules/clsx": {
+      "version": "2.1.1",
+      "resolved": "https://registry.npmjs.org/clsx/-/clsx-2.1.1.tgz",
+      "integrity": "sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==",
+      "license": "MIT",
+      "engines": {
+        "node": ">=6"
+      }
+    },
+    "node_modules/convert-source-map": {
+      "version": "2.0.0",
+      "resolved": "https://registry.npmjs.org/convert-source-map/-/convert-source-map-2.0.0.tgz",
+      "integrity": "sha512-Kvp459HrV2FEJ1CAsi1Ku+MY3kasH19TFykTz2xWmMeq6bk2NU3XXvfJ+Q61m0xktWwt+1HSYf3JZsTms3aRJg==",
+      "dev": true,
+      "license": "MIT"
+    },
+    "node_modules/core-js": {
+      "version": "3.49.0",
+      "resolved": "https://registry.npmjs.org/core-js/-/core-js-3.49.0.tgz",
+      "integrity": "sha512-es1U2+YTtzpwkxVLwAFdSpaIMyQaq0PBgm3YD1W3Qpsn1NAmO3KSgZfu+oGSWVu6NvLHoHCV/aYcsE5wiB7ALg==",
+      "hasInstallScript": true,
+      "license": "MIT",
+      "optional": true,
+      "funding": {
+        "type": "opencollective",
+        "url": "https://opencollective.com/core-js"
+      }
+    },
+    "node_modules/cross-spawn": {
+      "version": "7.0.6",
+      "resolved": "https://registry.npmjs.org/cross-spawn/-/cross-spawn-7.0.6.tgz",
+      "integrity": "sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "path-key": "^3.1.0",
+        "shebang-command": "^2.0.0",
+        "which": "^2.0.1"
+      },
+      "engines": {
+        "node": ">= 8"
+      }
+    },
+    "node_modules/css-line-break": {
+      "version": "2.1.0",
+      "resolved": "https://registry.npmjs.org/css-line-break/-/css-line-break-2.1.0.tgz",
+      "integrity": "sha512-FHcKFCZcAha3LwfVBhCQbW2nCNbkZXn7KVUJcsT5/P8YmfsVja0FMPJr0B903j/E69HUphKiV9iQArX8SDYA4w==",
+      "license": "MIT",
+      "optional": true,
+      "dependencies": {
+        "utrie": "^1.0.2"
+      }
+    },
+    "node_modules/csstype": {
+      "version": "3.2.3",
+      "resolved": "https://registry.npmjs.org/csstype/-/csstype-3.2.3.tgz",
+      "integrity": "sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==",
+      "devOptional": true,
+      "license": "MIT"
+    },
+    "node_modules/d3-array": {
+      "version": "3.2.4",
+      "resolved": "https://registry.npmjs.org/d3-array/-/d3-array-3.2.4.tgz",
+      "integrity": "sha512-tdQAmyA18i4J7wprpYq8ClcxZy3SC31QMeByyCFyRt7BVHdREQZ5lpzoe5mFEYZUWe+oq8HBvk9JjpibyEV4Jg==",
+      "license": "ISC",
+      "dependencies": {
+        "internmap": "1 - 2"
+      },
+      "engines": {
+        "node": ">=12"
+      }
+    },
+    "node_modules/d3-color": {
+      "version": "3.1.0",
+      "resolved": "https://registry.npmjs.org/d3-color/-/d3-color-3.1.0.tgz",
+      "integrity": "sha512-zg/chbXyeBtMQ1LbD/WSoW2DpC3I0mpmPdW+ynRTj/x2DAWYrIY7qeZIHidozwV24m4iavr15lNwIwLxRmOxhA==",
+      "license": "ISC",
+      "engines": {
+        "node": ">=12"
+      }
+    },
+    "node_modules/d3-ease": {
+      "version": "3.0.1",
+      "resolved": "https://registry.npmjs.org/d3-ease/-/d3-ease-3.0.1.tgz",
+      "integrity": "sha512-wR/XK3D3XcLIZwpbvQwQ5fK+8Ykds1ip7A2Txe0yxncXSdq1L9skcG7blcedkOX+ZcgxGAmLX1FrRGbADwzi0w==",
+      "license": "BSD-3-Clause",
+      "engines": {
+        "node": ">=12"
+      }
+    },
+    "node_modules/d3-format": {
+      "version": "3.1.2",
+      "resolved": "https://registry.npmjs.org/d3-format/-/d3-format-3.1.2.tgz",
+      "integrity": "sha512-AJDdYOdnyRDV5b6ArilzCPPwc1ejkHcoyFarqlPqT7zRYjhavcT3uSrqcMvsgh2CgoPbK3RCwyHaVyxYcP2Arg==",
+      "license": "ISC",
+      "engines": {
+        "node": ">=12"
+      }
+    },
+    "node_modules/d3-interpolate": {
+      "version": "3.0.1",
+      "resolved": "https://registry.npmjs.org/d3-interpolate/-/d3-interpolate-3.0.1.tgz",
+      "integrity": "sha512-3bYs1rOD33uo8aqJfKP3JWPAibgw8Zm2+L9vBKEHJ2Rg+viTR7o5Mmv5mZcieN+FRYaAOWX5SJATX6k1PWz72g==",
+      "license": "ISC",
+      "dependencies": {
+        "d3-color": "1 - 3"
+      },
+      "engines": {
+        "node": ">=12"
+      }
+    },
+    "node_modules/d3-path": {
+      "version": "3.1.0",
+      "resolved": "https://registry.npmjs.org/d3-path/-/d3-path-3.1.0.tgz",
+      "integrity": "sha512-p3KP5HCf/bvjBSSKuXid6Zqijx7wIfNW+J/maPs+iwR35at5JCbLUT0LzF1cnjbCHWhqzQTIN2Jpe8pRebIEFQ==",
+      "license": "ISC",
+      "engines": {
+        "node": ">=12"
+      }
+    },
+    "node_modules/d3-scale": {
+      "version": "4.0.2",
+      "resolved": "https://registry.npmjs.org/d3-scale/-/d3-scale-4.0.2.tgz",
+      "integrity": "sha512-GZW464g1SH7ag3Y7hXjf8RoUuAFIqklOAq3MRl4OaWabTFJY9PN/E1YklhXLh+OQ3fM9yS2nOkCoS+WLZ6kvxQ==",
+      "license": "ISC",
+      "dependencies": {
+        "d3-array": "2.10.0 - 3",
+        "d3-format": "1 - 3",
+        "d3-interpolate": "1.2.0 - 3",
+        "d3-time": "2.1.1 - 3",
+        "d3-time-format": "2 - 4"
+      },
+      "engines": {
+        "node": ">=12"
+      }
+    },
+    "node_modules/d3-shape": {
+      "version": "3.2.0",
+      "resolved": "https://registry.npmjs.org/d3-shape/-/d3-shape-3.2.0.tgz",
+      "integrity": "sha512-SaLBuwGm3MOViRq2ABk3eLoxwZELpH6zhl3FbAoJ7Vm1gofKx6El1Ib5z23NUEhF9AsGl7y+dzLe5Cw2AArGTA==",
+      "license": "ISC",
+      "dependencies": {
+        "d3-path": "^3.1.0"
+      },
+      "engines": {
+        "node": ">=12"
+      }
+    },
+    "node_modules/d3-time": {
+      "version": "3.1.0",
+      "resolved": "https://registry.npmjs.org/d3-time/-/d3-time-3.1.0.tgz",
+      "integrity": "sha512-VqKjzBLejbSMT4IgbmVgDjpkYrNWUYJnbCGo874u7MMKIWsILRX+OpX/gTk8MqjpT1A/c6HY2dCA77ZN0lkQ2Q==",
+      "license": "ISC",
+      "dependencies": {
+        "d3-array": "2 - 3"
+      },
+      "engines": {
+        "node": ">=12"
+      }
+    },
+    "node_modules/d3-time-format": {
+      "version": "4.1.0",
+      "resolved": "https://registry.npmjs.org/d3-time-format/-/d3-time-format-4.1.0.tgz",
+      "integrity": "sha512-dJxPBlzC7NugB2PDLwo9Q8JiTR3M3e4/XANkreKSUxF8vvXKqm1Yfq4Q5dl8budlunRVlUUaDUgFt7eA8D6NLg==",
+      "license": "ISC",
+      "dependencies": {
+        "d3-time": "1 - 3"
+      },
+      "engines": {
+        "node": ">=12"
+      }
+    },
+    "node_modules/d3-timer": {
+      "version": "3.0.1",
+      "resolved": "https://registry.npmjs.org/d3-timer/-/d3-timer-3.0.1.tgz",
+      "integrity": "sha512-ndfJ/JxxMd3nw31uyKoY2naivF+r29V+Lc0svZxe1JvvIRmi8hUsrMvdOwgS1o6uBHmiz91geQ0ylPP0aj1VUA==",
+      "license": "ISC",
+      "engines": {
+        "node": ">=12"
+      }
+    },
+    "node_modules/debug": {
+      "version": "4.4.3",
+      "resolved": "https://registry.npmjs.org/debug/-/debug-4.4.3.tgz",
+      "integrity": "sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "ms": "^2.1.3"
+      },
+      "engines": {
+        "node": ">=6.0"
+      },
+      "peerDependenciesMeta": {
+        "supports-color": {
+          "optional": true
+        }
+      }
+    },
+    "node_modules/decimal.js-light": {
+      "version": "2.5.1",
+      "resolved": "https://registry.npmjs.org/decimal.js-light/-/decimal.js-light-2.5.1.tgz",
+      "integrity": "sha512-qIMFpTMZmny+MMIitAB6D7iVPEorVw6YQRWkvarTkT4tBeSLLiHzcwj6q0MmYSFCiVpiqPJTJEYIrpcPzVEIvg==",
+      "license": "MIT"
+    },
+    "node_modules/deep-is": {
+      "version": "0.1.4",
+      "resolved": "https://registry.npmjs.org/deep-is/-/deep-is-0.1.4.tgz",
+      "integrity": "sha512-oIPzksmTg4/MriiaYGO+okXDT7ztn/w3Eptv/+gSIdMdKsJo0u4CfYNFJPy+4SKMuCqGw2wxnA+URMg3t8a/bQ==",
+      "dev": true,
+      "license": "MIT"
+    },
+    "node_modules/detect-libc": {
+      "version": "2.1.2",
+      "resolved": "https://registry.npmjs.org/detect-libc/-/detect-libc-2.1.2.tgz",
+      "integrity": "sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==",
+      "dev": true,
+      "license": "Apache-2.0",
+      "engines": {
+        "node": ">=8"
+      }
+    },
+    "node_modules/dompurify": {
+      "version": "3.4.3",
+      "resolved": "https://registry.npmjs.org/dompurify/-/dompurify-3.4.3.tgz",
+      "integrity": "sha512-VVwJidIJcp1hpg2OMXML3ZVRPYSZiq4aX7qBh83BSIpOaRDqI+qxhXjjIWnpzkOXhmp0L81lnoME1mnCc9H48A==",
+      "license": "(MPL-2.0 OR Apache-2.0)",
+      "optional": true,
+      "optionalDependencies": {
+        "@types/trusted-types": "^2.0.7"
+      }
+    },
+    "node_modules/electron-to-chromium": {
+      "version": "1.5.357",
+      "resolved": "https://registry.npmjs.org/electron-to-chromium/-/electron-to-chromium-1.5.357.tgz",
+      "integrity": "sha512-NHlTIQDK8fmVwHwuIzmXYEJ1Ewq3D9wDNc0cWXxDGysP6Pb21giwGNkxiTifyKy/4SoPuN5l6GLP1W9Sv7zB2g==",
+      "dev": true,
+      "license": "ISC"
+    },
+    "node_modules/es-toolkit": {
+      "version": "1.46.1",
+      "resolved": "https://registry.npmjs.org/es-toolkit/-/es-toolkit-1.46.1.tgz",
+      "integrity": "sha512-5eNtXOs3tbfxXOj04tjjseeWkRWaoCjdEI+96DgwzZoe6c9juL49pXlzAFTI72aWC9Y8p7168g6XIKjh7k6pyQ==",
+      "license": "MIT",
+      "workspaces": [
+        "docs",
+        "benchmarks"
+      ]
+    },
+    "node_modules/escalade": {
+      "version": "3.2.0",
+      "resolved": "https://registry.npmjs.org/escalade/-/escalade-3.2.0.tgz",
+      "integrity": "sha512-WUj2qlxaQtO4g6Pq5c29GTcWGDyd8itL8zTlipgECz3JesAiiOKotd8JU6otB3PACgG6xkJUyVhboMS+bje/jA==",
+      "dev": true,
+      "license": "MIT",
+      "engines": {
+        "node": ">=6"
+      }
+    },
+    "node_modules/escape-string-regexp": {
+      "version": "4.0.0",
+      "resolved": "https://registry.npmjs.org/escape-string-regexp/-/escape-string-regexp-4.0.0.tgz",
+      "integrity": "sha512-TtpcNJ3XAzx3Gq8sWRzJaVajRs0uVxA2YAkdb1jm2YkPz4G6egUFAyA3n5vtEIZefPk5Wa4UXbKuS5fKkJWdgA==",
+      "dev": true,
+      "license": "MIT",
+      "engines": {
+        "node": ">=10"
+      },
+      "funding": {
+        "url": "https://github.com/sponsors/sindresorhus"
+      }
+    },
+    "node_modules/eslint": {
+      "version": "10.4.0",
+      "resolved": "https://registry.npmjs.org/eslint/-/eslint-10.4.0.tgz",
+      "integrity": "sha512-loXy6bWOoP3EP6JA7jo6p5jMpBJmHmsNZM5SFRHLdh1MGOPurMnNBj4ZlAbaqUAaQWbCr7jHV4P7gzAyryZWkQ==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "@eslint-community/eslint-utils": "^4.8.0",
+        "@eslint-community/regexpp": "^4.12.2",
+        "@eslint/config-array": "^0.23.5",
+        "@eslint/config-helpers": "^0.6.0",
+        "@eslint/core": "^1.2.1",
+        "@eslint/plugin-kit": "^0.7.1",
+        "@humanfs/node": "^0.16.6",
+        "@humanwhocodes/module-importer": "^1.0.1",
+        "@humanwhocodes/retry": "^0.4.2",
+        "@types/estree": "^1.0.6",
+        "ajv": "^6.14.0",
+        "cross-spawn": "^7.0.6",
+        "debug": "^4.3.2",
+        "escape-string-regexp": "^4.0.0",
+        "eslint-scope": "^9.1.2",
+        "eslint-visitor-keys": "^5.0.1",
+        "espree": "^11.2.0",
+        "esquery": "^1.7.0",
+        "esutils": "^2.0.2",
+        "fast-deep-equal": "^3.1.3",
+        "file-entry-cache": "^8.0.0",
+        "find-up": "^5.0.0",
+        "glob-parent": "^6.0.2",
+        "ignore": "^5.2.0",
+        "imurmurhash": "^0.1.4",
+        "is-glob": "^4.0.0",
+        "json-stable-stringify-without-jsonify": "^1.0.1",
+        "minimatch": "^10.2.4",
+        "natural-compare": "^1.4.0",
+        "optionator": "^0.9.3"
+      },
+      "bin": {
+        "eslint": "bin/eslint.js"
+      },
+      "engines": {
+        "node": "^20.19.0 || ^22.13.0 || >=24"
+      },
+      "funding": {
+        "url": "https://eslint.org/donate"
+      },
+      "peerDependencies": {
+        "jiti": "*"
+      },
+      "peerDependenciesMeta": {
+        "jiti": {
+          "optional": true
+        }
+      }
+    },
+    "node_modules/eslint-plugin-react-hooks": {
+      "version": "7.1.1",
+      "resolved": "https://registry.npmjs.org/eslint-plugin-react-hooks/-/eslint-plugin-react-hooks-7.1.1.tgz",
+      "integrity": "sha512-f2I7Gw6JbvCexzIInuSbZpfdQ44D7iqdWX01FKLvrPgqxoE7oMj8clOfto8U6vYiz4yd5oKu39rRSVOe1zRu0g==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "@babel/core": "^7.24.4",
+        "@babel/parser": "^7.24.4",
+        "hermes-parser": "^0.25.1",
+        "zod": "^3.25.0 || ^4.0.0",
+        "zod-validation-error": "^3.5.0 || ^4.0.0"
+      },
+      "engines": {
+        "node": ">=18"
+      },
+      "peerDependencies": {
+        "eslint": "^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0-0 || ^9.0.0 || ^10.0.0"
+      }
+    },
+    "node_modules/eslint-plugin-react-refresh": {
+      "version": "0.5.2",
+      "resolved": "https://registry.npmjs.org/eslint-plugin-react-refresh/-/eslint-plugin-react-refresh-0.5.2.tgz",
+      "integrity": "sha512-hmgTH57GfzoTFjVN0yBwTggnsVUF2tcqi7RJZHqi9lIezSs4eFyAMktA68YD4r5kNw1mxyY4dmkyoFDb3FIqrA==",
+      "dev": true,
+      "license": "MIT",
+      "peerDependencies": {
+        "eslint": "^9 || ^10"
+      }
+    },
+    "node_modules/eslint-scope": {
+      "version": "9.1.2",
+      "resolved": "https://registry.npmjs.org/eslint-scope/-/eslint-scope-9.1.2.tgz",
+      "integrity": "sha512-xS90H51cKw0jltxmvmHy2Iai1LIqrfbw57b79w/J7MfvDfkIkFZ+kj6zC3BjtUwh150HsSSdxXZcsuv72miDFQ==",
+      "dev": true,
+      "license": "BSD-2-Clause",
+      "dependencies": {
+        "@types/esrecurse": "^4.3.1",
+        "@types/estree": "^1.0.8",
+        "esrecurse": "^4.3.0",
+        "estraverse": "^5.2.0"
+      },
+      "engines": {
+        "node": "^20.19.0 || ^22.13.0 || >=24"
+      },
+      "funding": {
+        "url": "https://opencollective.com/eslint"
+      }
+    },
+    "node_modules/eslint-visitor-keys": {
+      "version": "5.0.1",
+      "resolved": "https://registry.npmjs.org/eslint-visitor-keys/-/eslint-visitor-keys-5.0.1.tgz",
+      "integrity": "sha512-tD40eHxA35h0PEIZNeIjkHoDR4YjjJp34biM0mDvplBe//mB+IHCqHDGV7pxF+7MklTvighcCPPZC7ynWyjdTA==",
+      "dev": true,
+      "license": "Apache-2.0",
+      "engines": {
+        "node": "^20.19.0 || ^22.13.0 || >=24"
+      },
+      "funding": {
+        "url": "https://opencollective.com/eslint"
+      }
+    },
+    "node_modules/espree": {
+      "version": "11.2.0",
+      "resolved": "https://registry.npmjs.org/espree/-/espree-11.2.0.tgz",
+      "integrity": "sha512-7p3DrVEIopW1B1avAGLuCSh1jubc01H2JHc8B4qqGblmg5gI9yumBgACjWo4JlIc04ufug4xJ3SQI8HkS/Rgzw==",
+      "dev": true,
+      "license": "BSD-2-Clause",
+      "dependencies": {
+        "acorn": "^8.16.0",
+        "acorn-jsx": "^5.3.2",
+        "eslint-visitor-keys": "^5.0.1"
+      },
+      "engines": {
+        "node": "^20.19.0 || ^22.13.0 || >=24"
+      },
+      "funding": {
+        "url": "https://opencollective.com/eslint"
+      }
+    },
+    "node_modules/esquery": {
+      "version": "1.7.0",
+      "resolved": "https://registry.npmjs.org/esquery/-/esquery-1.7.0.tgz",
+      "integrity": "sha512-Ap6G0WQwcU/LHsvLwON1fAQX9Zp0A2Y6Y/cJBl9r/JbW90Zyg4/zbG6zzKa2OTALELarYHmKu0GhpM5EO+7T0g==",
+      "dev": true,
+      "license": "BSD-3-Clause",
+      "dependencies": {
+        "estraverse": "^5.1.0"
+      },
+      "engines": {
+        "node": ">=0.10"
+      }
+    },
+    "node_modules/esrecurse": {
+      "version": "4.3.0",
+      "resolved": "https://registry.npmjs.org/esrecurse/-/esrecurse-4.3.0.tgz",
+      "integrity": "sha512-KmfKL3b6G+RXvP8N1vr3Tq1kL/oCFgn2NYXEtqP8/L3pKapUA4G8cFVaoF3SU323CD4XypR/ffioHmkti6/Tag==",
+      "dev": true,
+      "license": "BSD-2-Clause",
+      "dependencies": {
+        "estraverse": "^5.2.0"
+      },
+      "engines": {
+        "node": ">=4.0"
+      }
+    },
+    "node_modules/estraverse": {
+      "version": "5.3.0",
+      "resolved": "https://registry.npmjs.org/estraverse/-/estraverse-5.3.0.tgz",
+      "integrity": "sha512-MMdARuVEQziNTeJD8DgMqmhwR11BRQ/cBP+pLtYdSTnf3MIO8fFeiINEbX36ZdNlfU/7A9f3gUw49B3oQsvwBA==",
+      "dev": true,
+      "license": "BSD-2-Clause",
+      "engines": {
+        "node": ">=4.0"
+      }
+    },
+    "node_modules/esutils": {
+      "version": "2.0.3",
+      "resolved": "https://registry.npmjs.org/esutils/-/esutils-2.0.3.tgz",
+      "integrity": "sha512-kVscqXk4OCp68SZ0dkgEKVi6/8ij300KBWTJq32P/dYeWTSwK41WyTxalN1eRmA5Z9UU/LX9D7FWSmV9SAYx6g==",
+      "dev": true,
+      "license": "BSD-2-Clause",
+      "engines": {
+        "node": ">=0.10.0"
+      }
+    },
+    "node_modules/eventemitter3": {
+      "version": "5.0.4",
+      "resolved": "https://registry.npmjs.org/eventemitter3/-/eventemitter3-5.0.4.tgz",
+      "integrity": "sha512-mlsTRyGaPBjPedk6Bvw+aqbsXDtoAyAzm5MO7JgU+yVRyMQ5O8bD4Kcci7BS85f93veegeCPkL8R4GLClnjLFw==",
+      "license": "MIT"
+    },
+    "node_modules/fast-deep-equal": {
+      "version": "3.1.3",
+      "resolved": "https://registry.npmjs.org/fast-deep-equal/-/fast-deep-equal-3.1.3.tgz",
+      "integrity": "sha512-f3qQ9oQy9j2AhBe/H9VC91wLmKBCCU/gDOnKNAYG5hswO7BLKj09Hc5HYNz9cGI++xlpDCIgDaitVs03ATR84Q==",
+      "dev": true,
+      "license": "MIT"
+    },
+    "node_modules/fast-json-stable-stringify": {
+      "version": "2.1.0",
+      "resolved": "https://registry.npmjs.org/fast-json-stable-stringify/-/fast-json-stable-stringify-2.1.0.tgz",
+      "integrity": "sha512-lhd/wF+Lk98HZoTCtlVraHtfh5XYijIjalXck7saUtuanSDyLMxnHhSXEDJqHxD7msR8D0uCmqlkwjCV8xvwHw==",
+      "dev": true,
+      "license": "MIT"
+    },
+    "node_modules/fast-levenshtein": {
+      "version": "2.0.6",
+      "resolved": "https://registry.npmjs.org/fast-levenshtein/-/fast-levenshtein-2.0.6.tgz",
+      "integrity": "sha512-DCXu6Ifhqcks7TZKY3Hxp3y6qphY5SJZmrWMDrKcERSOXWQdMhU9Ig/PYrzyw/ul9jOIyh0N4M0tbC5hodg8dw==",
+      "dev": true,
+      "license": "MIT"
+    },
+    "node_modules/fast-png": {
+      "version": "6.4.0",
+      "resolved": "https://registry.npmjs.org/fast-png/-/fast-png-6.4.0.tgz",
+      "integrity": "sha512-kAqZq1TlgBjZcLr5mcN6NP5Rv4V2f22z00c3g8vRrwkcqjerx7BEhPbOnWCPqaHUl2XWQBJQvOT/FQhdMT7X/Q==",
+      "license": "MIT",
+      "dependencies": {
+        "@types/pako": "^2.0.3",
+        "iobuffer": "^5.3.2",
+        "pako": "^2.1.0"
+      }
+    },
+    "node_modules/fdir": {
+      "version": "6.5.0",
+      "resolved": "https://registry.npmjs.org/fdir/-/fdir-6.5.0.tgz",
+      "integrity": "sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==",
+      "dev": true,
+      "license": "MIT",
+      "engines": {
+        "node": ">=12.0.0"
+      },
+      "peerDependencies": {
+        "picomatch": "^3 || ^4"
+      },
+      "peerDependenciesMeta": {
+        "picomatch": {
+          "optional": true
+        }
+      }
+    },
+    "node_modules/fflate": {
+      "version": "0.8.3",
+      "resolved": "https://registry.npmjs.org/fflate/-/fflate-0.8.3.tgz",
+      "integrity": "sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==",
+      "license": "MIT"
+    },
+    "node_modules/file-entry-cache": {
+      "version": "8.0.0",
+      "resolved": "https://registry.npmjs.org/file-entry-cache/-/file-entry-cache-8.0.0.tgz",
+      "integrity": "sha512-XXTUwCvisa5oacNGRP9SfNtYBNAMi+RPwBFmblZEF7N7swHYQS6/Zfk7SRwx4D5j3CH211YNRco1DEMNVfZCnQ==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "flat-cache": "^4.0.0"
+      },
+      "engines": {
+        "node": ">=16.0.0"
+      }
+    },
+    "node_modules/find-up": {
+      "version": "5.0.0",
+      "resolved": "https://registry.npmjs.org/find-up/-/find-up-5.0.0.tgz",
+      "integrity": "sha512-78/PXT1wlLLDgTzDs7sjq9hzz0vXD+zn+7wypEe4fXQxCmdmqfGsEPQxmiCSQI3ajFV91bVSsvNtrJRiW6nGng==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "locate-path": "^6.0.0",
+        "path-exists": "^4.0.0"
+      },
+      "engines": {
+        "node": ">=10"
+      },
+      "funding": {
+        "url": "https://github.com/sponsors/sindresorhus"
+      }
+    },
+    "node_modules/flat-cache": {
+      "version": "4.0.1",
+      "resolved": "https://registry.npmjs.org/flat-cache/-/flat-cache-4.0.1.tgz",
+      "integrity": "sha512-f7ccFPK3SXFHpx15UIGyRJ/FJQctuKZ0zVuN3frBo4HnK3cay9VEW0R6yPYFHC0AgqhukPzKjq22t5DmAyqGyw==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "flatted": "^3.2.9",
+        "keyv": "^4.5.4"
+      },
+      "engines": {
+        "node": ">=16"
+      }
+    },
+    "node_modules/flatted": {
+      "version": "3.4.2",
+      "resolved": "https://registry.npmjs.org/flatted/-/flatted-3.4.2.tgz",
+      "integrity": "sha512-PjDse7RzhcPkIJwy5t7KPWQSZ9cAbzQXcafsetQoD7sOJRQlGikNbx7yZp2OotDnJyrDcbyRq3Ttb18iYOqkxA==",
+      "dev": true,
+      "license": "ISC"
+    },
+    "node_modules/fraction.js": {
+      "version": "5.3.4",
+      "resolved": "https://registry.npmjs.org/fraction.js/-/fraction.js-5.3.4.tgz",
+      "integrity": "sha512-1X1NTtiJphryn/uLQz3whtY6jK3fTqoE3ohKs0tT+Ujr1W59oopxmoEh7Lu5p6vBaPbgoM0bzveAW4Qi5RyWDQ==",
+      "dev": true,
+      "license": "MIT",
+      "engines": {
+        "node": "*"
+      },
+      "funding": {
+        "type": "github",
+        "url": "https://github.com/sponsors/rawify"
+      }
+    },
+    "node_modules/fsevents": {
+      "version": "2.3.3",
+      "resolved": "https://registry.npmjs.org/fsevents/-/fsevents-2.3.3.tgz",
+      "integrity": "sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==",
+      "dev": true,
+      "hasInstallScript": true,
+      "license": "MIT",
+      "optional": true,
+      "os": [
+        "darwin"
+      ],
+      "engines": {
+        "node": "^8.16.0 || ^10.6.0 || >=11.0.0"
+      }
+    },
+    "node_modules/gensync": {
+      "version": "1.0.0-beta.2",
+      "resolved": "https://registry.npmjs.org/gensync/-/gensync-1.0.0-beta.2.tgz",
+      "integrity": "sha512-3hN7NaskYvMDLQY55gnW3NQ+mesEAepTqlg+VEbj7zzqEMBVNhzcGYYeqFo/TlYz6eQiFcp1HcsCZO+nGgS8zg==",
+      "dev": true,
+      "license": "MIT",
+      "engines": {
+        "node": ">=6.9.0"
+      }
+    },
+    "node_modules/glob-parent": {
+      "version": "6.0.2",
+      "resolved": "https://registry.npmjs.org/glob-parent/-/glob-parent-6.0.2.tgz",
+      "integrity": "sha512-XxwI8EOhVQgWp6iDL+3b0r86f4d6AX6zSU55HfB4ydCEuXLXc5FcYeOu+nnGftS4TEju/11rt4KJPTMgbfmv4A==",
+      "dev": true,
+      "license": "ISC",
+      "dependencies": {
+        "is-glob": "^4.0.3"
+      },
+      "engines": {
+        "node": ">=10.13.0"
+      }
+    },
+    "node_modules/globals": {
+      "version": "17.6.0",
+      "resolved": "https://registry.npmjs.org/globals/-/globals-17.6.0.tgz",
+      "integrity": "sha512-sepffkT8stwnIYbsMBpoCHJuJM5l98FUF2AnE07hfvE0m/qp3R586hw4jF4uadbhvg1ooIdzuu7CsfD2jzCaNA==",
+      "dev": true,
+      "license": "MIT",
+      "engines": {
+        "node": ">=18"
+      },
+      "funding": {
+        "url": "https://github.com/sponsors/sindresorhus"
+      }
+    },
+    "node_modules/hermes-estree": {
+      "version": "0.25.1",
+      "resolved": "https://registry.npmjs.org/hermes-estree/-/hermes-estree-0.25.1.tgz",
+      "integrity": "sha512-0wUoCcLp+5Ev5pDW2OriHC2MJCbwLwuRx+gAqMTOkGKJJiBCLjtrvy4PWUGn6MIVefecRpzoOZ/UV6iGdOr+Cw==",
+      "dev": true,
+      "license": "MIT"
+    },
+    "node_modules/hermes-parser": {
+      "version": "0.25.1",
+      "resolved": "https://registry.npmjs.org/hermes-parser/-/hermes-parser-0.25.1.tgz",
+      "integrity": "sha512-6pEjquH3rqaI6cYAXYPcz9MS4rY6R4ngRgrgfDshRptUZIc3lw0MCIJIGDj9++mfySOuPTHB4nrSW99BCvOPIA==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "hermes-estree": "0.25.1"
+      }
+    },
+    "node_modules/html2canvas": {
+      "version": "1.4.1",
+      "resolved": "https://registry.npmjs.org/html2canvas/-/html2canvas-1.4.1.tgz",
+      "integrity": "sha512-fPU6BHNpsyIhr8yyMpTLLxAbkaK8ArIBcmZIRiBLiDhjeqvXolaEmDGmELFuX9I4xDcaKKcJl+TKZLqruBbmWA==",
+      "license": "MIT",
+      "optional": true,
+      "dependencies": {
+        "css-line-break": "^2.1.0",
+        "text-segmentation": "^1.0.3"
+      },
+      "engines": {
+        "node": ">=8.0.0"
+      }
+    },
+    "node_modules/html5-qrcode": {
+      "version": "2.3.8",
+      "resolved": "https://registry.npmjs.org/html5-qrcode/-/html5-qrcode-2.3.8.tgz",
+      "integrity": "sha512-jsr4vafJhwoLVEDW3n1KvPnCCXWaQfRng0/EEYk1vNcQGcG/htAdhJX0be8YyqMoSz7+hZvOZSTAepsabiuhiQ==",
+      "license": "Apache-2.0"
+    },
+    "node_modules/ignore": {
+      "version": "5.3.2",
+      "resolved": "https://registry.npmjs.org/ignore/-/ignore-5.3.2.tgz",
+      "integrity": "sha512-hsBTNUqQTDwkWtcdYI2i06Y/nUBEsNEDJKjWdigLvegy8kDuJAS8uRlpkkcQpyEXL0Z/pjDy5HBmMjRCJ2gq+g==",
+      "dev": true,
+      "license": "MIT",
+      "engines": {
+        "node": ">= 4"
+      }
+    },
+    "node_modules/immer": {
+      "version": "10.2.0",
+      "resolved": "https://registry.npmjs.org/immer/-/immer-10.2.0.tgz",
+      "integrity": "sha512-d/+XTN3zfODyjr89gM3mPq1WNX2B8pYsu7eORitdwyA2sBubnTl3laYlBk4sXY5FUa5qTZGBDPJICVbvqzjlbw==",
+      "license": "MIT",
+      "funding": {
+        "type": "opencollective",
+        "url": "https://opencollective.com/immer"
+      }
+    },
+    "node_modules/imurmurhash": {
+      "version": "0.1.4",
+      "resolved": "https://registry.npmjs.org/imurmurhash/-/imurmurhash-0.1.4.tgz",
+      "integrity": "sha512-JmXMZ6wuvDmLiHEml9ykzqO6lwFbof0GG4IkcGaENdCRDDmMVnny7s5HsIgHCbaq0w2MyPhDqkhTUgS2LU2PHA==",
+      "dev": true,
+      "license": "MIT",
+      "engines": {
+        "node": ">=0.8.19"
+      }
+    },
+    "node_modules/internmap": {
+      "version": "2.0.3",
+      "resolved": "https://registry.npmjs.org/internmap/-/internmap-2.0.3.tgz",
+      "integrity": "sha512-5Hh7Y1wQbvY5ooGgPbDaL5iYLAPzMTUrjMulskHLH6wnv/A+1q5rgEaiuqEjB+oxGXIVZs1FF+R/KPN3ZSQYYg==",
+      "license": "ISC",
+      "engines": {
+        "node": ">=12"
+      }
+    },
+    "node_modules/iobuffer": {
+      "version": "5.4.0",
+      "resolved": "https://registry.npmjs.org/iobuffer/-/iobuffer-5.4.0.tgz",
+      "integrity": "sha512-DRebOWuqDvxunfkNJAlc3IzWIPD5xVxwUNbHr7xKB8E6aLJxIPfNX3CoMJghcFjpv6RWQsrcJbghtEwSPoJqMA==",
+      "license": "MIT"
+    },
+    "node_modules/is-extglob": {
+      "version": "2.1.1",
+      "resolved": "https://registry.npmjs.org/is-extglob/-/is-extglob-2.1.1.tgz",
+      "integrity": "sha512-SbKbANkN603Vi4jEZv49LeVJMn4yGwsbzZworEoyEiutsN3nJYdbO36zfhGJ6QEDpOZIFkDtnq5JRxmvl3jsoQ==",
+      "dev": true,
+      "license": "MIT",
+      "engines": {
+        "node": ">=0.10.0"
+      }
+    },
+    "node_modules/is-glob": {
+      "version": "4.0.3",
+      "resolved": "https://registry.npmjs.org/is-glob/-/is-glob-4.0.3.tgz",
+      "integrity": "sha512-xelSayHH36ZgE7ZWhli7pW34hNbNl8Ojv5KVmkJD4hBdD3th8Tfk9vYasLM+mXWOZhFkgZfxhLSnrwRr4elSSg==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "is-extglob": "^2.1.1"
+      },
+      "engines": {
+        "node": ">=0.10.0"
+      }
+    },
+    "node_modules/isexe": {
+      "version": "2.0.0",
+      "resolved": "https://registry.npmjs.org/isexe/-/isexe-2.0.0.tgz",
+      "integrity": "sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw==",
+      "dev": true,
+      "license": "ISC"
+    },
+    "node_modules/js-tokens": {
+      "version": "4.0.0",
+      "resolved": "https://registry.npmjs.org/js-tokens/-/js-tokens-4.0.0.tgz",
+      "integrity": "sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==",
+      "dev": true,
+      "license": "MIT"
+    },
+    "node_modules/jsesc": {
+      "version": "3.1.0",
+      "resolved": "https://registry.npmjs.org/jsesc/-/jsesc-3.1.0.tgz",
+      "integrity": "sha512-/sM3dO2FOzXjKQhJuo0Q173wf2KOo8t4I8vHy6lF9poUp7bKT0/NHE8fPX23PwfhnykfqnC2xRxOnVw5XuGIaA==",
+      "dev": true,
+      "license": "MIT",
+      "bin": {
+        "jsesc": "bin/jsesc"
+      },
+      "engines": {
+        "node": ">=6"
+      }
+    },
+    "node_modules/json-buffer": {
+      "version": "3.0.1",
+      "resolved": "https://registry.npmjs.org/json-buffer/-/json-buffer-3.0.1.tgz",
+      "integrity": "sha512-4bV5BfR2mqfQTJm+V5tPPdf+ZpuhiIvTuAB5g8kcrXOZpTT/QwwVRWBywX1ozr6lEuPdbHxwaJlm9G6mI2sfSQ==",
+      "dev": true,
+      "license": "MIT"
+    },
+    "node_modules/json-schema-traverse": {
+      "version": "0.4.1",
+      "resolved": "https://registry.npmjs.org/json-schema-traverse/-/json-schema-traverse-0.4.1.tgz",
+      "integrity": "sha512-xbbCH5dCYU5T8LcEhhuh7HJ88HXuW3qsI3Y0zOZFKfZEHcpWiHU/Jxzk629Brsab/mMiHQti9wMP+845RPe3Vg==",
+      "dev": true,
+      "license": "MIT"
+    },
+    "node_modules/json-stable-stringify-without-jsonify": {
+      "version": "1.0.1",
+      "resolved": "https://registry.npmjs.org/json-stable-stringify-without-jsonify/-/json-stable-stringify-without-jsonify-1.0.1.tgz",
+      "integrity": "sha512-Bdboy+l7tA3OGW6FjyFHWkP5LuByj1Tk33Ljyq0axyzdk9//JSi2u3fP1QSmd1KNwq6VOKYGlAu87CisVir6Pw==",
+      "dev": true,
+      "license": "MIT"
+    },
+    "node_modules/json5": {
+      "version": "2.2.3",
+      "resolved": "https://registry.npmjs.org/json5/-/json5-2.2.3.tgz",
+      "integrity": "sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg==",
+      "dev": true,
+      "license": "MIT",
+      "bin": {
+        "json5": "lib/cli.js"
+      },
+      "engines": {
+        "node": ">=6"
+      }
+    },
+    "node_modules/jspdf": {
+      "version": "4.2.1",
+      "resolved": "https://registry.npmjs.org/jspdf/-/jspdf-4.2.1.tgz",
+      "integrity": "sha512-YyAXyvnmjTbR4bHQRLzex3CuINCDlQnBqoSYyjJwTP2x9jDLuKDzy7aKUl0hgx3uhcl7xzg32agn5vlie6HIlQ==",
+      "license": "MIT",
+      "dependencies": {
+        "@babel/runtime": "^7.28.6",
+        "fast-png": "^6.2.0",
+        "fflate": "^0.8.1"
+      },
+      "optionalDependencies": {
+        "canvg": "^3.0.11",
+        "core-js": "^3.6.0",
+        "dompurify": "^3.3.1",
+        "html2canvas": "^1.0.0-rc.5"
+      }
+    },
+    "node_modules/jspdf-autotable": {
+      "version": "5.0.8",
+      "resolved": "https://registry.npmjs.org/jspdf-autotable/-/jspdf-autotable-5.0.8.tgz",
+      "integrity": "sha512-Hy05N86yBO7CXBrnSLOge7i1ZYpKH2DjQ94iybaP7vBhSInjvRBgDc99ngKzSbSO8Jc98ZCally8I6n0tj2RJQ==",
+      "license": "MIT",
+      "peerDependencies": {
+        "jspdf": "^2 || ^3 || ^4"
+      }
+    },
+    "node_modules/keyv": {
+      "version": "4.5.4",
+      "resolved": "https://registry.npmjs.org/keyv/-/keyv-4.5.4.tgz",
+      "integrity": "sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "json-buffer": "3.0.1"
+      }
+    },
+    "node_modules/levn": {
+      "version": "0.4.1",
+      "resolved": "https://registry.npmjs.org/levn/-/levn-0.4.1.tgz",
+      "integrity": "sha512-+bT2uH4E5LGE7h/n3evcS/sQlJXCpIp6ym8OWJ5eV6+67Dsql/LaaT7qJBAt2rzfoa/5QBGBhxDix1dMt2kQKQ==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "prelude-ls": "^1.2.1",
+        "type-check": "~0.4.0"
+      },
+      "engines": {
+        "node": ">= 0.8.0"
+      }
+    },
+    "node_modules/lightningcss": {
+      "version": "1.32.0",
+      "resolved": "https://registry.npmjs.org/lightningcss/-/lightningcss-1.32.0.tgz",
+      "integrity": "sha512-NXYBzinNrblfraPGyrbPoD19C1h9lfI/1mzgWYvXUTe414Gz/X1FD2XBZSZM7rRTrMA8JL3OtAaGifrIKhQ5yQ==",
+      "dev": true,
+      "license": "MPL-2.0",
+      "dependencies": {
+        "detect-libc": "^2.0.3"
+      },
+      "engines": {
+        "node": ">= 12.0.0"
+      },
+      "funding": {
+        "type": "opencollective",
+        "url": "https://opencollective.com/parcel"
+      },
+      "optionalDependencies": {
+        "lightningcss-android-arm64": "1.32.0",
+        "lightningcss-darwin-arm64": "1.32.0",
+        "lightningcss-darwin-x64": "1.32.0",
+        "lightningcss-freebsd-x64": "1.32.0",
+        "lightningcss-linux-arm-gnueabihf": "1.32.0",
+        "lightningcss-linux-arm64-gnu": "1.32.0",
+        "lightningcss-linux-arm64-musl": "1.32.0",
+        "lightningcss-linux-x64-gnu": "1.32.0",
+        "lightningcss-linux-x64-musl": "1.32.0",
+        "lightningcss-win32-arm64-msvc": "1.32.0",
+        "lightningcss-win32-x64-msvc": "1.32.0"
+      }
+    },
+    "node_modules/lightningcss-android-arm64": {
+      "version": "1.32.0",
+      "resolved": "https://registry.npmjs.org/lightningcss-android-arm64/-/lightningcss-android-arm64-1.32.0.tgz",
+      "integrity": "sha512-YK7/ClTt4kAK0vo6w3X+Pnm0D2cf2vPHbhOXdoNti1Ga0al1P4TBZhwjATvjNwLEBCnKvjJc2jQgHXH0NEwlAg==",
+      "cpu": [
+        "arm64"
+      ],
+      "dev": true,
+      "license": "MPL-2.0",
+      "optional": true,
+      "os": [
+        "android"
+      ],
+      "engines": {
+        "node": ">= 12.0.0"
+      },
+      "funding": {
+        "type": "opencollective",
+        "url": "https://opencollective.com/parcel"
+      }
+    },
+    "node_modules/lightningcss-darwin-arm64": {
+      "version": "1.32.0",
+      "resolved": "https://registry.npmjs.org/lightningcss-darwin-arm64/-/lightningcss-darwin-arm64-1.32.0.tgz",
+      "integrity": "sha512-RzeG9Ju5bag2Bv1/lwlVJvBE3q6TtXskdZLLCyfg5pt+HLz9BqlICO7LZM7VHNTTn/5PRhHFBSjk5lc4cmscPQ==",
+      "cpu": [
+        "arm64"
+      ],
+      "dev": true,
+      "license": "MPL-2.0",
+      "optional": true,
+      "os": [
+        "darwin"
+      ],
+      "engines": {
+        "node": ">= 12.0.0"
+      },
+      "funding": {
+        "type": "opencollective",
+        "url": "https://opencollective.com/parcel"
+      }
+    },
+    "node_modules/lightningcss-darwin-x64": {
+      "version": "1.32.0",
+      "resolved": "https://registry.npmjs.org/lightningcss-darwin-x64/-/lightningcss-darwin-x64-1.32.0.tgz",
+      "integrity": "sha512-U+QsBp2m/s2wqpUYT/6wnlagdZbtZdndSmut/NJqlCcMLTWp5muCrID+K5UJ6jqD2BFshejCYXniPDbNh73V8w==",
+      "cpu": [
+        "x64"
+      ],
+      "dev": true,
+      "license": "MPL-2.0",
+      "optional": true,
+      "os": [
+        "darwin"
+      ],
+      "engines": {
+        "node": ">= 12.0.0"
+      },
+      "funding": {
+        "type": "opencollective",
+        "url": "https://opencollective.com/parcel"
+      }
+    },
+    "node_modules/lightningcss-freebsd-x64": {
+      "version": "1.32.0",
+      "resolved": "https://registry.npmjs.org/lightningcss-freebsd-x64/-/lightningcss-freebsd-x64-1.32.0.tgz",
+      "integrity": "sha512-JCTigedEksZk3tHTTthnMdVfGf61Fky8Ji2E4YjUTEQX14xiy/lTzXnu1vwiZe3bYe0q+SpsSH/CTeDXK6WHig==",
+      "cpu": [
+        "x64"
+      ],
+      "dev": true,
+      "license": "MPL-2.0",
+      "optional": true,
+      "os": [
+        "freebsd"
+      ],
+      "engines": {
+        "node": ">= 12.0.0"
+      },
+      "funding": {
+        "type": "opencollective",
+        "url": "https://opencollective.com/parcel"
+      }
+    },
+    "node_modules/lightningcss-linux-arm-gnueabihf": {
+      "version": "1.32.0",
+      "resolved": "https://registry.npmjs.org/lightningcss-linux-arm-gnueabihf/-/lightningcss-linux-arm-gnueabihf-1.32.0.tgz",
+      "integrity": "sha512-x6rnnpRa2GL0zQOkt6rts3YDPzduLpWvwAF6EMhXFVZXD4tPrBkEFqzGowzCsIWsPjqSK+tyNEODUBXeeVHSkw==",
+      "cpu": [
+        "arm"
+      ],
+      "dev": true,
+      "license": "MPL-2.0",
+      "optional": true,
+      "os": [
+        "linux"
+      ],
+      "engines": {
+        "node": ">= 12.0.0"
+      },
+      "funding": {
+        "type": "opencollective",
+        "url": "https://opencollective.com/parcel"
+      }
+    },
+    "node_modules/lightningcss-linux-arm64-gnu": {
+      "version": "1.32.0",
+      "resolved": "https://registry.npmjs.org/lightningcss-linux-arm64-gnu/-/lightningcss-linux-arm64-gnu-1.32.0.tgz",
+      "integrity": "sha512-0nnMyoyOLRJXfbMOilaSRcLH3Jw5z9HDNGfT/gwCPgaDjnx0i8w7vBzFLFR1f6CMLKF8gVbebmkUN3fa/kQJpQ==",
+      "cpu": [
+        "arm64"
+      ],
+      "dev": true,
+      "libc": [
+        "glibc"
+      ],
+      "license": "MPL-2.0",
+      "optional": true,
+      "os": [
+        "linux"
+      ],
+      "engines": {
+        "node": ">= 12.0.0"
+      },
+      "funding": {
+        "type": "opencollective",
+        "url": "https://opencollective.com/parcel"
+      }
+    },
+    "node_modules/lightningcss-linux-arm64-musl": {
+      "version": "1.32.0",
+      "resolved": "https://registry.npmjs.org/lightningcss-linux-arm64-musl/-/lightningcss-linux-arm64-musl-1.32.0.tgz",
+      "integrity": "sha512-UpQkoenr4UJEzgVIYpI80lDFvRmPVg6oqboNHfoH4CQIfNA+HOrZ7Mo7KZP02dC6LjghPQJeBsvXhJod/wnIBg==",
+      "cpu": [
+        "arm64"
+      ],
+      "dev": true,
+      "libc": [
+        "musl"
+      ],
+      "license": "MPL-2.0",
+      "optional": true,
+      "os": [
+        "linux"
+      ],
+      "engines": {
+        "node": ">= 12.0.0"
+      },
+      "funding": {
+        "type": "opencollective",
+        "url": "https://opencollective.com/parcel"
+      }
+    },
+    "node_modules/lightningcss-linux-x64-gnu": {
+      "version": "1.32.0",
+      "resolved": "https://registry.npmjs.org/lightningcss-linux-x64-gnu/-/lightningcss-linux-x64-gnu-1.32.0.tgz",
+      "integrity": "sha512-V7Qr52IhZmdKPVr+Vtw8o+WLsQJYCTd8loIfpDaMRWGUZfBOYEJeyJIkqGIDMZPwPx24pUMfwSxxI8phr/MbOA==",
+      "cpu": [
+        "x64"
+      ],
+      "dev": true,
+      "libc": [
+        "glibc"
+      ],
+      "license": "MPL-2.0",
+      "optional": true,
+      "os": [
+        "linux"
+      ],
+      "engines": {
+        "node": ">= 12.0.0"
+      },
+      "funding": {
+        "type": "opencollective",
+        "url": "https://opencollective.com/parcel"
+      }
+    },
+    "node_modules/lightningcss-linux-x64-musl": {
+      "version": "1.32.0",
+      "resolved": "https://registry.npmjs.org/lightningcss-linux-x64-musl/-/lightningcss-linux-x64-musl-1.32.0.tgz",
+      "integrity": "sha512-bYcLp+Vb0awsiXg/80uCRezCYHNg1/l3mt0gzHnWV9XP1W5sKa5/TCdGWaR/zBM2PeF/HbsQv/j2URNOiVuxWg==",
+      "cpu": [
+        "x64"
+      ],
+      "dev": true,
+      "libc": [
+        "musl"
+      ],
+      "license": "MPL-2.0",
+      "optional": true,
+      "os": [
+        "linux"
+      ],
+      "engines": {
+        "node": ">= 12.0.0"
+      },
+      "funding": {
+        "type": "opencollective",
+        "url": "https://opencollective.com/parcel"
+      }
+    },
+    "node_modules/lightningcss-win32-arm64-msvc": {
+      "version": "1.32.0",
+      "resolved": "https://registry.npmjs.org/lightningcss-win32-arm64-msvc/-/lightningcss-win32-arm64-msvc-1.32.0.tgz",
+      "integrity": "sha512-8SbC8BR40pS6baCM8sbtYDSwEVQd4JlFTOlaD3gWGHfThTcABnNDBda6eTZeqbofalIJhFx0qKzgHJmcPTnGdw==",
+      "cpu": [
+        "arm64"
+      ],
+      "dev": true,
+      "license": "MPL-2.0",
+      "optional": true,
+      "os": [
+        "win32"
+      ],
+      "engines": {
+        "node": ">= 12.0.0"
+      },
+      "funding": {
+        "type": "opencollective",
+        "url": "https://opencollective.com/parcel"
+      }
+    },
+    "node_modules/lightningcss-win32-x64-msvc": {
+      "version": "1.32.0",
+      "resolved": "https://registry.npmjs.org/lightningcss-win32-x64-msvc/-/lightningcss-win32-x64-msvc-1.32.0.tgz",
+      "integrity": "sha512-Amq9B/SoZYdDi1kFrojnoqPLxYhQ4Wo5XiL8EVJrVsB8ARoC1PWW6VGtT0WKCemjy8aC+louJnjS7U18x3b06Q==",
+      "cpu": [
+        "x64"
+      ],
+      "dev": true,
+      "license": "MPL-2.0",
+      "optional": true,
+      "os": [
+        "win32"
+      ],
+      "engines": {
+        "node": ">= 12.0.0"
+      },
+      "funding": {
+        "type": "opencollective",
+        "url": "https://opencollective.com/parcel"
+      }
+    },
+    "node_modules/locate-path": {
+      "version": "6.0.0",
+      "resolved": "https://registry.npmjs.org/locate-path/-/locate-path-6.0.0.tgz",
+      "integrity": "sha512-iPZK6eYjbxRu3uB4/WZ3EsEIMJFMqAoopl3R+zuq0UjcAm/MO6KCweDgPfP3elTztoKP3KtnVHxTn2NHBSDVUw==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "p-locate": "^5.0.0"
+      },
+      "engines": {
+        "node": ">=10"
+      },
+      "funding": {
+        "url": "https://github.com/sponsors/sindresorhus"
+      }
+    },
+    "node_modules/lru-cache": {
+      "version": "5.1.1",
+      "resolved": "https://registry.npmjs.org/lru-cache/-/lru-cache-5.1.1.tgz",
+      "integrity": "sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==",
+      "dev": true,
+      "license": "ISC",
+      "dependencies": {
+        "yallist": "^3.0.2"
+      }
+    },
+    "node_modules/minimatch": {
+      "version": "10.2.5",
+      "resolved": "https://registry.npmjs.org/minimatch/-/minimatch-10.2.5.tgz",
+      "integrity": "sha512-MULkVLfKGYDFYejP07QOurDLLQpcjk7Fw+7jXS2R2czRQzR56yHRveU5NDJEOviH+hETZKSkIk5c+T23GjFUMg==",
+      "dev": true,
+      "license": "BlueOak-1.0.0",
+      "dependencies": {
+        "brace-expansion": "^5.0.5"
+      },
+      "engines": {
+        "node": "18 || 20 || >=22"
+      },
+      "funding": {
+        "url": "https://github.com/sponsors/isaacs"
+      }
+    },
+    "node_modules/ms": {
+      "version": "2.1.3",
+      "resolved": "https://registry.npmjs.org/ms/-/ms-2.1.3.tgz",
+      "integrity": "sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==",
+      "dev": true,
+      "license": "MIT"
+    },
+    "node_modules/nanoid": {
+      "version": "3.3.12",
+      "resolved": "https://registry.npmjs.org/nanoid/-/nanoid-3.3.12.tgz",
+      "integrity": "sha512-ZB9RH/39qpq5Vu6Y+NmUaFhQR6pp+M2Xt76XBnEwDaGcVAqhlvxrl3B2bKS5D3NH3QR76v3aSrKaF/Kiy7lEtQ==",
+      "dev": true,
+      "funding": [
+        {
+          "type": "github",
+          "url": "https://github.com/sponsors/ai"
+        }
+      ],
+      "license": "MIT",
+      "bin": {
+        "nanoid": "bin/nanoid.cjs"
+      },
+      "engines": {
+        "node": "^10 || ^12 || ^13.7 || ^14 || >=15.0.1"
+      }
+    },
+    "node_modules/natural-compare": {
+      "version": "1.4.0",
+      "resolved": "https://registry.npmjs.org/natural-compare/-/natural-compare-1.4.0.tgz",
+      "integrity": "sha512-OWND8ei3VtNC9h7V60qff3SVobHr996CTwgxubgyQYEpg290h9J0buyECNNJexkFm5sOajh5G116RYA1c8ZMSw==",
+      "dev": true,
+      "license": "MIT"
+    },
+    "node_modules/node-releases": {
+      "version": "2.0.44",
+      "resolved": "https://registry.npmjs.org/node-releases/-/node-releases-2.0.44.tgz",
+      "integrity": "sha512-5WUyunoPMsvvEhS8AxHtRzP+oA8UCkJ7YRxatWKjngndhDGLiqEVAQKWjFAiAiuL8zMRGzGSJxFnLetoa43qGQ==",
+      "dev": true,
+      "license": "MIT"
+    },
+    "node_modules/optionator": {
+      "version": "0.9.4",
+      "resolved": "https://registry.npmjs.org/optionator/-/optionator-0.9.4.tgz",
+      "integrity": "sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "deep-is": "^0.1.3",
+        "fast-levenshtein": "^2.0.6",
+        "levn": "^0.4.1",
+        "prelude-ls": "^1.2.1",
+        "type-check": "^0.4.0",
+        "word-wrap": "^1.2.5"
+      },
+      "engines": {
+        "node": ">= 0.8.0"
+      }
+    },
+    "node_modules/p-limit": {
+      "version": "3.1.0",
+      "resolved": "https://registry.npmjs.org/p-limit/-/p-limit-3.1.0.tgz",
+      "integrity": "sha512-TYOanM3wGwNGsZN2cVTYPArw454xnXj5qmWF1bEoAc4+cU/ol7GVh7odevjp1FNHduHc3KZMcFduxU5Xc6uJRQ==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "yocto-queue": "^0.1.0"
+      },
+      "engines": {
+        "node": ">=10"
+      },
+      "funding": {
+        "url": "https://github.com/sponsors/sindresorhus"
+      }
+    },
+    "node_modules/p-locate": {
+      "version": "5.0.0",
+      "resolved": "https://registry.npmjs.org/p-locate/-/p-locate-5.0.0.tgz",
+      "integrity": "sha512-LaNjtRWUBY++zB5nE/NwcaoMylSPk+S+ZHNB1TzdbMJMny6dynpAGt7X/tl/QYq3TIeE6nxHppbo2LGymrG5Pw==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "p-limit": "^3.0.2"
+      },
+      "engines": {
+        "node": ">=10"
+      },
+      "funding": {
+        "url": "https://github.com/sponsors/sindresorhus"
+      }
+    },
+    "node_modules/pako": {
+      "version": "2.1.0",
+      "resolved": "https://registry.npmjs.org/pako/-/pako-2.1.0.tgz",
+      "integrity": "sha512-w+eufiZ1WuJYgPXbV/PO3NCMEc3xqylkKHzp8bxp1uW4qaSNQUkwmLLEc3kKsfz8lpV1F8Ht3U1Cm+9Srog2ug==",
+      "license": "(MIT AND Zlib)"
+    },
+    "node_modules/path-exists": {
+      "version": "4.0.0",
+      "resolved": "https://registry.npmjs.org/path-exists/-/path-exists-4.0.0.tgz",
+      "integrity": "sha512-ak9Qy5Q7jYb2Wwcey5Fpvg2KoAc/ZIhLSLOSBmRmygPsGwkVVt0fZa0qrtMz+m6tJTAHfZQ8FnmB4MG4LWy7/w==",
+      "dev": true,
+      "license": "MIT",
+      "engines": {
+        "node": ">=8"
+      }
+    },
+    "node_modules/path-key": {
+      "version": "3.1.1",
+      "resolved": "https://registry.npmjs.org/path-key/-/path-key-3.1.1.tgz",
+      "integrity": "sha512-ojmeN0qd+y0jszEtoY48r0Peq5dwMEkIlCOu6Q5f41lfkswXuKtYrhgoTpLnyIcHm24Uhqx+5Tqm2InSwLhE6Q==",
+      "dev": true,
+      "license": "MIT",
+      "engines": {
+        "node": ">=8"
+      }
+    },
+    "node_modules/performance-now": {
+      "version": "2.1.0",
+      "resolved": "https://registry.npmjs.org/performance-now/-/performance-now-2.1.0.tgz",
+      "integrity": "sha512-7EAHlyLHI56VEIdK57uwHdHKIaAGbnXPiw0yWbarQZOKaKpvUIgW0jWRVLiatnM+XXlSwsanIBH/hzGMJulMow==",
+      "license": "MIT",
+      "optional": true
+    },
+    "node_modules/picocolors": {
+      "version": "1.1.1",
+      "resolved": "https://registry.npmjs.org/picocolors/-/picocolors-1.1.1.tgz",
+      "integrity": "sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==",
+      "dev": true,
+      "license": "ISC"
+    },
+    "node_modules/picomatch": {
+      "version": "4.0.4",
+      "resolved": "https://registry.npmjs.org/picomatch/-/picomatch-4.0.4.tgz",
+      "integrity": "sha512-QP88BAKvMam/3NxH6vj2o21R6MjxZUAd6nlwAS/pnGvN9IVLocLHxGYIzFhg6fUQ+5th6P4dv4eW9jX3DSIj7A==",
+      "dev": true,
+      "license": "MIT",
+      "engines": {
+        "node": ">=12"
+      },
+      "funding": {
+        "url": "https://github.com/sponsors/jonschlinkert"
+      }
+    },
+    "node_modules/postcss": {
+      "version": "8.5.14",
+      "resolved": "https://registry.npmjs.org/postcss/-/postcss-8.5.14.tgz",
+      "integrity": "sha512-SoSL4+OSEtR99LHFZQiJLkT59C5B1amGO1NzTwj7TT1qCUgUO6hxOvzkOYxD+vMrXBM3XJIKzokoERdqQq/Zmg==",
+      "dev": true,
+      "funding": [
+        {
+          "type": "opencollective",
+          "url": "https://opencollective.com/postcss/"
+        },
+        {
+          "type": "tidelift",
+          "url": "https://tidelift.com/funding/github/npm/postcss"
+        },
+        {
+          "type": "github",
+          "url": "https://github.com/sponsors/ai"
+        }
+      ],
+      "license": "MIT",
+      "dependencies": {
+        "nanoid": "^3.3.11",
+        "picocolors": "^1.1.1",
+        "source-map-js": "^1.2.1"
+      },
+      "engines": {
+        "node": "^10 || ^12 || >=14"
+      }
+    },
+    "node_modules/postcss-value-parser": {
+      "version": "4.2.0",
+      "resolved": "https://registry.npmjs.org/postcss-value-parser/-/postcss-value-parser-4.2.0.tgz",
+      "integrity": "sha512-1NNCs6uurfkVbeXG4S8JFT9t19m45ICnif8zWLd5oPSZ50QnwMfK+H3jv408d4jw/7Bttv5axS5IiHoLaVNHeQ==",
+      "dev": true,
+      "license": "MIT"
+    },
+    "node_modules/prelude-ls": {
+      "version": "1.2.1",
+      "resolved": "https://registry.npmjs.org/prelude-ls/-/prelude-ls-1.2.1.tgz",
+      "integrity": "sha512-vkcDPrRZo1QZLbn5RLGPpg/WmIQ65qoWWhcGKf/b5eplkkarX0m9z8ppCat4mlOqUsWpyNuYgO3VRyrYHSzX5g==",
+      "dev": true,
+      "license": "MIT",
+      "engines": {
+        "node": ">= 0.8.0"
+      }
+    },
+    "node_modules/punycode": {
+      "version": "2.3.1",
+      "resolved": "https://registry.npmjs.org/punycode/-/punycode-2.3.1.tgz",
+      "integrity": "sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==",
+      "dev": true,
+      "license": "MIT",
+      "engines": {
+        "node": ">=6"
+      }
+    },
+    "node_modules/raf": {
+      "version": "3.4.1",
+      "resolved": "https://registry.npmjs.org/raf/-/raf-3.4.1.tgz",
+      "integrity": "sha512-Sq4CW4QhwOHE8ucn6J34MqtZCeWFP2aQSmrlroYgqAV1PjStIhJXxYuTgUIfkEk7zTLjmIjLmU5q+fbD1NnOJA==",
+      "license": "MIT",
+      "optional": true,
+      "dependencies": {
+        "performance-now": "^2.1.0"
+      }
+    },
+    "node_modules/react": {
+      "version": "19.2.6",
+      "resolved": "https://registry.npmjs.org/react/-/react-19.2.6.tgz",
+      "integrity": "sha512-sfWGGfavi0xr8Pg0sVsyHMAOziVYKgPLNrS7ig+ivMNb3wbCBw3KxtflsGBAwD3gYQlE/AEZsTLgToRrSCjb0Q==",
+      "license": "MIT",
+      "engines": {
+        "node": ">=0.10.0"
+      }
+    },
+    "node_modules/react-dom": {
+      "version": "19.2.6",
+      "resolved": "https://registry.npmjs.org/react-dom/-/react-dom-19.2.6.tgz",
+      "integrity": "sha512-0prMI+hvBbPjsWnxDLxlCGyM8PN6UuWjEUCYmZhO67xIV9Xasa/r/vDnq+Xyq4Lo27g8QSbO5YzARu0D1Sps3g==",
+      "license": "MIT",
+      "dependencies": {
+        "scheduler": "^0.27.0"
+      },
+      "peerDependencies": {
+        "react": "^19.2.6"
+      }
+    },
+    "node_modules/react-is": {
+      "version": "19.2.6",
+      "resolved": "https://registry.npmjs.org/react-is/-/react-is-19.2.6.tgz",
+      "integrity": "sha512-XjBR15BhXuylgWGuslhDKqlSayuqvqBX91BP8pauG8kd1zY8kotkNWbXksTCNRarse4kuGbe2kIY05ARtwNIvw==",
+      "license": "MIT",
+      "peer": true
+    },
+    "node_modules/react-redux": {
+      "version": "9.3.0",
+      "resolved": "https://registry.npmjs.org/react-redux/-/react-redux-9.3.0.tgz",
+      "integrity": "sha512-KQopgqFo/p/fgmAs5qz6p5RWaNAzq40WAu7fJIXnQpYxFPbJYtsJPWvGeF2rOBaY/kEuV77AVsX8TsQzKm+A/g==",
+      "license": "MIT",
+      "dependencies": {
+        "@types/use-sync-external-store": "^0.0.6",
+        "use-sync-external-store": "^1.4.0"
+      },
+      "peerDependencies": {
+        "@types/react": "^18.2.25 || ^19",
+        "react": "^18.0 || ^19",
+        "redux": "^5.0.0"
+      },
+      "peerDependenciesMeta": {
+        "@types/react": {
+          "optional": true
+        },
+        "redux": {
+          "optional": true
+        }
+      }
+    },
+    "node_modules/recharts": {
+      "version": "3.8.1",
+      "resolved": "https://registry.npmjs.org/recharts/-/recharts-3.8.1.tgz",
+      "integrity": "sha512-mwzmO1s9sFL0TduUpwndxCUNoXsBw3u3E/0+A+cLcrSfQitSG62L32N69GhqUrrT5qKcAE3pCGVINC6pqkBBQg==",
+      "license": "MIT",
+      "workspaces": [
+        "www"
+      ],
+      "dependencies": {
+        "@reduxjs/toolkit": "^1.9.0 || 2.x.x",
+        "clsx": "^2.1.1",
+        "decimal.js-light": "^2.5.1",
+        "es-toolkit": "^1.39.3",
+        "eventemitter3": "^5.0.1",
+        "immer": "^10.1.1",
+        "react-redux": "8.x.x || 9.x.x",
+        "reselect": "5.1.1",
+        "tiny-invariant": "^1.3.3",
+        "use-sync-external-store": "^1.2.2",
+        "victory-vendor": "^37.0.2"
+      },
+      "engines": {
+        "node": ">=18"
+      },
+      "peerDependencies": {
+        "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0",
+        "react-dom": "^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0",
+        "react-is": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0"
+      }
+    },
+    "node_modules/redux": {
+      "version": "5.0.1",
+      "resolved": "https://registry.npmjs.org/redux/-/redux-5.0.1.tgz",
+      "integrity": "sha512-M9/ELqF6fy8FwmkpnF0S3YKOqMyoWJ4+CS5Efg2ct3oY9daQvd/Pc71FpGZsVsbl3Cpb+IIcjBDUnnyBdQbq4w==",
+      "license": "MIT"
+    },
+    "node_modules/redux-thunk": {
+      "version": "3.1.0",
+      "resolved": "https://registry.npmjs.org/redux-thunk/-/redux-thunk-3.1.0.tgz",
+      "integrity": "sha512-NW2r5T6ksUKXCabzhL9z+h206HQw/NJkcLm1GPImRQ8IzfXwRGqjVhKJGauHirT0DAuyy6hjdnMZaRoAcy0Klw==",
+      "license": "MIT",
+      "peerDependencies": {
+        "redux": "^5.0.0"
+      }
+    },
+    "node_modules/regenerator-runtime": {
+      "version": "0.13.11",
+      "resolved": "https://registry.npmjs.org/regenerator-runtime/-/regenerator-runtime-0.13.11.tgz",
+      "integrity": "sha512-kY1AZVr2Ra+t+piVaJ4gxaFaReZVH40AKNo7UCX6W+dEwBo/2oZJzqfuN1qLq1oL45o56cPaTXELwrTh8Fpggg==",
+      "license": "MIT",
+      "optional": true
+    },
+    "node_modules/reselect": {
+      "version": "5.1.1",
+      "resolved": "https://registry.npmjs.org/reselect/-/reselect-5.1.1.tgz",
+      "integrity": "sha512-K/BG6eIky/SBpzfHZv/dd+9JBFiS4SWV7FIujVyJRux6e45+73RaUHXLmIR1f7WOMaQ0U1km6qwklRQxpJJY0w==",
+      "license": "MIT"
+    },
+    "node_modules/rgbcolor": {
+      "version": "1.0.1",
+      "resolved": "https://registry.npmjs.org/rgbcolor/-/rgbcolor-1.0.1.tgz",
+      "integrity": "sha512-9aZLIrhRaD97sgVhtJOW6ckOEh6/GnvQtdVNfdZ6s67+3/XwLS9lBcQYzEEhYVeUowN7pRzMLsyGhK2i/xvWbw==",
+      "license": "MIT OR SEE LICENSE IN FEEL-FREE.md",
+      "optional": true,
+      "engines": {
+        "node": ">= 0.8.15"
+      }
+    },
+    "node_modules/rolldown": {
+      "version": "1.0.1",
+      "resolved": "https://registry.npmjs.org/rolldown/-/rolldown-1.0.1.tgz",
+      "integrity": "sha512-X0KQHljNnEkWNqqiz9zJrGunh1B0HgOxLXvnFpCOcadzcy5qohZ3tqMEUg00vncoRovXuK3ZqCT9KnnKzoInFQ==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "@oxc-project/types": "=0.130.0",
+        "@rolldown/pluginutils": "^1.0.0"
+      },
+      "bin": {
+        "rolldown": "bin/cli.mjs"
+      },
+      "engines": {
+        "node": "^20.19.0 || >=22.12.0"
+      },
+      "optionalDependencies": {
+        "@rolldown/binding-android-arm64": "1.0.1",
+        "@rolldown/binding-darwin-arm64": "1.0.1",
+        "@rolldown/binding-darwin-x64": "1.0.1",
+        "@rolldown/binding-freebsd-x64": "1.0.1",
+        "@rolldown/binding-linux-arm-gnueabihf": "1.0.1",
+        "@rolldown/binding-linux-arm64-gnu": "1.0.1",
+        "@rolldown/binding-linux-arm64-musl": "1.0.1",
+        "@rolldown/binding-linux-ppc64-gnu": "1.0.1",
+        "@rolldown/binding-linux-s390x-gnu": "1.0.1",
+        "@rolldown/binding-linux-x64-gnu": "1.0.1",
+        "@rolldown/binding-linux-x64-musl": "1.0.1",
+        "@rolldown/binding-openharmony-arm64": "1.0.1",
+        "@rolldown/binding-wasm32-wasi": "1.0.1",
+        "@rolldown/binding-win32-arm64-msvc": "1.0.1",
+        "@rolldown/binding-win32-x64-msvc": "1.0.1"
+      }
+    },
+    "node_modules/scheduler": {
+      "version": "0.27.0",
+      "resolved": "https://registry.npmjs.org/scheduler/-/scheduler-0.27.0.tgz",
+      "integrity": "sha512-eNv+WrVbKu1f3vbYJT/xtiF5syA5HPIMtf9IgY/nKg0sWqzAUEvqY/xm7OcZc/qafLx/iO9FgOmeSAp4v5ti/Q==",
+      "license": "MIT"
+    },
+    "node_modules/semver": {
+      "version": "6.3.1",
+      "resolved": "https://registry.npmjs.org/semver/-/semver-6.3.1.tgz",
+      "integrity": "sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA==",
+      "dev": true,
+      "license": "ISC",
+      "bin": {
+        "semver": "bin/semver.js"
+      }
+    },
+    "node_modules/shebang-command": {
+      "version": "2.0.0",
+      "resolved": "https://registry.npmjs.org/shebang-command/-/shebang-command-2.0.0.tgz",
+      "integrity": "sha512-kHxr2zZpYtdmrN1qDjrrX/Z1rR1kG8Dx+gkpK1G4eXmvXswmcE1hTWBWYUzlraYw1/yZp6YuDY77YtvbN0dmDA==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "shebang-regex": "^3.0.0"
+      },
+      "engines": {
+        "node": ">=8"
+      }
+    },
+    "node_modules/shebang-regex": {
+      "version": "3.0.0",
+      "resolved": "https://registry.npmjs.org/shebang-regex/-/shebang-regex-3.0.0.tgz",
+      "integrity": "sha512-7++dFhtcx3353uBaq8DDR4NuxBetBzC7ZQOhmTQInHEd6bSrXdiEyzCvG07Z44UYdLShWUyXt5M/yhz8ekcb1A==",
+      "dev": true,
+      "license": "MIT",
+      "engines": {
+        "node": ">=8"
+      }
+    },
+    "node_modules/source-map-js": {
+      "version": "1.2.1",
+      "resolved": "https://registry.npmjs.org/source-map-js/-/source-map-js-1.2.1.tgz",
+      "integrity": "sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==",
+      "dev": true,
+      "license": "BSD-3-Clause",
+      "engines": {
+        "node": ">=0.10.0"
+      }
+    },
+    "node_modules/stackblur-canvas": {
+      "version": "2.7.0",
+      "resolved": "https://registry.npmjs.org/stackblur-canvas/-/stackblur-canvas-2.7.0.tgz",
+      "integrity": "sha512-yf7OENo23AGJhBriGx0QivY5JP6Y1HbrrDI6WLt6C5auYZXlQrheoY8hD4ibekFKz1HOfE48Ww8kMWMnJD/zcQ==",
+      "license": "MIT",
+      "optional": true,
+      "engines": {
+        "node": ">=0.1.14"
+      }
+    },
+    "node_modules/svg-pathdata": {
+      "version": "6.0.3",
+      "resolved": "https://registry.npmjs.org/svg-pathdata/-/svg-pathdata-6.0.3.tgz",
+      "integrity": "sha512-qsjeeq5YjBZ5eMdFuUa4ZosMLxgr5RZ+F+Y1OrDhuOCEInRMA3x74XdBtggJcj9kOeInz0WE+LgCPDkZFlBYJw==",
+      "license": "MIT",
+      "optional": true,
+      "engines": {
+        "node": ">=12.0.0"
+      }
+    },
+    "node_modules/tailwindcss": {
+      "version": "4.3.0",
+      "resolved": "https://registry.npmjs.org/tailwindcss/-/tailwindcss-4.3.0.tgz",
+      "integrity": "sha512-y6nxMGB1nMW9R6k96e5gdIFzcfL/gTJRNaqGes1YvkLnPVXzWgbqFF2yLC0T8G774n24cx3Pe8XrKoniCOAH+Q==",
+      "dev": true,
+      "license": "MIT"
+    },
+    "node_modules/text-segmentation": {
+      "version": "1.0.3",
+      "resolved": "https://registry.npmjs.org/text-segmentation/-/text-segmentation-1.0.3.tgz",
+      "integrity": "sha512-iOiPUo/BGnZ6+54OsWxZidGCsdU8YbE4PSpdPinp7DeMtUJNJBoJ/ouUSTJjHkh1KntHaltHl/gDs2FC4i5+Nw==",
+      "license": "MIT",
+      "optional": true,
+      "dependencies": {
+        "utrie": "^1.0.2"
+      }
+    },
+    "node_modules/tiny-invariant": {
+      "version": "1.3.3",
+      "resolved": "https://registry.npmjs.org/tiny-invariant/-/tiny-invariant-1.3.3.tgz",
+      "integrity": "sha512-+FbBPE1o9QAYvviau/qC5SE3caw21q3xkvWKBtja5vgqOWIHHJ3ioaq1VPfn/Szqctz2bU/oYeKd9/z5BL+PVg==",
+      "license": "MIT"
+    },
+    "node_modules/tinyglobby": {
+      "version": "0.2.16",
+      "resolved": "https://registry.npmjs.org/tinyglobby/-/tinyglobby-0.2.16.tgz",
+      "integrity": "sha512-pn99VhoACYR8nFHhxqix+uvsbXineAasWm5ojXoN8xEwK5Kd3/TrhNn1wByuD52UxWRLy8pu+kRMniEi6Eq9Zg==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "fdir": "^6.5.0",
+        "picomatch": "^4.0.4"
+      },
+      "engines": {
+        "node": ">=12.0.0"
+      },
+      "funding": {
+        "url": "https://github.com/sponsors/SuperchupuDev"
+      }
+    },
+    "node_modules/tslib": {
+      "version": "2.8.1",
+      "resolved": "https://registry.npmjs.org/tslib/-/tslib-2.8.1.tgz",
+      "integrity": "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==",
+      "dev": true,
+      "license": "0BSD",
+      "optional": true
+    },
+    "node_modules/type-check": {
+      "version": "0.4.0",
+      "resolved": "https://registry.npmjs.org/type-check/-/type-check-0.4.0.tgz",
+      "integrity": "sha512-XleUoc9uwGXqjWwXaUTZAmzMcFZ5858QA2vvx1Ur5xIcixXIP+8LnFDgRplU30us6teqdlskFfu+ae4K79Ooew==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "prelude-ls": "^1.2.1"
+      },
+      "engines": {
+        "node": ">= 0.8.0"
+      }
+    },
+    "node_modules/update-browserslist-db": {
+      "version": "1.2.3",
+      "resolved": "https://registry.npmjs.org/update-browserslist-db/-/update-browserslist-db-1.2.3.tgz",
+      "integrity": "sha512-Js0m9cx+qOgDxo0eMiFGEueWztz+d4+M3rGlmKPT+T4IS/jP4ylw3Nwpu6cpTTP8R1MAC1kF4VbdLt3ARf209w==",
+      "dev": true,
+      "funding": [
+        {
+          "type": "opencollective",
+          "url": "https://opencollective.com/browserslist"
+        },
+        {
+          "type": "tidelift",
+          "url": "https://tidelift.com/funding/github/npm/browserslist"
+        },
+        {
+          "type": "github",
+          "url": "https://github.com/sponsors/ai"
+        }
+      ],
+      "license": "MIT",
+      "dependencies": {
+        "escalade": "^3.2.0",
+        "picocolors": "^1.1.1"
+      },
+      "bin": {
+        "update-browserslist-db": "cli.js"
+      },
+      "peerDependencies": {
+        "browserslist": ">= 4.21.0"
+      }
+    },
+    "node_modules/uri-js": {
+      "version": "4.4.1",
+      "resolved": "https://registry.npmjs.org/uri-js/-/uri-js-4.4.1.tgz",
+      "integrity": "sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg==",
+      "dev": true,
+      "license": "BSD-2-Clause",
+      "dependencies": {
+        "punycode": "^2.1.0"
+      }
+    },
+    "node_modules/use-sync-external-store": {
+      "version": "1.6.0",
+      "resolved": "https://registry.npmjs.org/use-sync-external-store/-/use-sync-external-store-1.6.0.tgz",
+      "integrity": "sha512-Pp6GSwGP/NrPIrxVFAIkOQeyw8lFenOHijQWkUTrDvrF4ALqylP2C/KCkeS9dpUM3KvYRQhna5vt7IL95+ZQ9w==",
+      "license": "MIT",
+      "peerDependencies": {
+        "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0"
+      }
+    },
+    "node_modules/utrie": {
+      "version": "1.0.2",
+      "resolved": "https://registry.npmjs.org/utrie/-/utrie-1.0.2.tgz",
+      "integrity": "sha512-1MLa5ouZiOmQzUbjbu9VmjLzn1QLXBhwpUa7kdLUQK+KQ5KA9I1vk5U4YHe/X2Ch7PYnJfWuWT+VbuxbGwljhw==",
+      "license": "MIT",
+      "optional": true,
+      "dependencies": {
+        "base64-arraybuffer": "^1.0.2"
+      }
+    },
+    "node_modules/victory-vendor": {
+      "version": "37.3.6",
+      "resolved": "https://registry.npmjs.org/victory-vendor/-/victory-vendor-37.3.6.tgz",
+      "integrity": "sha512-SbPDPdDBYp+5MJHhBCAyI7wKM3d5ivekigc2Dk2s7pgbZ9wIgIBYGVw4zGHBml/qTFbexrofXW6Gu4noGxrOwQ==",
+      "license": "MIT AND ISC",
+      "dependencies": {
+        "@types/d3-array": "^3.0.3",
+        "@types/d3-ease": "^3.0.0",
+        "@types/d3-interpolate": "^3.0.1",
+        "@types/d3-scale": "^4.0.2",
+        "@types/d3-shape": "^3.1.0",
+        "@types/d3-time": "^3.0.0",
+        "@types/d3-timer": "^3.0.0",
+        "d3-array": "^3.1.6",
+        "d3-ease": "^3.0.1",
+        "d3-interpolate": "^3.0.1",
+        "d3-scale": "^4.0.2",
+        "d3-shape": "^3.1.0",
+        "d3-time": "^3.0.0",
+        "d3-timer": "^3.0.1"
+      }
+    },
+    "node_modules/vite": {
+      "version": "8.0.13",
+      "resolved": "https://registry.npmjs.org/vite/-/vite-8.0.13.tgz",
+      "integrity": "sha512-MFtjBYgzmSxmgA4RAfjIyXWpGe1oALnjgUTzzV7QLx/TKxCzjtMH6Fd9/eVK+5Fg1qNoz5VAwsmMs/NofrmJvw==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "lightningcss": "^1.32.0",
+        "picomatch": "^4.0.4",
+        "postcss": "^8.5.14",
+        "rolldown": "1.0.1",
+        "tinyglobby": "^0.2.16"
+      },
+      "bin": {
+        "vite": "bin/vite.js"
+      },
+      "engines": {
+        "node": "^20.19.0 || >=22.12.0"
+      },
+      "funding": {
+        "url": "https://github.com/vitejs/vite?sponsor=1"
+      },
+      "optionalDependencies": {
+        "fsevents": "~2.3.3"
+      },
+      "peerDependencies": {
+        "@types/node": "^20.19.0 || >=22.12.0",
+        "@vitejs/devtools": "^0.1.18",
+        "esbuild": "^0.27.0 || ^0.28.0",
+        "jiti": ">=1.21.0",
+        "less": "^4.0.0",
+        "sass": "^1.70.0",
+        "sass-embedded": "^1.70.0",
+        "stylus": ">=0.54.8",
+        "sugarss": "^5.0.0",
+        "terser": "^5.16.0",
+        "tsx": "^4.8.1",
+        "yaml": "^2.4.2"
+      },
+      "peerDependenciesMeta": {
+        "@types/node": {
+          "optional": true
+        },
+        "@vitejs/devtools": {
+          "optional": true
+        },
+        "esbuild": {
+          "optional": true
+        },
+        "jiti": {
+          "optional": true
+        },
+        "less": {
+          "optional": true
+        },
+        "sass": {
+          "optional": true
+        },
+        "sass-embedded": {
+          "optional": true
+        },
+        "stylus": {
+          "optional": true
+        },
+        "sugarss": {
+          "optional": true
+        },
+        "terser": {
+          "optional": true
+        },
+        "tsx": {
+          "optional": true
+        },
+        "yaml": {
+          "optional": true
+        }
+      }
+    },
+    "node_modules/which": {
+      "version": "2.0.2",
+      "resolved": "https://registry.npmjs.org/which/-/which-2.0.2.tgz",
+      "integrity": "sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA==",
+      "dev": true,
+      "license": "ISC",
+      "dependencies": {
+        "isexe": "^2.0.0"
+      },
+      "bin": {
+        "node-which": "bin/node-which"
+      },
+      "engines": {
+        "node": ">= 8"
+      }
+    },
+    "node_modules/word-wrap": {
+      "version": "1.2.5",
+      "resolved": "https://registry.npmjs.org/word-wrap/-/word-wrap-1.2.5.tgz",
+      "integrity": "sha512-BN22B5eaMMI9UMtjrGd5g5eCYPpCPDUy0FJXbYsaT5zYxjFOckS53SQDE3pWkVoWpHXVb3BrYcEN4Twa55B5cA==",
+      "dev": true,
+      "license": "MIT",
+      "engines": {
+        "node": ">=0.10.0"
+      }
+    },
+    "node_modules/yallist": {
+      "version": "3.1.1",
+      "resolved": "https://registry.npmjs.org/yallist/-/yallist-3.1.1.tgz",
+      "integrity": "sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==",
+      "dev": true,
+      "license": "ISC"
+    },
+    "node_modules/yocto-queue": {
+      "version": "0.1.0",
+      "resolved": "https://registry.npmjs.org/yocto-queue/-/yocto-queue-0.1.0.tgz",
+      "integrity": "sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==",
+      "dev": true,
+      "license": "MIT",
+      "engines": {
+        "node": ">=10"
+      },
+      "funding": {
+        "url": "https://github.com/sponsors/sindresorhus"
+      }
+    },
+    "node_modules/zod": {
+      "version": "4.4.3",
+      "resolved": "https://registry.npmjs.org/zod/-/zod-4.4.3.tgz",
+      "integrity": "sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==",
+      "dev": true,
+      "license": "MIT",
+      "funding": {
+        "url": "https://github.com/sponsors/colinhacks"
+      }
+    },
+    "node_modules/zod-validation-error": {
+      "version": "4.0.2",
+      "resolved": "https://registry.npmjs.org/zod-validation-error/-/zod-validation-error-4.0.2.tgz",
+      "integrity": "sha512-Q6/nZLe6jxuU80qb/4uJ4t5v2VEZ44lzQjPDhYJNztRQ4wyWc6VF3D3Kb/fAuPetZQnhS3hnajCf9CsWesghLQ==",
+      "dev": true,
+      "license": "MIT",
+      "engines": {
+        "node": ">=18.0.0"
+      },
+      "peerDependencies": {
+        "zod": "^3.25.0 || ^4.0.0"
+      }
     }
-    setIsSubmitting(false);
-  };
-
-  if(done) return ( 
-     <div className={`${cardBg} p-6 md:p-10 rounded-3xl max-w-xl mx-auto text-center border-t-4 border-emerald-500 animate-bounce-in`}>
-        <h2 className="text-xl md:text-2xl font-black mb-4">Parcel Registered Successfully</h2>
-        <div className="bg-indigo-600/10 text-indigo-500 text-xl md:text-2xl font-mono font-bold p-3 rounded-xl mb-6">{done.id}</div>
-        
-        <p className="text-[10px] font-bold uppercase opacity-50 mb-2">Print Receipt Layouts:</p>
-        <div className="flex justify-center gap-2 mb-4">
-            <button onClick={()=>generatePDF(done, 1)} className="flex-1 bg-slate-800 text-white font-bold py-3 rounded-xl text-sm shadow-md">🖨️ Full Page</button>
-            <button onClick={()=>generatePDF(done, 2)} className="flex-1 bg-indigo-500 text-white font-bold py-3 rounded-xl text-sm shadow-md">🖨️ 2 Per Page</button>
-            <button onClick={()=>generatePDF(done, 3)} className="flex-1 bg-emerald-500 text-white font-bold py-3 rounded-xl text-sm shadow-md">🖨️ 3 Per Page</button>
-        </div>
-
-        <button onClick={()=>{setDone(null); setF(initF); setCargoList([{...initCargo}]); setEway(""); setLrNo(""); setIsManualLR(false);}} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl mb-3 mt-4 border border-indigo-500">New Registration</button>
-        <button onClick={() => openWhatsApp(done.sPhone, true, done)} className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl border border-emerald-500">📱 Send SMS / WhatsApp</button>
-     </div> 
-  );
-
-  return (
-    <div className="space-y-4 md:space-y-6">
-      <div className={`${cardBg} p-4 rounded-2xl border mb-2 flex flex-col lg:flex-row gap-4 relative z-10`}>
-         <div className="flex-1">
-            <div className="flex justify-between items-center mb-1 ml-1">
-               <label className="text-[10px] uppercase font-bold opacity-80 text-indigo-500">📑 LR Number Booking</label>
-               <button onClick={() => setIsManualLR(!isManualLR)} className={`text-[9px] font-black px-3 py-1 rounded-md shadow-sm transition-all ${isManualLR ? 'bg-amber-500 text-white ring-2 ring-amber-500/50' : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}`}>{isManualLR ? '🔓 MANUAL MODE' : '🔒 AUTO MODE'}</button>
-            </div>
-            <input value={lrNo} onChange={e=>setLrNo(e.target.value.toUpperCase())} readOnly={!isManualLR} placeholder={isManualLR ? "Type Manual LR Code..." : "Auto Generated..."} className={`w-full px-4 py-3 rounded-xl outline-none font-black tracking-widest uppercase border focus:ring-2 focus:ring-indigo-500 shadow-inner ${inputBg} ${isManualLR ? 'text-amber-500 border-amber-500/50' : 'text-indigo-500 opacity-80 bg-black/5 cursor-not-allowed'}`} />
-         </div>
-         <div className="flex-1">
-            <label className="text-[10px] uppercase font-bold opacity-60 ml-1 mb-1 block">⚡ Quick Fill (E-Way Bill)</label>
-            <div className="flex gap-2">
-               <input id="eway" value={eway} onChange={handleEwayChange} placeholder="Enter 12-Digit E-Way..." className={`w-full px-4 py-3 rounded-xl outline-none font-mono font-bold tracking-widest border focus:ring-2 focus:ring-indigo-500 ${inputBg}`} />
-               <button onClick={() => setShowScanner(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl shadow-md whitespace-nowrap flex items-center justify-center gap-2">📷 Scan</button>
-            </div>
-         </div>
-      </div>
-      
-      {showScanner && <EwayScannerModal onScan={handleQRScan} onClose={() => setShowScanner(false)} />}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 relative z-30">
-        <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}>
-            <h3 className="font-bold text-indigo-500">Sender Profile</h3>
-            <SuggestInput id="sPhone" label="Mobile Number *" value={f.sPhone} onChange={v=>handlePhoneChange(true, v)} onSelect={d=>handleContactSelect(true, d)} dataList={contacts} isPhone={true} theme={theme} />
-            <SuggestInput id="sName" label="Full Name *" value={f.sName} onChange={v=>setF({...f, sName:v.toUpperCase()})} onSelect={d=>handleContactSelect(true, d)} dataList={contacts} isPhone={false} theme={theme} />
-            <input id="sGst" value={f.sGst} onChange={e=>setF({...f, sGst:e.target.value.toUpperCase()})} placeholder="GST Number" className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 uppercase ${inputBg}`} />
-            <select id="sFrom" disabled={user.branch !== 'All'} value={f.from} onChange={e=>setF({...f, from:e.target.value})} className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 ${inputBg} ${user.branch !== 'All' ? 'opacity-50 cursor-not-allowed' : ''}`}><option value="">Select Origin *</option>{CITIES.map(c=><option key={c}>{c}</option>)}</select>
-        </div>
-        <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}>
-            <h3 className="font-bold text-emerald-500">Receiver Profile</h3>
-            <SuggestInput id="rPhone" label="Mobile Number *" value={f.rPhone} onChange={v=>handlePhoneChange(false, v)} onSelect={d=>handleContactSelect(false, d)} dataList={contacts} isPhone={true} theme={theme} />
-            <SuggestInput id="rName" label="Full Name *" value={f.rName} onChange={v=>setF({...f, rName:v.toUpperCase()})} onSelect={d=>handleContactSelect(false, d)} dataList={contacts} isPhone={false} theme={theme} />
-            <input id="rGst" value={f.rGst} onChange={e=>setF({...f, rGst:e.target.value.toUpperCase()})} placeholder="GST Number" className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 uppercase ${inputBg}`} />
-            <select id="rTo" value={f.to} onChange={e=>setF({...f, to:e.target.value})} className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500 relative z-10 ${inputBg}`}><option value="">Select Destination *</option>{CITIES.map(c=><option key={c}>{c}</option>)}</select>
-        </div>
-      </div>
-      
-      <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4 relative z-20`}>
-        <div className="flex justify-between items-center mb-2">
-            <h3 className="font-bold">Dynamic Cargo Details</h3>
-            <button onClick={addCargoRow} className="bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500 hover:text-white px-4 py-1.5 rounded-lg text-xs font-black transition-colors shadow-sm border border-indigo-500/20">+ Add Cargo Item</button>
-        </div>
-        
-        <div className="space-y-3">
-           {cargoList.map((c, index) => (
-               <div key={index} className="grid grid-cols-2 md:grid-cols-12 gap-3 md:gap-2 items-center bg-black/5 p-3 rounded-xl border border-slate-500/10 animate-fade-in relative">
-                  {cargoList.length > 1 && (
-                     <button onClick={()=>removeCargoRow(index)} className="absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full text-[10px] font-black shadow-md border-2 border-white hover:scale-110">X</button>
-                  )}
-                  <div className="md:col-span-1 hidden md:block text-center font-black text-slate-400">#{index+1}</div>
-                  <input type="number" value={c.count} onChange={e=>updateCargo(index, 'count', e.target.value)} placeholder="Qty *" className={`md:col-span-2 p-3 rounded-xl border outline-none [appearance:textfield] ${inputBg}`} />
-                  <select value={c.type} onChange={e=>updateCargo(index, 'type', e.target.value)} className={`md:col-span-3 p-3 rounded-xl border outline-none ${inputBg}`}>{TYPES.map(t=><option key={t}>{t}</option>)}</select>
-                  <select value={c.size} onChange={e=>updateCargo(index, 'size', e.target.value)} className={`md:col-span-2 p-3 rounded-xl border font-bold text-amber-600 outline-none ${inputBg}`}>
-                     <option value="Standard">Normal (1x)</option>
-                     <option value="Medium">Medium (1.5x)</option>
-                     <option value="Large">Large (2x)</option>
-                     <option value="Jumbo">Jumbo (3x)</option>
-                  </select>
-                  <input type="number" value={c.weight} onChange={e=>updateCargo(index, 'weight', e.target.value)} placeholder="Wgt (Kg)" className={`md:col-span-2 p-3 rounded-xl border outline-none [appearance:textfield] ${inputBg}`} />
-                  <input type="number" value={c.rate} onChange={e=>updateCargo(index, 'rate', e.target.value)} placeholder="Rate/Unit*" className={`md:col-span-2 p-3 rounded-xl border outline-none font-bold [appearance:textfield] ${inputBg}`} />
-               </div>
-           ))}
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mt-4 pt-4 border-t border-slate-500/20">
-          <div className="flex flex-col gap-3">
-            <select value={f.payment} onChange={e=>setF({...f, payment:e.target.value})} className="p-3 border rounded-xl font-bold bg-indigo-600 text-white outline-none w-full">{PAY_MODES.map(p=><option key={p} value={p}>{p.toUpperCase()}</option>)}</select>
-            {f.payment === 'Credit' && ( <CreditSearchDropdown value={f.creditCustomer} onChange={val => setF({...f, creditCustomer: val})} uniqueCompanies={uniqueCompanies} isDark={isDark} /> )}
-          </div>
-          <div className="bg-slate-950 p-4 rounded-xl flex justify-between items-center text-white h-full shadow-inner border border-slate-800"><span className="text-sm opacity-50">Total Income Allocation</span><span className="text-xl md:text-3xl font-black text-emerald-400">₹{ep}</span></div>
-        </div>
-      </div>
-      <button id="btnSubmit" onClick={submit} disabled={isSubmitting} className={`w-full text-white font-bold py-4 rounded-xl shadow-lg transition-transform transform hover:-translate-y-1 relative z-10 ${isSubmitting ? 'bg-slate-500 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}>{isSubmitting ? "Generating Booking..." : "Confirm Booking"}</button>
-    </div>
-  );
-}
-
-function Track({parcels, isDark, user, setGlobalView, initialStatus}) {
-  const [fLR, setFLR] = useState(""); const [fFrom, setFFrom] = useState("All"); const [fTo, setFTo] = useState("All"); 
-  const [fStatus, setFStatus] = useState(initialStatus || "All"); 
-  const [fFromDate, setFFromDate] = useState(""); const [fToDate, setFToDate] = useState("");
-  const [sortOrder, setSortOrder] = useState("date_desc"); 
-
-  const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-100"; 
-  const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800"; 
-  const tblBg = isDark ? "bg-slate-800/40" : "bg-slate-50";
-
-  useEffect(() => { if (initialStatus) setFStatus(initialStatus); }, [initialStatus]);
-
-  let results = parcels.filter(p => {
-    const sTerm = fLR.toLowerCase();
-    
-    if (fStatus === "All" && p.status === 'Deleted') return false; 
-    if (fStatus !== "All" && p.status !== fStatus) return false;
-
-    if (fLR && !p.id.toLowerCase().includes(sTerm) && !p.sPhone.includes(sTerm) && !p.rPhone.includes(sTerm) && !(p.sName && p.sName.toLowerCase().includes(sTerm)) && !(p.rName && p.rName.toLowerCase().includes(sTerm))) return false;
-    if (fFrom !== "All" && p.from !== fFrom) return false;
-    if (fTo !== "All" && p.to !== fTo) return false;
-    
-    if (user.role === 'staff' && p.from !== user.branch && p.to !== user.branch) return false;
-    
-    const pDate = p.isoDate ? p.isoDate.split('T')[0] : "";
-    if (fFromDate && pDate < fFromDate) return false;
-    if (fToDate && pDate > fToDate) return false;
-    return true;
-  });
-
-  results.sort((a, b) => {
-    if (sortOrder === "lr_asc") return a.id.localeCompare(b.id);
-    if (sortOrder === "lr_desc") return b.id.localeCompare(a.id);
-    if (sortOrder === "date_desc") return new Date(b.isoDate) - new Date(a.isoDate);
-    if (sortOrder === "date_asc") return new Date(a.isoDate) - new Date(b.isoDate);
-    return 0;
-  });
-
-  const totalQty = results.reduce((sum, p) => sum + (Number(p.count) || 0), 0);
-  const totalAmt = results.reduce((sum, p) => sum + (Number(p.price) || 0), 0);
-  const totalPaid = results.filter(p => p.payment === 'Paid').reduce((sum, p) => sum + (Number(p.price) || 0), 0);
-  const totalToPay = results.filter(p => p.payment === 'To Pay').reduce((sum, p) => sum + (Number(p.price) || 0), 0);
-  const totalCredit = results.filter(p => p.payment === 'Credit').reduce((sum, p) => sum + (Number(p.price) || 0), 0);
-
-  return (
-    <div className="space-y-4">
-      <div className={`${cardBg} p-4 rounded-2xl border space-y-3`}>
-        <div className="flex justify-between items-center">
-           <h3 className="font-bold text-sm text-indigo-500">Advanced Search Filter</h3>
-           <div className="flex gap-2">
-              <button onClick={() => exportToCSV("Track_List", results)} className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded-lg shadow-md transition-colors">📥 Excel</button>
-              <button onClick={() => generateListPDF("Tracked Parcels List", user.branch, results)} className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded-lg shadow-md transition-colors">🖨️ Print List</button>
-           </div>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2">
-          <input value={fLR} onChange={e=>setFLR(e.target.value)} placeholder="LR / Phone / Name" className={`p-2 rounded-xl border text-sm ${inputBg}`} />
-          <select value={fFrom} onChange={e=>setFFrom(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`}><option value="All">Any Origin</option>{CITIES.map(c => <option key={c}>{c}</option>)}</select>
-          <select value={fTo} onChange={e=>setFTo(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`}><option value="All">Any Destination</option>{CITIES.map(c => <option key={c}>{c}</option>)}</select>
-          <select value={fStatus} onChange={e=>setFStatus(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`}><option value="All">Any Status</option>{STATUSES.map(s => <option key={s}>{s}</option>)}</select>
-          <input type="date" title="From Date" value={fFromDate} onChange={e=>setFFromDate(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`} />
-          <input type="date" title="To Date" value={fToDate} onChange={e=>setFToDate(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`} />
-          <select value={sortOrder} onChange={e=>setSortOrder(e.target.value)} className={`p-2 rounded-xl border text-sm font-black text-indigo-500 ${inputBg}`}>
-            <option value="date_desc">Sort: Newest First</option>
-            <option value="date_asc">Sort: Oldest First</option>
-            <option value="lr_asc">Sort: LR (A ➔ Z)</option>
-            <option value="lr_desc">Sort: LR (Z ➔ A)</option>
-          </select>
-        </div>
-      </div>
-      <div className={`${cardBg} rounded-2xl border overflow-x-auto`}>
-        <table className="min-w-[900px] w-full text-left whitespace-nowrap text-sm">
-          <thead className={`${tblBg} text-[10px] font-bold uppercase opacity-80`}>
-             <tr>
-                <th className="p-4">LR Code & Date</th>
-                <th className="p-4">Route Info</th>
-                <th className="p-4">Customer Details</th>
-                <th className="p-4">Cargo (Qty)</th>
-                <th className="p-4">Amount & Payment</th>
-                <th className="p-4">Status</th>
-                <th className="p-4 text-center">Receipt</th>
-             </tr>
-          </thead>
-          <tbody>
-            {results.length === 0 ? <tr><td colSpan="7" className="p-8 text-center opacity-50 font-bold">No parcels match your search.</td></tr> : results.map(p => (
-              <tr key={p.id} className="border-t border-slate-500/10 hover:bg-black/5 cursor-pointer" onClick={() => setGlobalView(p)}>
-                <td className="p-4 font-black text-indigo-500 hover:underline">{p.id} <br/><span className="text-[10px] opacity-50 font-normal">{p.date}</span></td>
-                <td className="p-4 font-bold">{p.from} ➔ {p.to}</td>
-                <td className="p-4 text-xs"><p>{p.sName} ➔ {p.rName}</p><p className="opacity-50">{p.sPhone} | {p.rPhone}</p></td>
-                <td className="p-4 font-black text-amber-500">{p.count} <span className="text-xs font-normal opacity-70">{p.type}</span></td>
-                <td className="p-4 font-bold">
-                   ₹{p.price} <br/>
-                   <span className={`text-[10px] px-2 py-0.5 rounded-md ${p.payment==='Paid'?'bg-emerald-500/10 text-emerald-500':p.payment==='To Pay'?'bg-red-500/10 text-red-500':'bg-indigo-500/10 text-indigo-500'}`}>{p.payment}</span>
-                </td>
-                <td className="p-4"><span className="px-2 py-1 rounded-full text-[10px] font-bold uppercase" style={{backgroundColor: S_CLR[p.status]+'22', color: S_CLR[p.status]}}>{p.status}</span></td>
-                <td className="p-4 text-center"><PrintGroup p={p} /></td>
-              </tr>
-            ))}
-          </tbody>
-          {results.length > 0 && (
-            <tfoot className={`${isDark?'bg-slate-900 border-slate-700':'bg-slate-100 border-slate-200'} border-t-2 font-black`}>
-               <tr>
-                  <td colSpan="3" className="p-4 text-right opacity-50 uppercase text-xs">Total Summary :</td>
-                  <td className="p-4 text-amber-500 text-lg">{totalQty} <span className="text-xs">Items</span></td>
-                  <td colSpan="3" className="p-4">
-                     <div className="flex flex-col gap-1 text-xs">
-                        <span className="text-lg">₹{totalAmt}</span>
-                        <div className="flex gap-2">
-                           {totalPaid > 0 && <span className="text-emerald-500">Paid: ₹{totalPaid}</span>}
-                           {totalToPay > 0 && <span className="text-red-500">ToPay: ₹{totalToPay}</span>}
-                           {totalCredit > 0 && <span className="text-indigo-500">Credit: ₹{totalCredit}</span>}
-                        </div>
-                     </div>
-                  </td>
-               </tr>
-            </tfoot>
-          )}
-        </table>
-      </div>
-    </div>
-  );
-}
-
-function Delivery({parcels, setParcels, db, showMsg, isDark, user, creditAuthList, setGlobalView}) {
-  const [id, setId] = useState(""); 
-  const searchLR = () => { const item = parcels.find(p=>p.id === id.toUpperCase()); if(item) { if(item.status === 'Deleted') return showMsg("Consignment deleted by admin.", "error"); setGlobalView(item); setId(""); } else showMsg("No consignment found", "error"); };
-  const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200";
-  return (
-    <div className="max-w-xl mx-auto space-y-4 md:space-y-6">
-      <div className={`${cardBg} p-6 rounded-2xl text-center space-y-4`}>
-         <h2 className="text-xl font-black text-indigo-500">Fast Delivery Scanner [F6]</h2>
-         <p className="text-sm opacity-60">Scan barcode or type LR Code to quick-deliver.</p>
-         <div className="flex gap-2 flex-col sm:flex-row"><input id="delScan" autoFocus onKeyDown={e=> e.key==='Enter'?searchLR():null} value={id} onChange={e=>setId(e.target.value)} placeholder="Enter LR Code" className={`flex-1 p-4 text-center text-lg md:text-xl font-bold border rounded-xl outline-none ${isDark?'bg-slate-900 border-slate-700':'bg-slate-50'}`} /><button id="delFetch" onClick={searchLR} className="bg-indigo-600 text-white py-3 px-6 rounded-xl font-bold">Open Manifest</button></div>
-      </div>
-    </div>
-  );
-}
-
-function Accounts({parcels, setParcels, db, showMsg, isDark, user}) {
-  const dObj = new Date(); const todayStr = dObj.toISOString().split('T')[0]; dObj.setDate(1); const firstDayStr = dObj.toISOString().split('T')[0];
-  
-  const [acc, setAcc] = useState({ emi: 25000, diesel: 30000, other: 15000 }); 
-  const [payoutRate, setPayoutRate] = useState(10); const [partnerCount, setPartnerCount] = useState(5); 
-  const [pettyDesc, setPettyDesc] = useState(""); const [pettyAmt, setPettyAmt] = useState(""); const [pettyLedger, setPettyLedger] = useState([]);
-  
-  const [eodDate, setEodDate] = useState(todayStr);
-  const [eodBranch, setEodBranch] = useState(user.branch === 'All' ? CITIES[0] : user.branch);
-
-  const [selectedBranch, setSelectedBranch] = useState(user.branch === 'All' ? CITIES[0] : user.branch);
-  const [reconFrom, setReconFrom] = useState(firstDayStr);
-  const [reconTo, setReconTo] = useState(todayStr);
-
-  useEffect(() => { local.get("mps_petty_cash").then(d => { if(d) setPettyLedger(d); }); }, []);
-  const addPetty = async () => { if(!pettyDesc || !pettyAmt) return; const item = { desc: pettyDesc, amt: Number(pettyAmt), date: todayStr }; const newList = [item, ...pettyLedger]; setPettyLedger(newList); await local.set("mps_petty_cash", newList); setPettyDesc(""); setPettyAmt(""); };
-
-  const activeParcels = parcels.filter(p => p.status !== 'Deleted');
-  
-  const unsettledBranchParcels = activeParcels.filter(p => { 
-    const pDate = p.isoDate ? p.isoDate.split('T')[0] : "";
-    const inRange = (!reconFrom || pDate >= reconFrom) && (!reconTo || pDate <= reconTo);
-    const isRelated = p.from === selectedBranch || p.to === selectedBranch; 
-    const isSettled = p.settledBranches && p.settledBranches.includes(selectedBranch); 
-    return isRelated && !isSettled && inRange; 
-  });
-
-  const totalSystemRevenue = activeParcels.reduce((a,b)=>a+(Number(b.price)||0), 0); const totalPetty = pettyLedger.reduce((a,b)=>a+(Number(b.amt)||0), 0); const exp = Number(acc.emi) + Number(acc.diesel) + Number(acc.other); const net = totalSystemRevenue - exp - totalPetty; 
-  const cashCollected = unsettledBranchParcels.filter(p => (p.from === selectedBranch && p.payment === 'Paid') || (p.to === selectedBranch && p.payment === 'To Pay' && p.deliveryMode === 'Cash')).reduce((a,b) => a + (Number(b.price) || 0), 0);
-  const bookedCount = unsettledBranchParcels.filter(p => p.from === selectedBranch).reduce((total, p) => total + (Number(p.count) || 0), 0);
-  const deliveredCount = unsettledBranchParcels.filter(p => p.to === selectedBranch && p.status === 'Delivered').reduce((total, p) => total + (Number(p.count) || 0), 0);
-  const branchCommission = (bookedCount + deliveredCount) * Number(payoutRate); const netRemittance = cashCollected - branchCommission;
-
-  const markLedgerSettled = async () => { if(unsettledBranchParcels.length === 0) return showMsg("No transactions to settle in this date range!", "error"); if(!window.confirm(`Settle ledger for ${selectedBranch} from ${reconFrom} to ${reconTo}?`)) return; let updatedParcelsList = [...parcels]; for (let p of unsettledBranchParcels) { const updated = {...p, settledBranches: [...(p.settledBranches || []), selectedBranch]}; await db.updateParcel(updated.id, updated); updatedParcelsList = updatedParcelsList.map(x => x.id === updated.id ? updated : x); } setParcels(updatedParcelsList); showMsg(`Ledger Settled for ${selectedBranch}.`, "success"); };
-  const triggerEOD = () => { generateEOD_PDF(eodDate, eodBranch, activeParcels, pettyLedger); showMsg(`${eodBranch} Day-Book Report Generated!`); };
-
-  const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-900";
-
-  return (
-    <div className="space-y-6 md:space-y-8">
-      <div className={`${cardBg} p-6 rounded-3xl border border-indigo-500/30 flex flex-col md:flex-row items-center justify-between gap-4`}>
-        <div><h3 className="font-black text-lg text-indigo-500">💵 Daily EOD Settlement (Day-Book)</h3><p className="text-xs opacity-60">Generate complete collection & expense report for any date.</p></div>
-        <div className="flex gap-2 w-full md:w-auto overflow-x-auto">
-          {user.role === 'superadmin' ? (
-             <select value={eodBranch} onChange={e=>setEodBranch(e.target.value)} className={`p-3 rounded-xl border font-bold text-sm ${inputBg} outline-none`}>{CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
-          ) : ( <div className="p-3 bg-indigo-500/10 text-indigo-500 font-bold rounded-xl text-sm">{eodBranch}</div> )}
-          <input type="date" value={eodDate} onChange={e=>setEodDate(e.target.value)} className={`p-3 rounded-xl border font-bold text-sm ${inputBg}`} />
-          <button onClick={triggerEOD} className="bg-indigo-600 text-white font-bold py-3 px-6 rounded-xl shadow-md whitespace-nowrap">Print EOD Report</button>
-        </div>
-      </div>
-      <div className={`${cardBg} p-6 rounded-3xl border shadow-xl`}>
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-500/20 pb-4 mb-4 gap-4">
-          <div><h3 className="font-black text-xl text-indigo-500">Franchise Reconciliation & Payout</h3><p className="text-xs opacity-60">Active Settlement View (Filtered)</p></div>
-          <div className="flex flex-wrap gap-2 items-center">
-            <span className="text-[10px] font-bold opacity-50 uppercase">Filter:</span>
-            {user.role === 'superadmin' ? ( <select value={selectedBranch} onChange={e=>setSelectedBranch(e.target.value)} className={`p-2 rounded-xl font-bold border ${inputBg} outline-none`}><option value="All">Select Branch</option>{CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select> ) : ( <div className="font-black text-sm bg-indigo-500/10 text-indigo-500 px-4 py-2 rounded-xl">{selectedBranch}</div> )}
-            <input type="date" title="From Date" value={reconFrom} onChange={e=>setReconFrom(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`} />
-            <span className="opacity-50">to</span>
-            <input type="date" title="To Date" value={reconTo} onChange={e=>setReconTo(e.target.value)} className={`p-2 rounded-xl border text-sm font-bold ${inputBg}`} />
-          </div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6"><div className={`p-4 rounded-2xl border border-dashed border-slate-500/30 text-center`}><p className="text-[10px] uppercase font-bold opacity-60 mb-1">Unsettled Box Count</p><p className="text-2xl font-black">{bookedCount} <span className="text-sm opacity-50 font-normal">Bk</span> + {deliveredCount} <span className="text-sm opacity-50 font-normal">Dl</span></p></div><div className={`p-4 rounded-2xl border border-dashed border-emerald-500/30 text-center bg-emerald-500/5`}><p className="text-[10px] uppercase font-bold text-emerald-600 mb-1">Branch Cash in Hand</p><p className="text-2xl font-black text-emerald-600">₹{cashCollected.toLocaleString()}</p><p className="text-[8px] opacity-60 mt-1">From Paid & Cash To-Pay</p></div><div className={`p-4 rounded-2xl border border-dashed border-amber-500/30 text-center bg-amber-500/5`}><p className="text-[10px] uppercase font-bold text-amber-600 mb-1">Commission Earned</p><div className="flex justify-center items-center gap-2"><p className="text-2xl font-black text-amber-600">₹{branchCommission.toLocaleString()}</p><input type="number" title="Rate" value={payoutRate} onChange={e=>setPayoutRate(Number(e.target.value))} className={`w-10 p-1 text-xs text-center border rounded ${inputBg}`} /></div><p className="text-[8px] opacity-60 mt-1">Total Parcels × Rate</p></div><div className={`p-4 rounded-2xl border text-center text-white shadow-inner ${netRemittance >= 0 ? 'bg-indigo-600 border-indigo-700' : 'bg-red-500 border-red-600'}`}><p className="text-[10px] uppercase font-bold opacity-80 mb-1">{netRemittance >= 0 ? 'Branch Remit to HQ' : 'HQ Pays Branch'}</p><p className="text-2xl font-black">₹{Math.abs(netRemittance).toLocaleString()}</p><p className="text-[8px] opacity-80 mt-1">Net Balance Transfer</p></div></div><div className="flex gap-4"><button className="flex-1 border border-indigo-500 text-indigo-500 font-bold py-3 rounded-xl hover:bg-indigo-500/10">📥 Download Statement PDF</button><button onClick={markLedgerSettled} className="flex-1 bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700 shadow-md">🔒 Mark Ledger as Settled</button></div></div>
-      <div className={`${cardBg} p-4 md:p-6 rounded-3xl border border-dashed border-indigo-500/40 grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6`}><div className="md:col-span-3"><h3 className="text-base md:text-lg font-black text-indigo-500">⚡ Master Global Sheet</h3></div><div className="bg-slate-950 p-4 rounded-xl text-white"><p className="text-[10px] md:text-xs text-slate-400 font-bold uppercase">📊 Gross Network Revenue</p><p className="text-2xl md:text-3xl font-black text-blue-400 mt-1">₹{totalSystemRevenue.toLocaleString()}</p></div><div className="bg-slate-950 p-4 rounded-xl text-white"><p className="text-[10px] md:text-xs text-slate-400 font-bold uppercase">📉 Total Fixed Expense</p><p className="text-2xl md:text-3xl font-black text-red-400 mt-1">₹{exp.toLocaleString()}</p></div><div className="bg-slate-950 p-4 rounded-xl text-white"><p className="text-[10px] md:text-xs text-slate-400 font-bold uppercase">☕ Total Petty Cash</p><p className="text-2xl md:text-3xl font-black text-orange-400 mt-1">₹{totalPetty.toLocaleString()}</p></div></div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8"><div className={`${cardBg} p-4 md:p-6 rounded-3xl border space-y-4`}><h3 className="font-bold text-sm md:text-md text-indigo-500">Fixed Operational Expenses</h3><div className="space-y-4"><div><label className="text-[10px] md:text-xs font-bold opacity-60 uppercase">Monthly Vehicle EMI (₹)</label><input type="number" value={acc.emi} onChange={e=>setAcc({...acc, emi:Number(e.target.value)})} className={`w-full p-2 md:p-3 mt-1 rounded-xl border outline-none font-bold [appearance:textfield] ${inputBg}`} /></div><div><label className="text-[10px] md:text-xs font-bold opacity-60 uppercase">Diesel & Highway Toll Log (₹)</label><input type="number" value={acc.diesel} onChange={e=>setAcc({...acc, diesel:Number(e.target.value)})} className={`w-full p-2 md:p-3 mt-1 rounded-xl border outline-none font-bold [appearance:textfield] ${inputBg}`} /></div><div><label className="text-[10px] md:text-xs font-bold opacity-60 uppercase">Misc Office Rent & Utilities (₹)</label><input type="number" value={acc.other} onChange={e=>setAcc({...acc, other:Number(e.target.value)})} className={`w-full p-2 md:p-3 mt-1 rounded-xl border outline-none font-bold [appearance:textfield] ${inputBg}`} /></div></div></div><div className="bg-slate-950 p-6 md:p-8 rounded-3xl text-white flex flex-col justify-center shadow-xl"><div className="flex justify-between items-center mb-2 md:mb-4"><h3 className="text-lg md:text-xl font-black tracking-wider text-indigo-400">PARTNERSHIP SETTLEMENT</h3><div className="flex items-center gap-2"><span className="text-xs opacity-60 uppercase">Partners:</span><input type="number" value={partnerCount} onChange={e=>setPartnerCount(Number(e.target.value))} className="w-16 bg-slate-800 text-white font-bold p-1 rounded text-center border border-slate-700 outline-none" /></div></div><p className="text-xs md:text-sm opacity-60">Global Base Profit Yield: ₹{net.toLocaleString()}</p><div className="mt-4 md:mt-6 bg-white/5 p-4 md:p-6 rounded-2xl text-center border border-white/10"><p className="text-[10px] md:text-xs opacity-50 uppercase tracking-widest mb-1">Per Partner Yield</p><p className="text-3xl md:text-4xl font-black text-emerald-400">₹{((net / (partnerCount||1)) || 0).toLocaleString()}</p></div></div></div>
-      <div className={`${cardBg} p-4 md:p-6 rounded-3xl border flex flex-col h-full`}><h3 className="font-black text-sm md:text-md text-indigo-500 border-b pb-4 border-slate-500/20 mb-4">Petty Cash Ledger (Daily/Branch)</h3><div className="flex gap-2 mb-4"><input value={pettyDesc} onChange={e=>setPettyDesc(e.target.value)} placeholder="Detail (Tea, Coolie)" className={`flex-1 p-2 border rounded-lg text-sm outline-none ${inputBg}`} /><input value={pettyAmt} onChange={e=>setPettyAmt(e.target.value)} placeholder="Amt ₹" type="number" className={`w-24 p-2 border rounded-lg text-sm outline-none font-bold ${inputBg}`} /><button onClick={addPetty} className="bg-orange-500 text-white px-4 rounded-lg font-bold text-sm">+</button></div><div className={`flex-1 overflow-y-auto max-h-40 border rounded-lg ${inputBg}`}>{pettyLedger.map((l, i) => ( <div key={i} className="flex justify-between p-3 border-b border-slate-500/20 text-xs md:text-sm"><span>{l.desc} <span className="text-[10px] opacity-50 ml-2">{l.date}</span></span><span className="font-bold text-orange-500">₹{l.amt}</span></div> ))}</div></div>
-    </div>
-  );
-}
-
-function DeletedParcelsLog({ parcels, isDark }) {
-   const deletedList = parcels.filter(p => p.status === 'Deleted');
-   const cardBg = isDark ? "bg-slate-800 border-slate-700 text-white" : "bg-white border-slate-200 text-slate-900";
-   const tblBg = isDark ? "bg-slate-900" : "bg-slate-50";
-
-   return (
-      <div className={`${cardBg} p-4 md:p-6 rounded-2xl border shadow-sm mt-6`}>
-         <div className="flex items-center gap-2 mb-4 border-b border-slate-500/20 pb-2">
-            <span className="text-xl">🗑️</span>
-            <h3 className="font-black text-red-500 uppercase">Deleted Parcels Audit Log</h3>
-            <span className="ml-auto bg-red-500 text-white text-[10px] px-2 py-1 rounded-full font-bold">{deletedList.length} Items</span>
-         </div>
-         <div className="overflow-x-auto custom-scrollbar">
-            <table className="w-full text-left whitespace-nowrap text-sm">
-               <thead className={`${tblBg} opacity-70 text-[10px] uppercase font-bold`}>
-                  <tr><th className="p-3">LR No</th><th className="p-3">Route & Customer</th><th className="p-3">Deleted By (Staff)</th><th className="p-3">Deleted Time</th></tr>
-               </thead>
-               <tbody>
-                  {deletedList.length === 0 ? <tr><td colSpan="4" className="p-6 text-center opacity-50 font-bold">No deleted parcels found. Safe!</td></tr> : deletedList.map(p => (
-                     <tr key={p.id} className="border-t border-slate-500/10 hover:bg-red-500/5">
-                        <td className="p-3 font-black text-red-400 line-through">📦 {p.id}</td>
-                        <td className="p-3"><p className="font-bold">{p.from} ➔ {p.to}</p><p className="text-[10px] opacity-70">{p.sName} ➔ {p.rName}</p></td>
-                        <td className="p-3 font-black text-indigo-500">👤 {p.deletedBy || p.history?.slice(-1)[0]?.user || "System/Unknown"} <br/><span className="text-[9px] opacity-60">Reason: {p.deleteReason || "N/A"}</span></td>
-                        <td className="p-3 text-xs font-bold opacity-70">{p.history?.slice(-1)[0]?.time || p.date}</td>
-                     </tr>
-                  ))}
-               </tbody>
-            </table>
-         </div>
-      </div>
-   );
-}
-
-function Admin({parcels, users, setUsers, setParcels, db, showMsg, isDark, user, creditAuthList, setCreditAuthList, setGlobalView}) {
-  const [tab, setTab] = useState('parcels'); const [editF, setEditF] = useState(null); 
-  const [newUser, setNewUser] = useState(""); const [newPass, setNewPass] = useState(""); const [newRole, setNewRole] = useState("staff"); const [newBranch, setNewBranch] = useState(CITIES[0]);
-  const [newCPhone, setNewCPhone] = useState(""); const [newCName, setNewCName] = useState(""); const [paymentFilter, setPaymentFilter] = useState("All"); const [branchFilter, setBranchFilter] = useState(user.branch); const [searchQuery, setSearchQuery] = useState("");
-  const d = new Date(); const todayStr = d.toISOString().split('T')[0]; d.setDate(1); const firstDayStr = d.toISOString().split('T')[0];
-  const [fromDate, setFromDate] = useState(firstDayStr); const [toDate, setToDate] = useState(todayStr); const [invCustomer, setInvCustomer] = useState("");
-  
-  const [manualInvNo, setManualInvNo] = useState("");
-  const [manualInvDate, setManualInvDate] = useState(todayStr);
-
-  const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800"; const tblBg = isDark ? "bg-slate-800/40" : "bg-slate-50"; const isSuper = user.role === 'superadmin';
-
-  useEffect(() => { if (newRole === 'superadmin') setNewBranch('All'); else if (newRole === 'staff' && newBranch === 'All') setNewBranch(CITIES[0]); }, [newRole]);
-
-  const handleAddUser = async () => { if(!newUser || !newPass) return showMsg("Fill administrative requirements", "error"); const assignedRole = isSuper ? newRole : "staff"; const assignedBranch = assignedRole === 'superadmin' ? 'All' : newBranch; const u = {id: genUserId(), username: newUser, password: newPass, role: assignedRole, branch: assignedBranch}; await db.insertUser(u); setUsers([u, ...users]); setNewUser(""); setNewPass(""); showMsg(`${assignedRole.toUpperCase()} Created!`); };
-  
-  const addCreditAuth = async () => { 
-    if(newCPhone.length !== 10 || !newCName) return showMsg("Invalid Credit details", "error"); 
-    const newData = {phone: newCPhone, company: newCName.toUpperCase()}; 
-    const newList = [...creditAuthList, newData]; 
-    setCreditAuthList(newList); await db.insertCreditAuth(newData); setNewCPhone(""); setNewCName(""); showMsg("Credit Account Authorized!"); 
-  };
-  
-  const removeCredit = async (phone) => { 
-    const newList = creditAuthList.filter(c => c.phone !== phone); 
-    setCreditAuthList(newList); await db.deleteCreditAuth(phone); showMsg("Credit Auth Revoked", "error"); 
-  };
-
-  const deleteRecord = async (id) => { const reason = window.prompt(`Exact reason for deleting ${id}:`); if (!reason || reason.trim() === "") return showMsg("Deletion reason mandatory.", "error"); const target = parcels.find(p => p.id === id); const updatedHistory = [...target.history, {status: "Deleted", loc: user.branch, time: new Date().toLocaleString(), reason: reason}]; const updatedParcel = { ...target, status: 'Deleted', deletedBy: user.username, deleteReason: reason, history: updatedHistory }; await db.updateParcel(id, updatedParcel); setParcels(parcels.map(p => p.id === id ? updatedParcel : p)); showMsg("Consignment dropped.", "error"); };
-  const saveOverrides = async () => { await db.updateParcel(editF.id, editF); setParcels(parcels.map(p => p.id === editF.id ? editF : p)); setEditF(null); showMsg("Consignment updated"); };
-
-  const sortedTableData = [...parcels].reverse().filter(p => {
-    if (p.status === 'Deleted' && !isSuper) return false;
-    if (fromDate && toDate && p.isoDate) { const pDate = p.isoDate.split('T')[0]; if (pDate < fromDate || pDate > toDate) return false; }
-    if (paymentFilter !== "All" && p.payment !== paymentFilter) return false;
-    if (branchFilter !== "All") { if (p.bookedBranch !== branchFilter && p.deliveredBranch !== branchFilter && p.from !== branchFilter && p.to !== branchFilter) return false; }
-    if (searchQuery) { const matchTerm = searchQuery.toLowerCase(); return p.id.toLowerCase().includes(matchTerm) || p.sPhone.includes(matchTerm) || p.sName.toLowerCase().includes(matchTerm); }
-    return true;
-  });
-
-  const exportData = () => { if (sortedTableData.length === 0) return showMsg("No data to export", "error"); const headers = ["LR No", "Date", "Sender", "Receiver", "Origin", "Destination", "Payment Mode", "Amount", "Status", "Booked By"]; const rows = sortedTableData.map(p => [p.id, p.date, p.sName, p.rName, p.from, p.to, p.payment, p.price, p.status, p.bookedBy].join(',')); const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join('\n'); const encodedUri = encodeURI(csvContent); const link = document.createElement("a"); link.setAttribute("href", encodedUri); link.setAttribute("download", `MPS_Report.csv`); document.body.appendChild(link); link.click(); link.remove(); showMsg("Report Downloaded!"); };
-  
-  const triggerInvoice = () => { 
-    if(!invCustomer) return showMsg("Select a Customer Account!", "error"); 
-    if(!manualInvNo || manualInvNo.trim() === "") return showMsg("Please enter an Invoice Number!", "error");
-
-    const invoiceParcels = parcels.filter(p => {
-        if (p.status === 'Deleted') return false;
-        const isCreditLedger = p.payment === "Credit" || p.deliveryMode === "Credit" || (p.notes && p.notes.includes("Mode: Credit"));
-        const matchCustomer = p.creditCustomer && p.creditCustomer.trim().toLowerCase() === invCustomer.trim().toLowerCase();
-        const pDateStr = p.isoDate ? p.isoDate.split('T')[0] : "";
-        const matchDate = (!fromDate || pDateStr >= fromDate) && (!toDate || pDateStr <= toDate);
-        return isCreditLedger && matchCustomer && matchDate;
-    });
-
-    if(invoiceParcels.length === 0) return showMsg("No credit bills found for this period.", "error"); 
-    const sampleAuth = creditAuthList.find(c => c.company.toLowerCase() === invCustomer.toLowerCase());
-    const displayPhone = sampleAuth ? sampleAuth.phone : "Multiple Acc Numbers";
-    
-    generateInvoicePDF(invCustomer, displayPhone, fromDate, toDate, invoiceParcels, manualInvNo.toUpperCase(), manualInvDate); 
-    showMsg(`Invoice Generated for ${invCustomer}`); 
-  };
-
-  const settleCreditBill = async () => {
-    if(!invCustomer) return showMsg("Select a Customer Account!", "error");
-    if(!window.confirm(`Mark all bills for ${invCustomer} (${fromDate} to ${toDate}) as PAID?`)) return;
-    
-    const invoiceParcels = parcels.filter(p => {
-        if (p.status === 'Deleted' || p.creditSettled) return false;
-        const isCreditLedger = p.payment === "Credit" || p.deliveryMode === "Credit" || (p.notes && p.notes.includes("Mode: Credit"));
-        const matchCustomer = p.creditCustomer && p.creditCustomer.trim().toLowerCase() === invCustomer.trim().toLowerCase();
-        const pDateStr = p.isoDate ? p.isoDate.split('T')[0] : "";
-        const matchDate = (!fromDate || pDateStr >= fromDate) && (!toDate || pDateStr <= toDate);
-        return isCreditLedger && matchCustomer && matchDate;
-    });
-    
-    if(invoiceParcels.length === 0) return showMsg("No unpaid bills found in this date range.", "error");
-    let updatedParcelsList = [...parcels];
-    for (let p of invoiceParcels) { const updated = {...p, creditSettled: true}; await db.updateParcel(updated.id, updated); updatedParcelsList = updatedParcelsList.map(x => x.id === updated.id ? updated : x); }
-    setParcels(updatedParcelsList); showMsg(`Successfully settled ${invoiceParcels.length} parcels for ${invCustomer}!`);
-  };
-
-  const uniqueCompanies = [...new Set(creditAuthList.map(c => c.company))];
-
-  const unpaidCreditParcels = parcels.filter(p => p.status !== 'Deleted' && !p.creditSettled && (p.payment === 'Credit' || p.deliveryMode === 'Credit' || (p.notes && p.notes.includes("Mode: Credit"))));
-  const customerBalances = {};
-  let grandTotalCredit = 0;
-  unpaidCreditParcels.forEach(p => {
-     if(p.creditCustomer) {
-         const amt = Number(p.price) || 0;
-         if(!customerBalances[p.creditCustomer]) customerBalances[p.creditCustomer] = 0;
-         customerBalances[p.creditCustomer] += amt;
-         grandTotalCredit += amt;
-     }
-  });
-
-  return (
-    <div className="space-y-4 md:space-y-6">
-      <div className="flex flex-wrap gap-2 md:gap-4"><button onClick={()=>setTab('parcels')} className={`px-4 md:px-6 py-2 rounded-full text-[10px] md:text-sm font-bold ${tab==='parcels'?'bg-indigo-600 text-white':cardBg}`}>📋 Audits & Analytics</button><button onClick={()=>setTab('staff')} className={`px-4 md:px-6 py-2 rounded-full text-[10px] md:text-sm font-bold ${tab==='staff'?'bg-indigo-600 text-white':cardBg}`}>👥 System RBAC</button><button onClick={()=>setTab('credit')} className={`px-4 md:px-6 py-2 rounded-full text-[10px] md:text-sm font-bold ${tab==='credit'?'bg-amber-600 text-white':cardBg}`}>💳 Credit Control</button></div>
-      
-      {tab === 'staff' && ( <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6"><div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}><h3 className="font-black text-sm md:text-base">Assign Privilege Context</h3><input value={newUser} onChange={e=>setNewUser(e.target.value)} placeholder="Username Identifier" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} /><input value={newPass} onChange={e=>setNewPass(e.target.value)} type="password" placeholder="Account Password" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} />{isSuper && ( <select value={newRole} onChange={e=>setNewRole(e.target.value)} className={`w-full p-2 md:p-3 rounded-xl border font-bold outline-none text-sm ${inputBg}`}><option value="staff">Privilege Level: STAFF</option><option value="admin">Privilege Level: ADMIN</option><option value="superadmin">Privilege Level: SUPERADMIN</option></select> )}<select disabled={newRole === 'superadmin'} value={newBranch} onChange={e=>setNewBranch(e.target.value)} className={`w-full p-2 md:p-3 rounded-xl border font-bold outline-none text-sm ${inputBg} ${newRole==='superadmin'?'opacity-50 cursor-not-allowed':''}`}>{(isSuper && (newRole === 'admin' || newRole === 'superadmin')) && <option value="All">Global Access (All Branches)</option>}{CITIES.map(c => <option key={c} value={c}>Branch: {c}</option>)}</select><button onClick={handleAddUser} className="w-full bg-indigo-600 text-white font-bold py-2 md:py-3 rounded-xl text-sm md:text-base">Commit Assignment</button></div><div className={`${cardBg} p-4 md:p-6 rounded-2xl border lg:col-span-2 space-y-3`}><h3 className="font-black text-sm md:text-base">Identity Mapping Matrix</h3><div className="space-y-2 max-h-64 overflow-y-auto pr-2">{users.filter(u => isSuper ? true : u.role === 'staff').map(u => { const canManage = isSuper ? (u.username !== user.username) : true; return ( <div key={u.id} className="flex flex-col sm:flex-row justify-between sm:items-center p-3 border rounded-xl bg-black/5 gap-2"><div><p className="font-bold text-sm">{u.username} <span className="text-[10px] ml-1 opacity-50">({u.branch})</span></p><p className={`text-[10px] uppercase font-black ${u.role === 'superadmin' ? 'text-amber-500' : 'text-indigo-500'}`}>{u.role}</p></div>{canManage && ( <div className="flex items-center gap-2"><button onClick={async ()=>{ await db.deleteUser(u.id); setUsers(users.filter(x=>x.id!==u.id)); showMsg("Access revoked", "error"); }} className="text-red-500 text-[10px] font-bold border border-red-500/20 px-2 py-1 rounded bg-red-500/10">Revoke 🗑️</button></div> )}</div> ) })}</div></div></div> )}
-      
-      {tab === 'credit' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4`}><h3 className="font-black text-sm md:text-base text-amber-500">Add Authorized Credit Account</h3><p className="text-[10px] md:text-xs opacity-60">You can add multiple phone numbers under the same Company Name.</p><input value={newCPhone} onChange={e=>setNewCPhone(e.target.value)} placeholder="Customer 10-digit Mobile" maxLength="10" className={`w-full p-2 md:p-3 rounded-xl border outline-none ${inputBg}`} /><input value={newCName} onChange={e=>setNewCName(e.target.value)} placeholder="Company / Individual Name" className={`w-full p-2 md:p-3 rounded-xl border outline-none uppercase ${inputBg}`} /><button onClick={addCreditAuth} className="w-full bg-amber-600 text-white font-bold py-2 md:py-3 rounded-xl text-sm md:text-base">Authorize Account</button></div>
-          <div className={`${cardBg} p-4 md:p-6 rounded-2xl border h-96 overflow-y-auto`}><h3 className="font-black text-sm md:text-base mb-4">Approved Credit Ledger</h3>{creditAuthList.length === 0 ? <p className="text-sm opacity-50">No credit accounts authorized.</p> : <div className="space-y-2">{creditAuthList.map((c, i) => ( <div key={i} className="flex justify-between items-center p-3 border border-slate-500/20 rounded-xl bg-black/5"><div><p className="font-bold text-sm text-amber-500">{c.company}</p><p className="text-[10px] opacity-80 font-mono">📱 {c.phone}</p></div><button onClick={()=>removeCredit(c.phone)} className="text-red-500 text-[10px] font-bold bg-red-500/10 px-2 py-1 rounded border border-red-500/20">Revoke</button></div> ))}</div> }</div>
-          <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4 lg:col-span-2 border-indigo-500/30`}>
-             <h3 className="font-black text-sm md:text-base text-indigo-500">📑 Generate Monthly Credit Invoice</h3>
-             <div className="grid grid-cols-1 sm:grid-cols-6 gap-4">
-                <select value={invCustomer} onChange={e=>setInvCustomer(e.target.value)} className={`sm:col-span-2 p-3 rounded-xl border font-bold text-sm ${inputBg}`}>
-                  <option value="">Select Account...</option>
-                  {uniqueCompanies.map((c,i) => <option key={i} value={c}>{c}</option>)}
-                </select>
-                <div className="flex flex-col">
-                   <label className="text-[9px] uppercase font-bold opacity-60 ml-1 mb-1">Invoice No</label>
-                   <input type="text" value={manualInvNo} onChange={e => setManualInvNo(e.target.value)} placeholder="Ex: 0001" className={`p-3 rounded-xl border text-sm font-bold uppercase focus:ring-2 focus:ring-indigo-500 ${inputBg}`} />
-                </div>
-                <div className="flex flex-col">
-                   <label className="text-[9px] uppercase font-bold opacity-60 ml-1 mb-1">Invoice Date</label>
-                   <input type="date" value={manualInvDate} onChange={e => setManualInvDate(e.target.value)} className={`p-3 rounded-xl border text-sm font-bold focus:ring-2 focus:ring-indigo-500 ${inputBg}`} />
-                </div>
-                <div className="flex flex-col">
-                   <label className="text-[9px] uppercase font-bold opacity-60 ml-1 mb-1">From Bill Date</label>
-                   <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} className={`p-3 rounded-xl border text-sm font-bold ${inputBg}`} />
-                </div>
-                <div className="flex flex-col">
-                   <label className="text-[9px] uppercase font-bold opacity-60 ml-1 mb-1">To Bill Date</label>
-                   <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} className={`p-3 rounded-xl border text-sm font-bold ${inputBg}`} />
-                </div>
-             </div>
-             
-             <div className="flex gap-2 flex-col md:flex-row"><button onClick={triggerInvoice} className="flex-1 bg-indigo-600 text-white font-bold py-3 rounded-xl shadow-md">🖨️ Print Consolidated Invoice</button><button onClick={settleCreditBill} className="flex-1 bg-emerald-600 text-white font-bold py-3 rounded-xl shadow-md">✅ Mark Bill as PAID</button></div>
-          </div>
-          <div className={`${cardBg} p-4 md:p-6 rounded-2xl border space-y-4 lg:col-span-2 border-red-500/30 bg-red-500/5`}>
-             <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-red-500/20 pb-4 gap-2">
-                 <div>
-                     <h3 className="font-black text-sm md:text-base text-red-500 uppercase">💰 Unpaid Credit Balances</h3>
-                     <p className="text-[10px] opacity-60 font-bold">Total unsettled outstanding amount by company.</p>
-                 </div>
-                 <span className="bg-red-500 text-white px-4 py-2 rounded-xl text-sm font-black shadow-md">Overall: ₹{grandTotalCredit.toLocaleString()}</span>
-             </div>
-             {Object.keys(customerBalances).length === 0 ? (
-                 <p className="text-sm opacity-50 font-bold text-center py-6">All credit bills are settled! No pending dues.</p>
-             ) : (
-                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                    {Object.entries(customerBalances).sort((a,b)=>b[1]-a[1]).map(([customer, amt]) => (
-                        <div key={customer} className={`p-3 md:p-4 border border-red-500/20 rounded-xl flex flex-col justify-between ${isDark ? 'bg-slate-900' : 'bg-white'}`}>
-                            <span className="font-bold text-xs md:text-sm text-slate-500 truncate mb-1" title={customer}>{customer}</span>
-                            <span className="font-black text-red-500 text-lg md:text-xl">₹{amt.toLocaleString()}</span>
-                        </div>
-                    ))}
-                 </div>
-             )}
-          </div>
-        </div>
-      )}
-      
-      {tab === 'parcels' && (
-        <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4"><input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="🔍 Keyword" className={`p-2 md:p-3 rounded-xl border text-sm ${cardBg}`} /><select disabled={!isSuper} value={branchFilter} onChange={e=>setBranchFilter(e.target.value)} className={`p-2 md:p-3 rounded-xl border font-bold text-sm ${cardBg} ${!isSuper && 'opacity-50 cursor-not-allowed'}`}>{isSuper && <option value="All">All Branches</option>}{CITIES.map(c => <option key={c} value={c}>{c}</option>)}</select><input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} className={`p-2 md:p-3 rounded-xl border font-bold text-sm ${cardBg}`} title="From Date" /><input type="date" value={toDate} onChange={e=>setToDate(e.target.value)} className={`p-2 md:p-3 rounded-xl border font-bold text-sm ${cardBg}`} title="To Date" /><select value={paymentFilter} onChange={e=>setPaymentFilter(e.target.value)} className={`p-2 md:p-3 rounded-xl border font-bold text-sm ${cardBg}`}><option value="All">All Modes</option><option value="Paid">Paid</option><option value="To Pay">To Pay</option><option value="Credit">Credit</option></select></div>
-          <button onClick={exportData} className="w-full py-2 bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500 hover:text-white transition-colors text-[10px] md:text-xs font-bold rounded-lg border border-indigo-500/20">📥 Export CSV Record</button>
-          
-          <div className={`${cardBg} rounded-2xl border overflow-x-auto shadow-sm mt-6`}>
-            <table className="min-w-[800px] w-full text-left whitespace-nowrap">
-              <thead className={`${tblBg} text-[10px] md:text-xs font-bold uppercase opacity-80`}><tr><th className="p-3 md:p-4">LR Code</th><th className="p-3 md:p-4">Route Info</th><th className="p-3 md:p-4">Billing Parameters</th><th className="p-3 md:p-4">Tracking Node</th><th className="p-3 md:p-4">Operations Control</th></tr></thead>
-              <tbody>
-                {sortedTableData.length === 0 ? <tr><td colSpan="5" className="p-8 text-center opacity-50 font-bold">No records found.</td></tr> : sortedTableData.map(p => {
-                  const canEditDrop = p.status !== 'Delivered' && p.status !== 'RTO' && p.status !== 'Deleted';
-                  return (
-                  <tr key={p.id} className={`border-t hover:bg-black/5 ${p.status === 'Deleted' ? 'bg-red-500/5 border-red-500/10' : 'border-slate-500/10'}`}>
-                    <td className="p-3 md:p-4 font-black text-indigo-500 text-sm cursor-pointer hover:underline" onClick={() => setGlobalView(p)}>{p.id} <span className="block text-[10px] opacity-50 font-normal">{p.date}</span></td>
-                    <td className="p-3 md:p-4 text-xs md:text-sm font-bold">{p.from} ➔ {p.to}</td>
-                    <td className="p-3 md:p-4 text-xs md:text-sm">₹{p.price} <b className="text-[10px] md:text-xs opacity-60">({p.payment})</b></td>
-                    <td className="p-3 md:p-4"><span className="px-2 md:px-3 py-1 rounded-full text-[10px] md:text-xs font-bold uppercase" style={{backgroundColor: S_CLR[p.status]+'22', color: S_CLR[p.status]}}>{p.status}</span></td>
-                    <td className="p-3 md:p-4 space-x-1 md:space-x-2 flex items-center">
-                      {(canEditDrop || isSuper) && p.status !== 'Deleted' && ( <><button onClick={()=>setEditF(p)} className="text-amber-500 text-[10px] md:text-xs font-bold border border-amber-500/20 px-2 py-1 rounded bg-amber-500/5">✏️ Edit</button><button onClick={()=>deleteRecord(p.id)} className="text-red-500 text-[10px] md:text-xs font-bold border border-red-500/20 px-2 py-1 rounded bg-red-500/5">🗑️ Drop</button></> )}
-                      {!canEditDrop && !isSuper && p.status !== 'Deleted' && <span className="text-[10px] opacity-50 italic">🔒 Locked</span>}
-                      {p.status !== 'Deleted' && <div className="ml-2"><PrintGroup p={p} /></div>}
-                    </td>
-                  </tr>
-                )})}
-              </tbody>
-            </table>
-          </div>
-
-          {isSuper && <DeletedParcelsLog parcels={parcels} isDark={isDark} />}
-        </>
-      )}
-      {editF && ( <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[200]"><div className={`${cardBg} p-6 rounded-2xl max-w-lg w-full space-y-4 animate-bounce-in`}><h3 className="font-black text-lg">Modify Manifest Parameters: {editF.id}</h3><div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><input value={editF.sName} onChange={e=>setEditF({...editF, sName:e.target.value.toUpperCase()})} placeholder="Sender Identity" className={`p-2 border rounded text-sm uppercase ${inputBg}`} /><input value={editF.rName} onChange={e=>setEditF({...editF, rName:e.target.value.toUpperCase()})} placeholder="Receiver Identity" className={`p-2 border rounded text-sm uppercase ${inputBg}`} /><select value={editF.status} onChange={e=>setEditF({...editF, status:e.target.value})} className={`p-2 border rounded text-sm ${inputBg}`}>{STATUSES.filter(s=>s!=='Deleted').map(s=><option key={s}>{s}</option>)}</select><input type="number" value={editF.price} onChange={e=>setEditF({...editF, price:Number(e.target.value)})} placeholder="Price Override" className={`p-2 border rounded font-bold text-sm ${inputBg}`} /></div><div className="flex gap-2 mt-4"><button onClick={saveOverrides} className="bg-indigo-600 text-white font-bold py-2 px-4 rounded-xl flex-1 text-sm">Save Changes</button><button onClick={()=>setEditF(null)} className="bg-slate-500 text-white py-2 px-4 rounded-xl text-sm">Dismiss</button></div></div></div> )}
-    </div>
-  );
-}
-
-function Login({onLogin, theme}) {
-  const [u,setU]=useState(""); const [p,setP]=useState(""); const [err, setErr] = useState(""); const isDark = theme === 'dark';
-  const handleSub = async () => { const success = await onLogin(u,p); if(!success) { setP(""); setErr("Invalid Identity ID or Passcode!"); document.getElementById('pwdIn').focus(); } };
-  return (
-    <div className={`flex h-screen items-center justify-center p-4 ${isDark?'bg-slate-900':'bg-slate-100'}`}>
-      <div className={`${isDark?'bg-slate-800 border-slate-700 text-white':'bg-white border-slate-200 text-slate-800'} p-8 md:p-10 rounded-3xl shadow-2xl w-full max-w-sm text-center border relative`}><div className="flex justify-center mb-6"><MpsLogo /></div><h2 className="text-xl md:text-2xl font-black mb-2 tracking-widest">MPS TERMINAL</h2>{err ? <p className="text-red-500 font-bold mb-4 text-xs md:text-sm animate-fade-in">{err}</p> : <div className="h-4 mb-4"></div>}<input id="userIn" onKeyDown={e=> e.key === 'Enter' ? document.getElementById('pwdIn').focus() : null} value={u} onChange={e=>{setU(e.target.value); setErr("");}} placeholder="User Identity ID" className="w-full border p-3 rounded-xl mb-4 text-center font-bold text-slate-900 bg-slate-100 outline-none focus:ring-2 focus:ring-indigo-500 text-sm md:text-base" /><input id="pwdIn" onKeyDown={e=> e.key === 'Enter' && handleSub()} value={p} onChange={e=>{setP(e.target.value); setErr("");}} type="password" placeholder="Credential Security Code" className="w-full border p-3 rounded-xl mb-6 text-center font-bold text-slate-900 bg-slate-100 outline-none focus:ring-2 focus:ring-indigo-500 text-sm md:text-base" /><button onClick={handleSub} className="w-full bg-indigo-600 text-white font-black py-3 rounded-xl hover:bg-indigo-700 transition text-sm md:text-base">Access Server</button></div>
-    </div>
-  );
+  }
 }
