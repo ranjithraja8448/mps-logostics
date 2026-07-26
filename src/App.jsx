@@ -363,7 +363,7 @@ function CreditSearchDropdown({ value, onChange, uniqueCompanies, isDark }) {
 
 const local={ async get(k){try{const r=window.localStorage.getItem(k);return r?JSON.parse(r):null;}catch{return null;}}, async set(k,v){try{window.localStorage.setItem(k,JSON.stringify(v));}catch{}}, async remove(k){try{window.localStorage.removeItem(k);}catch{}} };
 
-// 🔥 CACHE BUSTER ADDED TO DB CLASS 🔥
+// 🔥 FIXED DB CLASS - NO CACHE BUSTER UNDERSCORE 🔥
 class DB {
   constructor(url, key) {
      this.isLive = Boolean(url && key);
@@ -379,8 +379,8 @@ class DB {
   async getParcels() {
      if (this.isLive) {
          try {
-             // Cache Buster Trick to force fetch latest data ALWAYS 
-             const r = await fetch(`${this.base}/parcels?select=*&_=${Date.now()}`, { headers: this.h, cache: "no-store" });
+             // FIXED: Removed &_=${Date.now()}
+             const r = await fetch(`${this.base}/parcels?select=*`, { headers: this.h, cache: "no-store" });
              if (r.ok) return await r.json();
          } catch (e) { console.error("Fetch parcels error:", e); }
      }
@@ -411,7 +411,8 @@ class DB {
   async getUsers() {
      if (this.isLive) {
          try {
-             const r = await fetch(`${this.base}/app_users?select=*&_=${Date.now()}`, { headers: this.h, cache: "no-store" });
+             // FIXED: Removed &_=${Date.now()}
+             const r = await fetch(`${this.base}/app_users?select=*`, { headers: this.h, cache: "no-store" });
              if (r.ok) return await r.json();
          } catch (e) {}
      }
@@ -440,7 +441,8 @@ class DB {
   async getCreditAuth() {
      if (this.isLive) {
          try {
-             const r = await fetch(`${this.base}/credit_auth?select=*&_=${Date.now()}`, { headers: this.h, cache: "no-store" });
+             // FIXED: Removed &_=${Date.now()}
+             const r = await fetch(`${this.base}/credit_auth?select=*`, { headers: this.h, cache: "no-store" });
              if (r.ok) return await r.json();
          } catch (e) {}
      }
