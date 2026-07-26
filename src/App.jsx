@@ -7,7 +7,7 @@ import { Html5QrcodeScanner } from "html5-qrcode";
 /* ══════════════════════════════════════════
   CONSTANTS & CONFIG
 ══════════════════════════════════════════ */
-const ENV_URL = "https://tqhckzoemvjgwqjmkct.supabase.co"; 
+const ENV_URL = "tqhckzoemvijgwqjmkct";
 const ENV_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRxaGNrem9lbXZpamd3cWpta2N0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5OTA1MzIsImV4cCI6MjA5NDU2NjUzMn0.eJm7K_8yjdCgqbb8WZJsDIAM2VO30tBFhYassw_PF8I";
 
 
