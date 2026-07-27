@@ -10,7 +10,6 @@ import { Html5QrcodeScanner } from "html5-qrcode";
 const ENV_URL = "https://tqhckzoemvijgwqjmkct.supabase.co";
 const ENV_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRxaGNrem9lbXZpamd3cWpta2N0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5OTA1MzIsImV4cCI6MjA5NDU2NjUzMn0.eJm7K_8yjdCgqbb8WZJsDIAM2VO30tBFhYassw_PF8I";
 
-
 const BRANCH_CONFIG = { "Mecheri": "01", "Elampillai": "02", "Jalakandapuram": "03", "Salem": "04", "Coimbatore": "05", "Bhavani": "06", "Sathyamangalam": "07", "Bangalore": "08", "Chennai": "09" };
 const CITIES = Object.keys(BRANCH_CONFIG);
 const TYPES = ["Box","Wooden Box","Bag","Green bag","Yellow Bag","Bale","Documents","Electronics","Furniture","Medical","Machinery"];
@@ -26,7 +25,7 @@ const generateLR = (fromCity, toCity, allParcels) => {
   if (!fromCity || !toCity) return `MPS${String(Math.floor(Math.random()*1000)).padStart(6,'0')}`; 
   const fCode = BRANCH_CONFIG[fromCity] || "00"; 
   const tCode = BRANCH_CONFIG[toCity] || "00"; 
-  const fromPrefix = `${fCode}/`; 
+  const fromPrefix = `${fCode}/${tCode}/`; 
   let max = 0;
   
   if(allParcels && allParcels.length > 0) {
@@ -363,7 +362,7 @@ function CreditSearchDropdown({ value, onChange, uniqueCompanies, isDark }) {
 
 const local={ async get(k){try{const r=window.localStorage.getItem(k);return r?JSON.parse(r):null;}catch{return null;}}, async set(k,v){try{window.localStorage.setItem(k,JSON.stringify(v));}catch{}}, async remove(k){try{window.localStorage.removeItem(k);}catch{}} };
 
-// 🔥 FIXED DB CLASS - NO CACHE BUSTER UNDERSCORE 🔥
+// 🔥 ENHANCED DB CLASS - Handles Detailed Errors 🔥
 class DB {
   constructor(url, key) {
      this.isLive = Boolean(url && key);
@@ -379,8 +378,7 @@ class DB {
   async getParcels() {
      if (this.isLive) {
          try {
-             // FIXED: Removed &_=${Date.now()}
-             const r = await fetch(`${this.base}/parcels?select=*`, { headers: this.h, cache: "no-store" });
+             const r = await fetch(`${this.base}/parcels?select=*&limit=10000`, { headers: this.h, cache: "no-store" });
              if (r.ok) return await r.json();
          } catch (e) { console.error("Fetch parcels error:", e); }
      }
@@ -390,8 +388,13 @@ class DB {
      if (this.isLive) {
          const r = await fetch(`${this.base}/parcels`, { method: "POST", headers: this.h, body: JSON.stringify(p) });
          if (!r.ok) {
-             const errData = await r.text();
-             throw new Error(`DB Insert Failed: ${r.status} - ${errData}`);
+             const errText = await r.text();
+             let cleanError = errText;
+             try { 
+                 const j = JSON.parse(errText); 
+                 cleanError = j.message || j.details || errText; 
+             } catch(e) {}
+             throw new Error(cleanError); // Passing clean JSON error to UI
          }
      }
      await local.set("mps_parcels", [p, ...(await local.get("mps_parcels") || [])]);
@@ -411,7 +414,6 @@ class DB {
   async getUsers() {
      if (this.isLive) {
          try {
-             // FIXED: Removed &_=${Date.now()}
              const r = await fetch(`${this.base}/app_users?select=*`, { headers: this.h, cache: "no-store" });
              if (r.ok) return await r.json();
          } catch (e) {}
@@ -441,7 +443,6 @@ class DB {
   async getCreditAuth() {
      if (this.isLive) {
          try {
-             // FIXED: Removed &_=${Date.now()}
              const r = await fetch(`${this.base}/credit_auth?select=*`, { headers: this.h, cache: "no-store" });
              if (r.ok) return await r.json();
          } catch (e) {}
@@ -489,15 +490,18 @@ export default function App() {
   const [db] = useState(new DB(ENV_URL, ENV_KEY));
   const showMsg = (msg, type='success') => { setToast({msg, type}); setTimeout(() => setToast(null), 3000); };
 
+  // 🔥 OFFLINE PROTECTION IN SYNC 🔥
   const syncData = async () => {
+     if (!navigator.onLine) return showMsg("⚠️ Internet Illa! Please connect to network.", "error");
      showMsg("Syncing Latest Data...", "info");
      const ps = await db.getParcels(); setParcels(ps);
      showMsg("Data Synced!");
   };
 
-  // 🔥 EMERGENCY RECOVERY CODE 🔥
   const emergencySync = async () => {
       if(!window.confirm("EMERGENCY RECOVERY: Do you want to sync local device data to the live database? RUN THIS ONLY ON THE STAFF PHONE!")) return;
+      if (!navigator.onLine) return showMsg("⚠️ Offline! Net on pannittu sync pannunga.", "error");
+      
       showMsg("Checking local phone memory...", "info");
       
       try {
@@ -557,11 +561,29 @@ export default function App() {
     window.addEventListener('keydown', handleKey); return () => window.removeEventListener('keydown', handleKey);
   }, [user, globalViewItem]);
 
-  if(!user) return <Login onLogin={async (u,p) => { const valid = users.find(x=>x.username===u && x.password===p); if(valid){ setUser(valid); await local.set("mps_session", valid); showMsg("Welcome!"); return true; } else { return false; } }} theme={theme} />;
+  // 🔥 CUSTOM ANIMATIONS INJECTED 🔥
+  const globalCss = `
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUpFade { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes pulseSoft { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+    .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+    .animate-bounce-in { animation: slideUpFade 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #6366f1; border-radius: 10px; }
+  `;
+
+  if(!user) return (
+     <>
+        <style>{globalCss}</style>
+        <Login onLogin={async (u,p) => { const valid = users.find(x=>x.username===u && x.password===p); if(valid){ setUser(valid); await local.set("mps_session", valid); showMsg("Welcome!"); return true; } else { return false; } }} theme={theme} />
+     </>
+  );
+  
   const isDark = theme === "dark"; const bgClass = isDark ? "bg-slate-900 text-slate-100" : "bg-slate-50 text-slate-800"; const headerBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200";
 
   return (
     <div className={`flex h-screen font-sans ${bgClass} transition-colors duration-300`}>
+      <style>{globalCss}</style>
       <aside className={`${sidebarExpanded ? "w-64" : "w-16 md:w-20"} bg-slate-950 text-slate-300 flex flex-col shadow-2xl z-20 shrink-0 transition-all duration-300`}>
         <div className="h-16 md:h-20 flex items-center justify-between px-2 md:px-4 border-b border-slate-800 bg-black/10">
           {sidebarExpanded ? ( <div className="flex items-center animate-fade-in pl-2"><MpsLogo /><div><h1 className="text-xl font-black text-white tracking-widest">MPS</h1><p className="text-[10px] uppercase text-indigo-400 font-bold">{user.branch} Branch</p></div></div> ) : ( <div className="mx-auto"><MpsLogo /></div> )}
@@ -607,7 +629,10 @@ export default function App() {
           </div>
         </div>
       </main>
-      {toast && ( <div className={`fixed bottom-4 right-4 md:bottom-8 md:right-8 px-4 md:px-6 py-2 md:py-3 rounded-xl shadow-2xl font-bold text-white z-50 animate-bounce-in text-sm md:text-base ${toast.type==='error'?'bg-red-500':'bg-emerald-500'}`}>{toast.msg}</div> )}
+      {toast && ( <div className={`fixed bottom-4 right-4 md:bottom-8 md:right-8 px-4 md:px-6 py-2 md:py-3 rounded-xl shadow-2xl font-bold text-white z-50 animate-bounce-in text-sm md:text-base border border-white/20 flex items-center gap-2 ${toast.type==='error'?'bg-red-500':'bg-emerald-500'}`}>
+          <span className="text-lg">{toast.type === 'error' ? '⚠️' : '✅'}</span>
+          {toast.msg}
+      </div> )}
       {globalViewItem && <ParcelModal item={globalViewItem} creditAuthList={creditAuthList} onClose={()=>setGlobalViewItem(null)} db={db} parcels={parcels} setParcels={setParcels} user={user} showMsg={showMsg} isDark={isDark} />}
     </div>
   );
@@ -1123,8 +1148,15 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
   const cardBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200"; const inputBg = isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-slate-50 border-slate-200 text-slate-800";
   const uniqueCompanies = [...new Set(creditAuthList.map(c => c.company))];
 
+  // 🔥 OFFLINE PROTECTION & ENHANCED ERROR HANDLING DURING SUBMIT 🔥
   const submit = async () => {
     if(isSubmitting) return; 
+    
+    // OFFLINE CHECK
+    if (!navigator.onLine) {
+        return showMsg("⚠️ Internet Illa! Net ON pannittu booking podunga.", "error");
+    }
+
     if(isManualLR && (!lrNo || lrNo.trim() === "")) return showMsg("LR Number is mandatory in Manual Mode!", "error");
     if(!f.sName || !f.sPhone || !f.from || !f.rName || !f.rPhone || !f.to) return showMsg("Please fill all profile fields marked with (*)", "error");
     
@@ -1165,7 +1197,11 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
                 await db.insertParcel(p); 
                 success = true;
             } catch(insertError) {
-                if(!isManualLR) {
+                // Check if it's a unique constraint error
+                const eMsg = (insertError.message || "").toLowerCase();
+                const isDuplicate = eMsg.includes('duplicate key') || eMsg.includes('unique constraint');
+                
+                if(!isManualLR && isDuplicate) {
                     retryLimit--;
                     console.log(`409 Conflict hit for ${currentLR}. Auto-incrementing...`);
                     const parts = currentLR.split('/');
@@ -1173,21 +1209,26 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
                         const nextNum = parseInt(parts[2], 10) + 1;
                         currentLR = `${parts[0]}/${parts[1]}/${String(nextNum).padStart(4, '0')}`;
                     } else { throw insertError; }
-                } else { throw insertError; }
+                } else { 
+                    throw insertError; 
+                }
             }
         }
 
-        if(!success) { throw new Error("Duplicate ID or Network Issue"); }
+        if(!success) { throw new Error("Could not resolve unique LR number after retries."); }
 
         const saved = await local.get("mps_contacts") || {}; saved[f.sPhone] = { name: p.sName, gst: f.sGst }; saved[f.rPhone] = { name: p.rName, gst: f.rGst }; await local.set("mps_contacts", saved);
         
-        // INSTANT UI UPDATE WITHOUT WAITING FOR DB CACHE
         setParcels([p, ...parcels]); 
         
         setDone(p); showMsg("Booking Successful!"); 
     } catch(err) { 
         console.error(err);
-        showMsg("Network or Database Error! Please try again.", "error"); 
+        let eMsg = err.message || "Network or Database Error!";
+        if (eMsg.toLowerCase().includes("duplicate key") || eMsg.toLowerCase().includes("unique constraint")) {
+             eMsg = isManualLR ? `LR Number ${lrNo} is already used! Use a different one.` : "Database conflict resolving LR. Please try again.";
+        }
+        showMsg(`❌ DB/Network Error: ${eMsg}`, "error"); 
     }
     setIsSubmitting(false);
   };
@@ -1282,7 +1323,10 @@ function Book({shortcutMode, parcels, setParcels, db, showMsg, isDark, theme, us
           <div className="bg-slate-950 p-4 rounded-xl flex justify-between items-center text-white h-full shadow-inner border border-slate-800"><span className="text-sm opacity-50">Total Income Allocation</span><span className="text-xl md:text-3xl font-black text-emerald-400">₹{ep}</span></div>
         </div>
       </div>
-      <button id="btnSubmit" onClick={submit} disabled={isSubmitting} className={`w-full text-white font-bold py-4 rounded-xl shadow-lg transition-transform transform hover:-translate-y-1 relative z-10 ${isSubmitting ? 'bg-slate-500 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}>{isSubmitting ? "Generating Booking..." : "Confirm Booking"}</button>
+      <button id="btnSubmit" onClick={submit} disabled={isSubmitting} className={`w-full text-white font-bold py-4 rounded-xl shadow-lg transition-transform transform hover:-translate-y-1 relative z-10 flex items-center justify-center gap-2 ${isSubmitting ? 'bg-slate-500 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+         {isSubmitting && <span className="animate-pulse">🔄</span>}
+         {isSubmitting ? "Generating Booking..." : "Confirm Booking"}
+      </button>
     </div>
   );
 }
